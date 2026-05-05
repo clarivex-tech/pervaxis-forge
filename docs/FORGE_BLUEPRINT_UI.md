@@ -88,7 +88,7 @@ Integration + Polish (Week 6)
 ### 2.1 Day 1: Project Setup
 
 **Tasks:**
-- [ ] Create `Pervaxis.Forge.Launchpad` Angular 18 project
+- [ ] Create `Pervaxis.Forge.Launchpad` Angular 21 project
 - [ ] Configure Nx workspace
 - [ ] Add Angular Material + Angular CDK
 - [ ] Set up routing:
@@ -458,7 +458,7 @@ Route: `/verticals/:slug/generate`
 - [ ] `Templates/angular-shell/manifest.json.sbn`
 - [ ] `Templates/angular-shell/SPEC.md.sbn`
 - [ ] `Templates/angular-shell/README.md.sbn`
-- [ ] `Templates/angular-shell/package.json.sbn` — Angular 18 + Canvas module deps (loop)
+- [ ] `Templates/angular-shell/package.json.sbn` — Angular 21 + Canvas module deps (loop)
 - [ ] `Templates/angular-shell/angular.json.sbn` — workspace config
 - [ ] `Templates/angular-shell/tsconfig.json.sbn` — strict mode
 - [ ] `Templates/angular-shell/app.component.ts.sbn` — root component stub

@@ -2,7 +2,7 @@
 
 ## Project Context
 
-Forge Launchpad is an **admin-only Angular 18 web application** for enrolling business verticals and generating production-ready service scaffolds. It is part of Pervaxis Forge — an internal platform tool at Clarivex Technologies.
+Forge Launchpad is an **admin-only Angular 21 web application** for enrolling business verticals and generating production-ready service scaffolds. It is part of Pervaxis Forge — an internal platform tool at Clarivex Technologies.
 
 Before writing any code, read:
 - `docs/FORGE_SOLUTION_STRUCTURE.md` — folder layout, naming conventions
@@ -44,7 +44,7 @@ environments/ environment.ts (mock API) and environment.prod.ts (real API)
 
 | Concern | Choice | Do NOT use |
 |---|---|---|
-| UI components | Angular Material 18 | Tailwind, Bootstrap, custom CSS frameworks |
+| UI components | Angular Material 21.2.9 | Tailwind, Bootstrap, custom CSS frameworks |
 | State | Angular Signals | NgRx, BehaviorSubject, Redux |
 | Build | Nx — use `npx nx` commands | `ng` CLI directly |
 | Testing (unit) | Karma + Jasmine | Vitest, Jest |

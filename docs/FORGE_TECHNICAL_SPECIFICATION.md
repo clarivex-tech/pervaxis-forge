@@ -33,7 +33,7 @@
 ```
 ┌──────────────────────────────────────────────────────────────┐
 │                    Forge.Launchpad                           │
-│                   (Angular 18 Web UI)                        │
+│                   (Angular 21 Web UI)                        │
 │                                                              │
 │  ┌────────────────────────────────────────────────────────┐  │
 │  │  Vertical Dashboard  (landing page)                    │  │
@@ -145,13 +145,13 @@ External Integrations:
 
 | Component | Technology | Version |
 |---|---|---|
-| Framework | Angular | 18.x |
-| UI Components | Angular Material | 18.x |
-| Build System | Nx | 19.x |
-| State Management | Angular Signals | 18.x |
-| HTTP Client | Angular HttpClient | 18.x |
+| Framework | Angular | 21.2.9 |
+| UI Components | Angular Material | 21.2.9 |
+| Build System | Nx | 22.7.0 |
+| State Management | Angular Signals | 21.2.9 |
+| HTTP Client | Angular HttpClient | 21.2.9 |
 | Styling | SCSS | - |
-| TypeScript | TypeScript | 5.4+ |
+| TypeScript | TypeScript | ~5.9.2 |
 
 **No Ionic, No Pervaxis.Mobile dependency** — Launchpad is desktop-web only.
 
