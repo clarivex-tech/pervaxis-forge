@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/Pervaxis.Forge.Engine/Pervaxis.Forge.Engine.csproj" />
+  <Project Path="src/Pervaxis.Forge.Api/Pervaxis.Forge.Api.csproj" />
+  <Project Path="tests/Pervaxis.Forge.Engine.Tests/Pervaxis.Forge.Engine.Tests.csproj" />
+  <Project Path="tests/Pervaxis.Forge.Api.Tests/Pervaxis.Forge.Api.Tests.csproj" />
+</Solution>

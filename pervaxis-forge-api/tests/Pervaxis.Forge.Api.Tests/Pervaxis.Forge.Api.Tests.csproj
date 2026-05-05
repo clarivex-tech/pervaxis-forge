@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pervaxis.Forge.Api\Pervaxis.Forge.Api.csproj" />
+    <PackageReference Include="xunit" Version="*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="*" />
+    <PackageReference Include="FluentAssertions" Version="*" />
+    <PackageReference Include="Moq" Version="*" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.*" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="*" />
+  </ItemGroup>
+</Project>
