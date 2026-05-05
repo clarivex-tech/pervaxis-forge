@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Pervaxis.Forge.Engine\Pervaxis.Forge.Engine.csproj" />
+    <PackageReference Include="xunit" Version="*" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="*" />
+    <PackageReference Include="FluentAssertions" Version="*" />
+    <PackageReference Include="Moq" Version="*" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>Pervaxis.Forge.Engine</AssemblyName>
+    <RootNamespace>Pervaxis.Forge.Engine</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Scriban" Version="5.*" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Templates\**\*.sbn" />
+  </ItemGroup>
+</Project>
