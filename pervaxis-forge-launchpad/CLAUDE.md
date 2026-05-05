@@ -55,6 +55,32 @@ environments/ environment.ts (mock API) and environment.prod.ts (real API)
 
 ---
 
+## File Header
+
+Every `.ts` file must start with this exact license header — no exceptions:
+
+```typescript
+/**
+ ************************************************************************
+ * Copyright (C) 2026 Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+```
+
+---
+
 ## TypeScript Standards
 
 - **Strict mode is on** — no `any`, no implicit `any`, no non-null assertion (`!`) unless genuinely impossible to be null
