@@ -2,46 +2,83 @@ name: Deploy
 
 on:
   push:
-    branches: [ main ]
+    branches: [main, develop]
+  workflow_dispatch:
 
 defaults:
   run:
     working-directory: pervaxis-forge-api
 
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
 jobs:
-  build-and-test:
-    name: Build & Test
+  build-test-scan:
+    name: Build · Test · SonarQube
     runs-on: ubuntu-latest
-
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v5
         with:
-          dotnet-version: '10.0.x'
+          fetch-depth: 0
 
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build --no-restore --configuration Release
-
-      - name: Test
-        run: >
-          dotnet test
-          --no-build
-          --configuration Release
-          --verbosity normal
-          --collect:"XPlat Code Coverage"
-          --filter "Category!=Integration"
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
+      - uses: actions/setup-dotnet@v5
         with:
-          files: '**/coverage.cobertura.xml'
-          flags: deploy
+          dotnet-version: "10.x"
 
-      # TODO(sonar): add SonarCloud scan step here once SONAR_TOKEN is provisioned
+      - name: Setup Java 17
+        if: (github.ref_name == 'main' || github.event_name == 'workflow_dispatch') && env.SONAR_TOKEN != ''
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
 
-  # TODO: add deploy job here (ECS task update / ECR push) once infra is provisioned
+      - uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Install SonarScanner
+        if: (github.ref_name == 'main' || github.event_name == 'workflow_dispatch') && env.SONAR_TOKEN != ''
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - run: dotnet restore Pervaxis.Forge.slnx
+
+      - name: SonarQube begin
+        if: (github.ref_name == 'main' || github.event_name == 'workflow_dispatch') && env.SONAR_TOKEN != ''
+        run: |
+          dotnet sonarscanner begin \
+            /k:"clarivex-tech_pervaxis-forge" \
+            /o:"clarivex-tech" \
+            /d:sonar.host.url="https://sonarcloud.io" \
+            /d:sonar.token="${{ env.SONAR_TOKEN }}" \
+            /d:sonar.cs.opencover.reportsPaths="**/TestResults/**/coverage.opencover.xml" \
+            /d:sonar.exclusions=".github/**,**/obj/**,**/*.g.cs" \
+            /d:sonar.coverage.exclusions="**/obj/**,**/*.g.cs" \
+            /d:sonar.qualitygate.wait=false
+
+      - run: dotnet build Pervaxis.Forge.slnx --no-restore --configuration Release
+
+      - name: Test with coverage
+        run: |
+          dotnet test Pervaxis.Forge.slnx --no-build --configuration Release \
+            --filter "Category!=Integration" \
+            --collect:"XPlat Code Coverage" --results-directory TestResults \
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
+
+      - name: SonarQube end
+        if: (github.ref_name == 'main' || github.event_name == 'workflow_dispatch') && env.SONAR_TOKEN != ''
+        run: dotnet sonarscanner end /d:sonar.token="${{ env.SONAR_TOKEN }}"
+
+      - uses: actions/upload-artifact@v5
+        if: always()
+        with:
+          name: deploy-test-results-${{ github.run_id }}
+          path: pervaxis-forge-api/TestResults/
+          retention-days: 7
+
+      # TODO: add deploy job here (ECS task update / ECR push) once infra is provisioned
