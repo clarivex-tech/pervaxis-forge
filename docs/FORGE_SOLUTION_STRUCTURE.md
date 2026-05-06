@@ -313,7 +313,7 @@ pervaxis-forge-launchpad/
 ├── .gitignore
 ├── README.md
 └── apps/
-    └── launchpad/                    ← single Angular 18 app
+    └── launchpad/                    ← single Angular 21 app
 ```
 
 ---
@@ -509,17 +509,17 @@ export const environment = {
 ```json
 {
   "dependencies": {
-    "@angular/core": "^18.0.0",
-    "@angular/material": "^18.0.0",
-    "@angular/cdk": "^18.0.0",
-    "@angular/router": "^18.0.0",
-    "@angular/forms": "^18.0.0",
-    "@angular/common": "^18.0.0"
+    "@angular/core": "21.2.9",
+    "@angular/material": "21.2.9",
+    "@angular/cdk": "21.2.9",
+    "@angular/router": "21.2.9",
+    "@angular/forms": "21.2.9",
+    "@angular/common": "21.2.9"
   },
   "devDependencies": {
-    "@nx/angular": "^19.0.0",
-    "@nx/workspace": "^19.0.0",
-    "typescript": "~5.4.0",
+    "@nx/angular": "22.7.0",
+    "@nx/workspace": "22.7.0",
+    "typescript": "~5.9.2",
     "jasmine-core": "~5.1.0",
     "karma": "~6.4.0",
     "cypress": "^13.0.0"

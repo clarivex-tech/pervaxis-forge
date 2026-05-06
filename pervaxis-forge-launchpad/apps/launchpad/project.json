@@ -1,0 +1,56 @@
+{
+  "name": "launchpad",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/launchpad/src",
+  "targets": {
+    "build": {
+      "executor": "@nx/angular:application",
+      "options": {
+        "outputPath": "dist/apps/launchpad",
+        "index": "apps/launchpad/src/index.html",
+        "browser": "apps/launchpad/src/main.ts",
+        "polyfills": ["zone.js"],
+        "tsConfig": "apps/launchpad/tsconfig.app.json",
+        "inlineStyleLanguage": "scss",
+        "assets": [
+          {
+            "glob": "**/*",
+            "input": "apps/launchpad/src/assets",
+            "output": "assets"
+          }
+        ],
+        "styles": ["apps/launchpad/src/styles.scss"],
+        "scripts": []
+      },
+      "configurations": {
+        "production": {
+          "optimization": true,
+          "extractLicenses": true,
+          "sourceMap": false
+        },
+        "development": {
+          "optimization": false,
+          "extractLicenses": false,
+          "sourceMap": true
+        }
+      },
+      "defaultConfiguration": "development"
+    },
+    "serve": {
+      "executor": "@nx/angular:dev-server",
+      "options": {
+        "buildTarget": "launchpad:build:development"
+      },
+      "configurations": {
+        "production": {
+          "buildTarget": "launchpad:build:production"
+        },
+        "development": {
+          "buildTarget": "launchpad:build:development"
+        }
+      },
+      "defaultConfiguration": "development"
+    }
+  }
+}

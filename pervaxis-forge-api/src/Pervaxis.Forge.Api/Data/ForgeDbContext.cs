@@ -1,3 +1,181 @@
+/*
+ ************************************************************************
+ * Copyright (C) 2026 Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
+using Pervaxis.Forge.Api.Data.Entities;
+
 namespace Pervaxis.Forge.Api.Data;
 
-// TODO: implement ForgeDbContext
+public class ForgeDbContext(
+    DbContextOptions<ForgeDbContext> options,
+    IDataProtectionProvider dataProtectionProvider) : DbContext(options)
+{
+    private readonly IDataProtector _protector =
+        dataProtectionProvider.CreateProtector("VerticalCredentials");
+
+    public DbSet<Vertical> Verticals => Set<Vertical>();
+    public DbSet<VerticalCloudConfig> VerticalCloudConfigs => Set<VerticalCloudConfig>();
+    public DbSet<VerticalSourceControlConfig> VerticalSourceControlConfigs => Set<VerticalSourceControlConfig>();
+    public DbSet<VerticalTechDefaults> VerticalTechDefaults => Set<VerticalTechDefaults>();
+    public DbSet<GenerationLog> GenerationLogs => Set<GenerationLog>();
+    public DbSet<DeploymentOutput> DeploymentOutputs => Set<DeploymentOutput>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // ── Vertical ─────────────────────────────────────────────────────────
+        modelBuilder.Entity<Vertical>(e =>
+        {
+            e.ToTable("verticals");
+            e.HasKey(v => v.Id);
+            e.Property(v => v.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(v => v.Slug).HasMaxLength(100).IsRequired();
+            e.Property(v => v.DisplayName).HasMaxLength(255).IsRequired();
+            e.Property(v => v.OwnerTeam).HasMaxLength(255).IsRequired();
+            e.Property(v => v.OwnerEmail).HasMaxLength(255).IsRequired();
+            e.Property(v => v.IsActive).HasDefaultValue(true);
+            e.Property(v => v.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(v => v.UpdatedAt).HasDefaultValueSql("NOW()");
+
+            e.HasIndex(v => v.Slug).IsUnique().HasDatabaseName("idx_verticals_slug");
+
+            e.HasOne(v => v.CloudConfig)
+                .WithOne(c => c.Vertical)
+                .HasForeignKey<VerticalCloudConfig>(c => c.VerticalId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(v => v.SourceControlConfig)
+                .WithOne(c => c.Vertical)
+                .HasForeignKey<VerticalSourceControlConfig>(c => c.VerticalId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasOne(v => v.TechDefaults)
+                .WithOne(t => t.Vertical)
+                .HasForeignKey<VerticalTechDefaults>(t => t.VerticalId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            e.HasMany(v => v.GenerationLogs)
+                .WithOne(g => g.Vertical)
+                .HasForeignKey(g => g.VerticalId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ── VerticalCloudConfig ───────────────────────────────────────────────
+        modelBuilder.Entity<VerticalCloudConfig>(e =>
+        {
+            e.ToTable("vertical_cloud_configs");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(c => c.Provider).HasMaxLength(50).HasDefaultValue("AWS").IsRequired();
+            e.Property(c => c.AwsAccountId).HasMaxLength(12);
+            e.Property(c => c.DefaultRegion).HasMaxLength(50).HasDefaultValue("us-east-1").IsRequired();
+            e.Property(c => c.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(c => c.UpdatedAt).HasDefaultValueSql("NOW()");
+
+            e.HasIndex(c => new { c.VerticalId, c.Provider }).IsUnique();
+
+            // Encrypt IamRoleArn at rest using Data Protection
+            e.Property(c => c.IamRoleArn)
+                .HasConversion(new EncryptedStringConverter(_protector));
+        });
+
+        // ── VerticalSourceControlConfig ───────────────────────────────────────
+        modelBuilder.Entity<VerticalSourceControlConfig>(e =>
+        {
+            e.ToTable("vertical_source_control_configs");
+            e.HasKey(c => c.Id);
+            e.Property(c => c.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(c => c.Platform).HasMaxLength(50).HasDefaultValue("GitHub").IsRequired();
+            e.Property(c => c.GitHubOrg).HasMaxLength(255);
+            e.Property(c => c.DefaultVisibility).HasMaxLength(20).HasDefaultValue("Private").IsRequired();
+            e.Property(c => c.DefaultBranchProtection).HasDefaultValue(true);
+            e.Property(c => c.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(c => c.UpdatedAt).HasDefaultValueSql("NOW()");
+
+            e.HasIndex(c => new { c.VerticalId, c.Platform }).IsUnique();
+
+            // Encrypt AccessToken at rest using Data Protection
+            e.Property(c => c.AccessToken)
+                .HasConversion(new EncryptedStringConverter(_protector));
+        });
+
+        // ── VerticalTechDefaults ──────────────────────────────────────────────
+        modelBuilder.Entity<VerticalTechDefaults>(e =>
+        {
+            e.ToTable("vertical_tech_defaults");
+            e.HasKey(t => t.Id);
+            e.Property(t => t.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(t => t.Environments).HasColumnType("text[]").IsRequired();
+            e.Property(t => t.DefaultEnvironment).HasMaxLength(50).HasDefaultValue("test").IsRequired();
+            e.Property(t => t.GenerateTerraform).HasDefaultValue(true);
+            e.Property(t => t.GenerateCdk).HasDefaultValue(true);
+            e.Property(t => t.DefaultDbEngine).HasMaxLength(50);
+            e.Property(t => t.CreatedAt).HasDefaultValueSql("NOW()");
+            e.Property(t => t.UpdatedAt).HasDefaultValueSql("NOW()");
+
+            e.HasIndex(t => t.VerticalId).IsUnique();
+        });
+
+        // ── GenerationLog ─────────────────────────────────────────────────────
+        modelBuilder.Entity<GenerationLog>(e =>
+        {
+            e.ToTable("generation_logs");
+            e.HasKey(g => g.Id);
+            e.Property(g => g.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(g => g.Manifest).HasColumnType("jsonb").IsRequired();
+            e.Property(g => g.InfrastructureDeployed).HasDefaultValue(false);
+            e.Property(g => g.GitHubReposCreated).HasDefaultValue(false);
+            e.Property(g => g.CreatedBy).HasMaxLength(255).IsRequired();
+            e.Property(g => g.CreatedAt).HasDefaultValueSql("NOW()");
+
+            e.HasIndex(g => g.VerticalId).HasDatabaseName("idx_generation_logs_vertical");
+            e.HasIndex(g => g.CreatedAt).IsDescending().HasDatabaseName("idx_generation_logs_created_at");
+
+            e.HasMany(g => g.DeploymentOutputs)
+                .WithOne(d => d.GenerationLog)
+                .HasForeignKey(d => d.GenerationLogId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── DeploymentOutput ──────────────────────────────────────────────────
+        modelBuilder.Entity<DeploymentOutput>(e =>
+        {
+            e.ToTable("deployment_outputs");
+            e.HasKey(d => d.Id);
+            e.Property(d => d.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(d => d.ServiceName).HasMaxLength(255).IsRequired();
+            e.Property(d => d.ResourceType).HasMaxLength(100).IsRequired();
+            e.Property(d => d.ResourceName).HasMaxLength(500).IsRequired();
+            e.Property(d => d.CreatedAt).HasDefaultValueSql("NOW()");
+
+            e.HasIndex(d => d.GenerationLogId).HasDatabaseName("idx_deployment_outputs_generation");
+        });
+    }
+}
+
+// Transparent encrypt/decrypt converter — wraps Data Protection so EF handles it automatically.
+// Null-safe: null stored as null, protecting against unnecessary encryption of empty fields.
+file sealed class EncryptedStringConverter(IDataProtector protector)
+    : ValueConverter<string?, string?>(
+        v => v == null ? null : protector.Protect(v),
+        v => v == null ? null : protector.Unprotect(v))
+{
+}

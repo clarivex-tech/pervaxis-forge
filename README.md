@@ -66,6 +66,17 @@ For every service, Forge produces:
 
 ---
 
+## Current Status
+
+| Team | Phase | Branch | Status |
+|---|---|---|---|
+| BFF (API + Engine) | Phase 0 — Vertical Enrollment | `feature/api-vertical-enrollment` | 🟢 In progress — models, Swagger, entities, migration done |
+| UI (Launchpad) | Phase 0 — Vertical Enrollment | `feature/ui-vertical-enrollment` | 🟢 In progress — enrollment wizard done, serve + tests pending |
+
+**Hard deadline: May 8, 2026** — Swagger JSON contract delivered to UI team.
+
+---
+
 ## Repository Structure
 
 This repository contains the planning and documentation for Forge. The two implementation repos are:

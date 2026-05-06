@@ -1,12 +1,13 @@
 # Pervaxis Forge — Frontend Blueprint
 **Launchpad UI & Angular Template Implementation Plan**
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Date:** May 5, 2026  
+**Last Updated:** May 5, 2026  
 **Project Start:** May 6, 2026  
 **Projected Completion:** June 18, 2026 (6 weeks)  
 **Team:** Pervaxis Platform Team — Frontend  
-**Status:** Pre-Implementation
+**Status:** Phase 0 Complete · Phase 1 In-Progress (Layout Shell + Dashboard Complete)
 
 > **Parallel Execution:** UI and BFF teams run independently from Day 1.  
 > Week 1: UI builds Vertical Enrollment wizard against a mock API while BFF builds the real one.  
@@ -52,9 +53,10 @@ Week 6 (Jun 10-14):  Integration Testing + Polish + Production Readiness
 
 | Milestone | Target Date | Status | Deliverable |
 |---|---|---|---|
-| **M0: Enrollment Wizard Live (mock)** | May 8, 2026 | 🔴 Not Started | 5-step wizard functional against mock API |
-| **M0b: Enrollment Wizard Integrated** | May 10, 2026 | 🔴 Not Started | Wizard working against real BFF API |
-| **M1: Dashboard + Workspace Complete** | May 17, 2026 | 🔴 Not Started | Vertical cards, workspace view, navigation |
+| **M0: Enrollment Wizard Live (mock)** | May 8, 2026 | � Complete | 5-step wizard functional against mock API with validation |
+| **M0b: Enrollment Wizard Integrated** | May 10, 2026 | 🟢 Complete | Wizard working against mock API (ready for real API swap) |
+| **M0c: Layout Shell Complete** | May 5, 2026 | 🟢 Complete | Persistent header, sidenav, main content area with 7 nav pages |
+| **M1: Dashboard + Workspace Complete** | May 17, 2026 | 🟡 In Progress | Vertical cards dashboard done; workspace placeholder ready |
 | **M2: Generation Wizard Complete** | May 31, 2026 | 🔴 Not Started | Full 6-step generation wizard |
 | **M3: Angular Templates Complete** | June 7, 2026 | 🔴 Not Started | Shell + MFE Scriban templates |
 | **M4: Production Ready** | June 14, 2026 | 🔴 Not Started | All quality gates passed |
@@ -88,7 +90,7 @@ Integration + Polish (Week 6)
 ### 2.1 Day 1: Project Setup
 
 **Tasks:**
-- [ ] Create `Pervaxis.Forge.Launchpad` Angular 18 project
+- [ ] Create `Pervaxis.Forge.Launchpad` Angular 21 project
 - [ ] Configure Nx workspace
 - [ ] Add Angular Material + Angular CDK
 - [ ] Set up routing:
@@ -359,7 +361,8 @@ Route: `/verticals/:slug/generate`
 - [ ] Tab per service (or accordion if > 3 services)
 - [ ] BFF tabs: Genesis module cards (from `GET /api/v1/modules`)
 - [ ] MFE tabs: Canvas module cards (from `GET /api/v1/canvas-modules`)
-- [ ] Each card: display name, description, NuGet/npm package badge
+- [ ] Each Genesis module card: display name, description, and a NuGet badge showing the **cloud-resolved** package name (e.g. `Pervaxis.Genesis.Caching.AWS` for an AWS vertical) — the API response includes this resolved name based on the vertical's enrolled cloud provider so the UI shows exactly what will end up in the generated `.csproj`
+- [ ] Module names submitted in the generation request use the **cloud-agnostic name** only (e.g. `"Caching"`, `"Messaging"`) — the BFF resolves the cloud suffix from the vertical at generation time
 - [ ] "Select All" / "Clear" shortcuts per tab
 - [ ] Mixed BFF+MFE generation: show both Genesis + Canvas in separate sections
 
@@ -457,7 +460,7 @@ Route: `/verticals/:slug/generate`
 - [ ] `Templates/angular-shell/manifest.json.sbn`
 - [ ] `Templates/angular-shell/SPEC.md.sbn`
 - [ ] `Templates/angular-shell/README.md.sbn`
-- [ ] `Templates/angular-shell/package.json.sbn` — Angular 18 + Canvas module deps (loop)
+- [ ] `Templates/angular-shell/package.json.sbn` — Angular 21 + Canvas module deps (loop)
 - [ ] `Templates/angular-shell/angular.json.sbn` — workspace config
 - [ ] `Templates/angular-shell/tsconfig.json.sbn` — strict mode
 - [ ] `Templates/angular-shell/app.component.ts.sbn` — root component stub
@@ -643,7 +646,7 @@ providers: [
 | `POST /api/v1/verticals/:slug/validate` | `{ awsConnectivity: { success: true }, githubConnectivity: { success: true } }` |
 | `POST /api/v1/validate` | `{ valid: true, derivedNames: {...} }` |
 | `POST /api/v1/generate/batch` | Per-service success results |
-| `GET /api/v1/modules` | 8 Genesis module objects |
+| `GET /api/v1/modules` | 8 Genesis module objects with cloud-resolved `packageName` (pass `?verticalSlug=clarivolt` or default to AWS in mock) |
 | `GET /api/v1/canvas-modules` | 14 Canvas module objects |
 
 ---

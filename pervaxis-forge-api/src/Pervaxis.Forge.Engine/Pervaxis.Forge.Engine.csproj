@@ -4,7 +4,7 @@
     <RootNamespace>Pervaxis.Forge.Engine</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Scriban" Version="5.*" />
+    <PackageReference Include="Scriban" Version="7.*" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Templates\**\*.sbn" />

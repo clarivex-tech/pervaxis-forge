@@ -23,11 +23,12 @@
 3. [Phase 1: Core Engine](#3-phase-1-core-engine)
 4. [Phase 2: REST API Templates](#4-phase-2-rest-api-templates)
 5. [Phase 3: Infrastructure Provisioning & GitHub Integration](#5-phase-3-infrastructure-provisioning--github-integration)
-6. [Dependencies & Blockers](#6-dependencies--blockers)
-7. [Quality Gates](#7-quality-gates)
-8. [Testing Strategy](#8-testing-strategy)
-9. [Risk Mitigation](#9-risk-mitigation)
-10. [Definition of Done](#10-definition-of-done)
+6. [Phase 4 (V2 Roadmap): Forge-Managed Infrastructure](#6-phase-4-v2-roadmap-forge-managed-infrastructure)
+7. [Dependencies & Blockers](#7-dependencies--blockers)
+8. [Quality Gates](#8-quality-gates)
+9. [Testing Strategy](#9-testing-strategy)
+10. [Risk Mitigation](#10-risk-mitigation)
+11. [Definition of Done](#11-definition-of-done)
 
 ---
 
@@ -258,7 +259,8 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 **Tasks:**
 - [ ] Create `PrintGenerator` class
-- [ ] Implement `GenerateAsync(manifest)` — validate → normalize → derive names → load templates → render files → package ZIP
+- [ ] Implement `GenerateAsync(manifest, cloudProvider)` — validate → normalize → derive names → load templates → render files → package ZIP
+- [ ] `cloudProvider` flows from the vertical's enrolled cloud into `TemplateModelBuilder.Build(manifest, cloudProvider)` — Engine stays cloud-agnostic by treating it as an opaque string (`"AWS"`, `"Azure"`, `"GCP"`)
 - [ ] Create `FileGenerator` for individual file rendering
 - [ ] Create `ZipPackager` using `System.IO.Compression`
 - [ ] Integration test: manifest → ZIP → extract → verify full file tree
@@ -271,10 +273,13 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 #### Day 4-5: Module Metadata
 
 **Tasks:**
-- [ ] `GenesisModules` static class — 8 modules with Id, DisplayName, NugetPackage, IAM Permissions
-- [ ] `CanvasModules` static class — 14 modules
+- [ ] `GenesisModules` static class — 8 modules with Id, DisplayName, IAM Permissions
+- [ ] Module names are **cloud-agnostic** (`Caching`, `Messaging`, `FileStorage`, `Search`, `Notifications`, `Workflow`, `AIAssistance`, `Reporting`) — no cloud suffix on the module name itself
+- [ ] `GetPackageName(moduleName, cloudProvider)` → `Pervaxis.Genesis.{Module}.{CloudProvider}` (e.g. `"Caching" + "AWS"` → `Pervaxis.Genesis.Caching.AWS`)
+- [ ] `GetDiExtensionName(moduleName, cloudProvider)` → `AddGenesis{Module}{CloudProvider}` (e.g. `AddGenesisCachingAWS`) — matches the extension method naming in each Genesis provider package
 - [ ] `GetAll()`, `GetById(id)`, `GetAllNames()` methods
-- [ ] Tests to verify module lists are complete and correct
+- [ ] `CanvasModules` static class — 14 modules
+- [ ] Tests to verify module lists are complete, `GetPackageName` resolves correctly for `"AWS"`, and `GetDiExtensionName` produces correct method names
 
 **Owner:** Engineer B  
 **Effort:** 6 hours
@@ -340,7 +345,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 4.4 Day 2-3: .csproj + Configuration
 
-- [ ] `csproj.sbn` — .NET 10, nullable, dynamic `<PackageReference>` loop
+- [ ] `csproj.sbn` — .NET 10, nullable, dynamic `<PackageReference>` loop — package name resolved as `Pervaxis.Genesis.{{ module.name }}.{{ model.cloud_provider }}` so an AWS vertical generates `Pervaxis.Genesis.Caching.AWS` and a future Azure vertical generates `Pervaxis.Genesis.Caching.Azure` with zero template change
 - [ ] `tests.csproj.sbn` — xUnit + FluentAssertions
 - [ ] `appsettings.json.sbn` — dynamic sections per Genesis module + DB connection + logging
 - [ ] `appsettings.Development.json.sbn` — LocalStack overrides
@@ -351,9 +356,9 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 4.5 Day 3-4: Program.cs + DI Wiring (CRITICAL)
 
-- [ ] `Program.cs.sbn` — Minimal API host, Genesis module loop, Swagger
-- [ ] `ServiceCollectionExtensions.cs.sbn` — Genesis DI + domain service stub
-- [ ] Test: generated service compiles with `dotnet build` and starts
+- [ ] `Program.cs.sbn` — Minimal API host, Genesis module loop, Swagger — `using` directives rendered as `Pervaxis.Genesis.{{ module.name }}.{{ model.cloud_provider }}`
+- [ ] `ServiceCollectionExtensions.cs.sbn` — Genesis DI calls rendered as `services.AddGenesis{{ module.name }}{{ model.cloud_provider }}(...)` — cloud provider from vertical, module name from manifest
+- [ ] Test: generated service for an AWS vertical compiles with `dotnet build` and starts; verify `csproj` references `*.AWS` packages only
 
 **Owner:** Engineer B | **Effort:** 12 hours
 
@@ -455,7 +460,103 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-## 6. Dependencies & Blockers
+## 6. Phase 4 (V2 Roadmap): Forge-Managed Infrastructure
+
+**Status:** Planned — not in V1 scope  
+**Goal:** All cloud resources for every vertical and service are created, updated, and destroyed exclusively through Forge. No developer ever touches the AWS console or runs `terraform apply` manually. Forge becomes the single policy-enforcement point for infrastructure across all verticals.
+
+> **Why this matters:** Today, V1 generates IaC templates that engineers apply themselves. That still allows console drift, manual overrides, and inconsistent naming. V2 closes that gap — Forge owns the infrastructure lifecycle end-to-end.
+
+---
+
+### 6.1 Core Principle: Forge as the Infrastructure Control Plane
+
+```
+Developer  →  Forge Launchpad  →  Forge API  →  Cloud (AWS / Azure / GCP)
+                                      ↑
+                              No other path to provision
+                              resources is permitted
+```
+
+- **No console access** for resource creation — IAM policies on the vertical's role deny `Create*` / `Delete*` actions except when called from Forge's assumed role session
+- **No manual `terraform apply`** — Forge executes the plan internally; engineers receive outputs (ARNs, endpoints), not the ability to run Terraform themselves
+- **Full audit trail** — every resource create/update/destroy is logged to `generation_logs` with operator identity, manifest snapshot, and outcome
+
+---
+
+### 6.2 Terraform Execution Engine
+
+V1 generates Terraform HCL files that teams apply themselves. V2 internalises the execution:
+
+- [ ] Embed Terraform binary or invoke via child process (`terraform init`, `terraform plan`, `terraform apply -auto-approve`)
+- [ ] Store Terraform state in a Forge-managed S3 bucket (one state file per `{vertical}/{service}/{environment}`)
+- [ ] State locking via DynamoDB to prevent concurrent applies
+- [ ] `POST /api/v1/infrastructure/apply` — trigger apply for a specific service + environment
+- [ ] `POST /api/v1/infrastructure/destroy` — tear down resources for a service + environment
+- [ ] `GET /api/v1/infrastructure/{vertical}/{service}/{environment}` — current state summary (resources, endpoints, last applied)
+
+**Terraform module source — decision pending:**  
+The Terraform templates Forge generates will use community modules rather than raw resources where appropriate. The `terraform-aws-modules` community registry (`registry.terraform.io/modules/terraform-aws-modules`) is the leading candidate — it covers ElastiCache, RDS, S3, SQS, VPC, and more with production-hardened defaults. Final decision on which modules (community vs. custom internal) to be made before Phase 4 kicks off.
+
+```hcl
+# Example — using terraform-aws-modules/elasticache (decision pending)
+module "cache" {
+  source  = "terraform-aws-modules/elasticache/aws"
+  version = "~> 1.0"
+
+  cluster_id = "${var.environment}-${var.vertical}-${var.service}-cache"
+  # ... module inputs
+}
+```
+
+---
+
+### 6.3 Policy Enforcement (IAM Guardrails)
+
+For Forge to be the sole provisioning path, the vertical's `ForgeDeploymentRole` must be scoped so that no other session can create or delete infrastructure resources:
+
+- [ ] Define a `ForgeResourcePolicy` IAM policy template (generated per vertical at enrollment time)
+- [ ] Policy denies `ec2:*`, `rds:*`, `elasticache:*`, `s3:CreateBucket`, `sqs:CreateQueue`, etc. unless the session principal is Forge's own assumed-role session tag (`forge:managed=true`)
+- [ ] Forge sets `aws:RequestTag/forge:managed=true` on every STS AssumeRole call
+- [ ] Policy template emitted as an additional IaC file (`iam-policy.tf.sbn`) during vertical enrollment
+- [ ] Cloud Ops applies this policy to the vertical's AWS account — once applied, console creation is blocked
+
+---
+
+### 6.4 Infrastructure Drift Detection
+
+- [ ] `GET /api/v1/infrastructure/{vertical}/{service}/{environment}/drift` — run `terraform plan` without apply; return diff of actual vs. declared state
+- [ ] Scheduled drift check (configurable per vertical — default daily)
+- [ ] Drift alert written to `generation_logs` with `drift_detected: true`
+- [ ] Launchpad surfaces drift warnings on the Vertical Workspace (V2 UI scope)
+
+---
+
+### 6.5 Multi-Cloud Readiness
+
+Phase 4 targets AWS first. The same execution engine will support Azure and GCP by swapping the Terraform provider — no structural changes to Forge required:
+
+| Cloud | Terraform Provider | Module Candidate |
+|---|---|---|
+| AWS | `hashicorp/aws` | `terraform-aws-modules/*` (TBD) |
+| Azure | `hashicorp/azurerm` | `Azure/` modules on registry (TBD) |
+| GCP | `hashicorp/google` | `terraform-google-modules/*` (TBD) |
+
+The `cloudProvider` already flows through `TemplateModel` from V1 — Forge templates conditionally emit the correct provider block at generation time.
+
+---
+
+### 6.6 Phase 4 Prerequisites (before scheduling)
+
+- [ ] Decision: `terraform-aws-modules` community modules vs. custom internal modules — evaluate security posture, versioning, and coverage
+- [ ] Terraform binary bundling strategy (sidecar container vs. embedded CLI vs. Terraform Cloud API)
+- [ ] S3 state bucket and DynamoDB lock table provisioned per Forge environment
+- [ ] IAM policy template reviewed by Cloud Ops and Security
+- [ ] UI scope defined for infrastructure management screens (Launchpad V2)
+
+---
+
+## 7. Dependencies & Blockers
 
 | Dependency | Owner | Status | Impact if Delayed |
 |---|---|---|---|
@@ -468,7 +569,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-## 7. Quality Gates
+## 8. Quality Gates
 
 ### Phase 0 Gate — May 10, 2026
 
@@ -508,7 +609,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-## 8. Testing Strategy
+## 9. Testing Strategy
 
 ### Unit Tests (90%+ coverage)
 - xUnit + FluentAssertions + Moq
@@ -528,7 +629,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-## 9. Risk Mitigation
+## 10. Risk Mitigation
 
 | Risk | Mitigation |
 |---|---|
@@ -540,7 +641,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-## 10. Definition of Done
+## 11. Definition of Done
 
 ### Feature-Level
 - [ ] Code complete and committed

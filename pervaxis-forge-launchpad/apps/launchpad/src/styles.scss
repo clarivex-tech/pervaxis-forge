@@ -1,0 +1,375 @@
+// =============================================================================
+// Pervaxis Forge Launchpad — Global Styles & Angular Material Theme
+// Design tokens sourced from Stitch design token specification.
+// =============================================================================
+
+// 1. Angular Material theming setup
+@use '@angular/material' as mat;
+
+// 2. Include Material core (typography baseline, ripple, etc.)
+@include mat.core();
+
+// -----------------------------------------------------------------------------
+// COLOUR PALETTE
+// Primary: Clarivex purple #6750A4
+// -----------------------------------------------------------------------------
+
+$forge-primary: mat.m2-define-palette((
+  50:   #F3EEFF,
+  100:  #EADDFF,
+  200:  #D0BCFF,
+  300:  #B69DF8,
+  400:  #9A82DB,
+  500:  #7F67BE,
+  600:  #6750A4,
+  700:  #4F378A,
+  800:  #381E72,
+  900:  #21005D,
+  contrast: (
+    50:   #21005D,
+    100:  #21005D,
+    200:  #21005D,
+    300:  #21005D,
+    400:  #21005D,
+    500:  #FFFFFF,
+    600:  #FFFFFF,
+    700:  #FFFFFF,
+    800:  #FFFFFF,
+    900:  #FFFFFF,
+  )
+), 600, 300, 800);
+
+$forge-secondary: mat.m2-define-palette((
+  50:   #F3EEF8,
+  100:  #E8DEF8,
+  200:  #CCC2DC,
+  300:  #B0A7C0,
+  400:  #958DA5,
+  500:  #7A7289,
+  600:  #625B71,
+  700:  #4A4458,
+  800:  #332D41,
+  900:  #1D192B,
+  contrast: (
+    50:   #1D192B,
+    100:  #1D192B,
+    200:  #1D192B,
+    300:  #1D192B,
+    400:  #1D192B,
+    500:  #FFFFFF,
+    600:  #FFFFFF,
+    700:  #FFFFFF,
+    800:  #FFFFFF,
+    900:  #FFFFFF,
+  )
+), 600, 300, 800);
+
+$forge-warn: mat.m2-define-palette((
+  50:   #FFEDEA,
+  100:  #F9DEDC,
+  200:  #F2B8B5,
+  300:  #EC928E,
+  400:  #E46962,
+  500:  #DC362E,
+  600:  #B3261E,
+  700:  #8C1D18,
+  800:  #601410,
+  900:  #410E0B,
+  contrast: (
+    50:   #410E0B,
+    100:  #410E0B,
+    200:  #410E0B,
+    300:  #410E0B,
+    400:  #FFFFFF,
+    500:  #FFFFFF,
+    600:  #FFFFFF,
+    700:  #FFFFFF,
+    800:  #FFFFFF,
+    900:  #FFFFFF,
+  )
+), 600, 300, 800);
+
+// -----------------------------------------------------------------------------
+// TYPOGRAPHY — Google Sans / Inter / system-ui fallback
+// Full MD3 type scale from Stitch token spec
+// -----------------------------------------------------------------------------
+
+$forge-typography: mat.m2-define-typography-config(
+  $font-family:   'Google Sans, Inter, system-ui, sans-serif',
+  $headline-1: mat.m2-define-typography-level(57px, 64px, 400, $letter-spacing: -0.25px),
+  $headline-2: mat.m2-define-typography-level(45px, 52px, 400, $letter-spacing: 0),
+  $headline-3: mat.m2-define-typography-level(36px, 44px, 400, $letter-spacing: 0),
+  $headline-4: mat.m2-define-typography-level(32px, 40px, 400, $letter-spacing: 0),
+  $headline-5: mat.m2-define-typography-level(28px, 36px, 400, $letter-spacing: 0),
+  $headline-6: mat.m2-define-typography-level(24px, 32px, 400, $letter-spacing: 0),
+  $subtitle-1: mat.m2-define-typography-level(22px, 28px, 400, $letter-spacing: 0),
+  $subtitle-2: mat.m2-define-typography-level(16px, 24px, 500, $letter-spacing: 0.15px),
+  $body-1: mat.m2-define-typography-level(16px, 24px, 400, $letter-spacing: 0.5px),
+  $body-2: mat.m2-define-typography-level(14px, 20px, 400, $letter-spacing: 0.25px),
+  $caption: mat.m2-define-typography-level(12px, 16px, 400, $letter-spacing: 0.4px),
+  $button: mat.m2-define-typography-level(14px, 20px, 500, $letter-spacing: 0.1px),
+  $overline: mat.m2-define-typography-level(11px, 16px, 500, $letter-spacing: 0.5px),
+);
+
+// -----------------------------------------------------------------------------
+// THEME — Light theme assembly
+// -----------------------------------------------------------------------------
+
+$forge-theme: mat.m2-define-light-theme((
+  color: (
+    primary:    $forge-primary,
+    accent:     $forge-secondary,
+    warn:       $forge-warn,
+  ),
+  typography: $forge-typography,
+  density: 0,
+));
+
+@include mat.all-component-themes($forge-theme);
+@include mat.typography-hierarchy($forge-typography);
+
+// -----------------------------------------------------------------------------
+// DESIGN TOKENS — CSS custom properties
+// Sourced directly from Stitch token spec — available globally
+// -----------------------------------------------------------------------------
+
+:root {
+  // Colour tokens
+  --color-primary:                  #6750A4;
+  --color-on-primary:               #FFFFFF;
+  --color-primary-container:        #EADDFF;
+  --color-on-primary-container:     #21005D;
+  --color-secondary:                #625B71;
+  --color-on-secondary:             #FFFFFF;
+  --color-secondary-container:      #E8DEF8;
+  --color-on-secondary-container:   #1D192B;
+  --color-tertiary:                 #7D5260;
+  --color-on-tertiary:              #FFFFFF;
+  --color-tertiary-container:       #FFD8E4;
+  --color-on-tertiary-container:    #31111D;
+  --color-error:                    #B3261E;
+  --color-on-error:                 #FFFFFF;
+  --color-error-container:          #F9DEDC;
+  --color-on-error-container:       #410E0B;
+  --color-background:               #FEF7FF;
+  --color-on-background:            #1D1B20;
+  --color-surface:                  #FEF7FF;
+  --color-on-surface:               #1D1B20;
+  --color-surface-variant:          #E7E0EB;
+  --color-on-surface-variant:       #49454F;
+  --color-outline:                  #79747E;
+  --color-outline-variant:          #CAC4D0;
+  --color-surface-container-lowest: #FFFFFF;
+  --color-surface-container-low:    #F7F2FA;
+  --color-surface-container:        #F3EDF7;
+  --color-surface-container-high:   #ECE6F0;
+  --color-surface-container-highest:#E6E0E9;
+
+  // Semantic — Forge-specific
+  --color-aws:                      #FF9900;
+  --color-github:                   #24292F;
+  --color-success:                  #2E7D32;
+  --color-failed:                   #D32F2F;
+  --color-coming-soon:              #9E9E9E;
+
+  // Elevation (MD3 box-shadow levels)
+  --elevation-0: none;
+  --elevation-1: 0px 1px 3px 1px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.30);
+  --elevation-2: 0px 2px 6px 2px rgba(0,0,0,0.15), 0px 1px 2px 0px rgba(0,0,0,0.30);
+  --elevation-3: 0px 4px 8px 3px rgba(0,0,0,0.15), 0px 1px 3px 0px rgba(0,0,0,0.30);
+  --elevation-4: 0px 6px 10px 4px rgba(0,0,0,0.15), 0px 2px 3px 0px rgba(0,0,0,0.30);
+  --elevation-5: 0px 8px 12px 6px rgba(0,0,0,0.15), 0px 4px 4px 0px rgba(0,0,0,0.30);
+
+  // Shape (border-radius)
+  --shape-none:        0px;
+  --shape-extra-small: 4px;
+  --shape-small:       8px;
+  --shape-medium:      12px;
+  --shape-large:       16px;
+  --shape-extra-large: 28px;
+  --shape-full:        9999px;
+
+  // Spacing (8px base grid)
+  --spacing-half:  4px;
+  --spacing-1:     8px;
+  --spacing-2:     16px;
+  --spacing-3:     24px;
+  --spacing-4:     32px;
+  --spacing-5:     40px;
+  --spacing-6:     48px;
+  --spacing-7:     56px;
+  --spacing-8:     64px;
+  --spacing-9:     72px;
+  --spacing-10:    80px;
+  --spacing-11:    88px;
+  --spacing-12:    96px;
+
+  // Component-specific sizing
+  --size-form-field-height: 56px;
+  --size-card-padding:      24px;
+  --size-stepper-height:    72px;
+  --size-table-row-height:  52px;
+  --size-chip-height:       32px;
+  --size-button-height:     40px;
+  --size-container-max:     1280px;
+}
+
+// -----------------------------------------------------------------------------
+// MDC COMPONENT OVERRIDES
+// Wire Stitch component tokens into Angular Material MDC CSS variables
+// -----------------------------------------------------------------------------
+
+// MatCard
+.mat-mdc-card {
+  --mdc-elevated-card-container-color: var(--color-surface-container-low);
+  --mdc-elevated-card-container-shape: var(--shape-medium);
+  box-shadow: var(--elevation-1);
+  padding: var(--size-card-padding);
+}
+
+// MatFormField (outline variant)
+.mat-mdc-form-field {
+  --mdc-outlined-text-field-container-shape: var(--shape-extra-small);
+  --mdc-outlined-text-field-outline-color: var(--color-outline);
+  --mdc-outlined-text-field-focus-outline-color: var(--color-primary);
+  --mdc-outlined-text-field-label-text-color: var(--color-on-surface-variant);
+  --mdc-outlined-text-field-input-text-color: var(--color-on-surface);
+  height: var(--size-form-field-height);
+}
+
+// MatButton — filled
+.mat-mdc-raised-button, .mdc-button--unelevated {
+  --mdc-filled-button-container-shape: var(--shape-full);
+  --mdc-filled-button-container-color: var(--color-primary);
+  --mdc-filled-button-label-text-color: var(--color-on-primary);
+  height: var(--size-button-height);
+}
+
+// MatButton — outlined
+.mat-mdc-outlined-button {
+  --mdc-outlined-button-container-shape: var(--shape-full);
+  --mdc-outlined-button-outline-color: var(--color-outline);
+  --mdc-outlined-button-label-text-color: var(--color-primary);
+  height: var(--size-button-height);
+}
+
+// MatChip
+.mat-mdc-chip {
+  --mdc-chip-container-shape-radius: var(--shape-small);
+  --mdc-chip-elevated-container-color: var(--color-surface-container-high);
+  --mdc-chip-label-text-color: var(--color-on-surface-variant);
+  height: var(--size-chip-height);
+}
+
+// Semantic chip variants
+.chip-aws {
+  background-color: var(--color-aws) !important;
+  color: #000000 !important;
+}
+
+.chip-github {
+  background-color: var(--color-github) !important;
+  color: #FFFFFF !important;
+}
+
+.chip-success {
+  background-color: var(--color-success) !important;
+  color: #FFFFFF !important;
+}
+
+.chip-failed {
+  background-color: var(--color-failed) !important;
+  color: #FFFFFF !important;
+}
+
+.chip-coming-soon {
+  background-color: var(--color-coming-soon) !important;
+  color: #FFFFFF !important;
+}
+
+// MatStepper
+.mat-stepper-horizontal, .mat-stepper-vertical {
+  --mat-stepper-container-color: transparent;
+  --mat-stepper-line-color: var(--color-outline-variant);
+  --mat-stepper-header-selected-state-icon-background-color: var(--color-primary);
+  --mat-stepper-header-selected-state-icon-foreground-color: var(--color-on-primary);
+  --mat-stepper-header-done-state-icon-background-color: var(--color-primary);
+  --mat-stepper-header-done-state-icon-foreground-color: var(--color-on-primary);
+  min-height: var(--size-stepper-height);
+}
+
+// MatTable
+.mat-mdc-table {
+  --mat-table-background-color: var(--color-surface-container-low);
+  --mat-table-header-headline-color: var(--color-on-surface);
+  --mat-table-row-item-outline-color: var(--color-outline-variant);
+  --mat-table-row-item-container-height: var(--size-table-row-height);
+
+  .mat-mdc-header-row {
+    background: var(--color-surface-container-low);
+  }
+
+  .mat-mdc-row:hover {
+    background: var(--color-surface-container-high);
+  }
+}
+
+// MatSlideToggle
+.mat-mdc-slide-toggle {
+  --mdc-switch-selected-track-color: var(--color-primary);
+  --mdc-switch-selected-handle-color: var(--color-on-primary);
+  --mdc-switch-unselected-track-color: var(--color-surface-variant);
+  --mdc-switch-unselected-handle-color: var(--color-outline);
+}
+
+// MatDialog
+.mat-mdc-dialog-container {
+  --mdc-dialog-container-color: var(--color-surface-container-high);
+  --mdc-dialog-container-shape: var(--shape-extra-large);
+  box-shadow: var(--elevation-3);
+}
+
+// MatSidenav
+.mat-drawer {
+  background-color: var(--color-surface-container-low) !important;
+  box-shadow: var(--elevation-0) !important;
+}
+
+// MatSelect
+.mat-mdc-select {
+  --mat-select-panel-background-color: var(--color-surface-container);
+  --mat-option-hover-state-layer-color: var(--color-primary-container);
+  --mat-option-selected-state-label-text-color: var(--color-on-primary-container);
+}
+
+// -----------------------------------------------------------------------------
+// GLOBAL BASE STYLES
+// -----------------------------------------------------------------------------
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background-color: var(--color-background);
+  color: var(--color-on-background);
+  font-family: 'Google Sans', Inter, system-ui, sans-serif;
+  color-scheme: light;
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+// Scrollbar styling — subtle, matches surface tokens
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-surface-container-low);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-outline-variant);
+  border-radius: var(--shape-full);
+}
