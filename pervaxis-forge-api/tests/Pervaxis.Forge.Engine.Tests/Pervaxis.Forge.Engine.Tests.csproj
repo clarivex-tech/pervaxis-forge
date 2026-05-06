@@ -1,8 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!-- Required for .NET 10 testhost to resolve net6.0/net8.0 NuGet assemblies (Castle.Core, AWSSDK.Core) -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\Pervaxis.Forge.Engine\Pervaxis.Forge.Engine.csproj" />
-    <PackageReference Include="xunit" Version="*" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="*" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="FluentAssertions" Version="*" />
     <PackageReference Include="Moq" Version="*" />
   </ItemGroup>

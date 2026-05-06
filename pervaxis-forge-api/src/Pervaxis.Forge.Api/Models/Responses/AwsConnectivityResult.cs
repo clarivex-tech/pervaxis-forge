@@ -18,14 +18,9 @@
 
 namespace Pervaxis.Forge.Api.Models.Responses;
 
-public record VerticalSummaryResponse
+public record AwsConnectivityResult
 {
-    public required Guid Id { get; init; }
-    public required string Slug { get; init; }
-    public required string DisplayName { get; init; }
-    public string? Description { get; init; }
-    public required string CloudProvider { get; init; }
-    public required string SourceControl { get; init; }
-    public int ServiceCount { get; init; }
-    public required DateTimeOffset EnrolledAt { get; init; }
+    public bool Success { get; init; }
+    public string? AccountId { get; init; }
+    public string? ErrorMessage { get; init; }
 }
