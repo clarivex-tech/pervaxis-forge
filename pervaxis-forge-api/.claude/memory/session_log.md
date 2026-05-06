@@ -79,6 +79,91 @@ Known conflicts the guides will pull you toward — use the CLAUDE.md / Forge-sp
 
 ---
 
+## 2026-05-06 — Phase 0 Day 1 (Session 2): Contract + entities + CI + tests
+
+**Branch:** `feature/api-vertical-enrollment`
+**Engineer:** Anand Jayaseelan (with Claude as implementing engineer)
+**Phase:** Phase 0 — Vertical Enrollment Backend (Week 1, May 6–10)
+
+### What was done this session
+
+1. **TODO 4 — Request/response records** (18 files, all green):
+   - New supporting types: `CloudProviderConfig`, `SourceControlConfig`, `VerticalTechDefaults`, `GenerationDatabaseConfig`, `GenerationQueueConfig`, `GenerationMetadata`, `ServiceGenerationSpec`, `AwsConnectivityResult`, `GitHubConnectivityResult`
+   - Filled stubs: `VerticalEnrollmentRequest`, `UpdateVerticalRequest`, `GenerationRequest`, `BatchGenerationRequest`, `VerticalResponse`, `VerticalSummaryResponse`, `ConnectivityValidationResponse`, `GenerationResult`, `BatchGenerationResult`
+   - All records, all `required` modifiers, all Clarivex license headers. Build: 0 warnings, 0 errors.
+
+2. **TODO 5 — Program.cs + Swagger wiring**:
+   - Added `Swashbuckle.AspNetCore 7.*` + `Microsoft.OpenApi 1.*` + `Microsoft.EntityFrameworkCore.Design 10.*` to csproj.
+   - `Program.cs`: EF Core + Npgsql, Data Protection (keys → `%LOCALAPPDATA%\Pervaxis.Forge\keys`), Swashbuckle with full OpenAPI info block.
+   - Swagger UI gated: dev-only **OR** `Forge:EnableSwagger=true` config flag (prod opt-in without code deploy).
+   - All 3 endpoint groups wired via `MapVerticalEndpoints()`, `MapGenerationEndpoints()`, `MapModuleEndpoints()` extension methods.
+   - Endpoint stubs return `501 Not Implemented` with full Swagger metadata (`WithSummary`, `Produces<T>`, `ProducesProblem`).
+   - `appsettings.json`: `Forge:EnableSwagger` defaulted to `false`.
+   - `ForgeDbContext`: promoted from namespace-only stub to compilable skeleton (full implementation is TODO 3, which followed immediately).
+
+3. **TODO 2 + 3 — EF entities + ForgeDbContext**:
+   - All 6 entities implemented: `Vertical`, `VerticalCloudConfig`, `VerticalSourceControlConfig`, `VerticalTechDefaults`, `GenerationLog`, `DeploymentOutput` — classes (not records) per EF change-tracking requirement, `required` on mandatory props.
+   - `ForgeDbContext`: full Fluent API — table names, column constraints, relationships, cascade rules, all indexes from spec (`idx_verticals_slug`, `idx_generation_logs_vertical`, `idx_generation_logs_created_at DESC`, `idx_deployment_outputs_generation`).
+   - `EncryptedStringConverter` (`file sealed`) — transparent Data Protection encrypt/decrypt for `IamRoleArn` and `AccessToken`. Null-safe.
+   - `GenerationLog.Manifest` stored as `jsonb`. `VerticalTechDefaults.Environments` stored as `text[]`.
+
+4. **TODO 6 — EF migration**:
+   - Installed `dotnet-ef` global tool (`--prerelease` for .NET 10).
+   - Added `Microsoft.EntityFrameworkCore.Design 10.*` to csproj (required for migrations, `PrivateAssets=all`).
+   - Generated `20260506140655_InitialSchema`. **Not applied** — no RDS yet (Day 2).
+
+5. **TODO 7 — CI rework**:
+   - Deleted `build-test.yml` (had postgres:16 service container — violates no-local-emulation rule).
+   - Created `pr-check.yml`: triggers on PR to `main`/`develop`. Runs build + non-integration tests (`--filter "Category!=Integration"`). Codecov upload. `TODO(sonar)` marker for future SonarCloud step.
+   - Created `deploy.yml`: triggers on push to `main`. Same build/test pattern. `TODO` for deploy job once ECS infra is provisioned.
+   - DB-dependent tests gated behind `RUN_INTEGRATION_TESTS` env var (off by default until RDS exists).
+
+6. **TODO 8 — Stub tests (one per project, CI green)**:
+   - `Pervaxis.Forge.Engine.Tests` — `NamingConventionTests.NamingConvention_ClassExists_InExpectedNamespace` (smoke test; namespace/class existence assertion).
+   - `Pervaxis.Forge.Api.Tests` — `VerticalServiceTests.VerticalEnrollmentRequest_CanBeConstructed_WithRequiredProperties` (full request object construction + FluentAssertions).
+   - Added minimal `NamingConvention` static class stub to Engine (was namespace-only, blocked compilation).
+   - Result: **2/2 passed, 0 failures**.
+
+7. **TODO 9 — README updates**:
+   - `pervaxis-forge-api/README.md`: full rewrite with prerequisites, build/test/run instructions, migration commands, Swagger opt-in instructions, key decisions table, pinned package rationale.
+   - Root `README.md`: added Current Status table (BFF + UI phase, branch, status).
+
+### Gotchas resolved this session
+
+| Issue | Root cause | Fix |
+|---|---|---|
+| `Microsoft.OpenApi.Models` not found | `Swashbuckle Version="*"` resolved to v8.x which dropped the namespace | Pinned `Swashbuckle.AspNetCore 7.*` + explicit `Microsoft.OpenApi 1.*` |
+| `ForgeDbContext` not found in Program.cs | Stub was namespace-only, no class | Promoted to compilable skeleton before full implementation |
+| Test run aborted — `Castle.Core lib/net6.0` not found | .NET 10 testhost assembly resolution | Added `CopyLocalLockFileAssemblies=true` to both test csproj files |
+| Test run aborted — `testhost 18.3.0-release-26219-105` not found | `Version="*"` pulled nightly xUnit runner which dragged in a missing nightly testhost | Pinned `xunit 2.9.3`, `xunit.runner.visualstudio 3.1.5`, `Microsoft.NET.Test.Sdk 17.14.1` |
+| MSB3277 EF Relational version conflict | `Microsoft.AspNetCore.Mvc.Testing 10.*` and Api project pulling different EF Relational versions | Explicit `Microsoft.EntityFrameworkCore.Relational 10.*` pin in Api.Tests csproj |
+
+### End-of-day state
+
+- **Build:** 4/4 projects, 0 warnings, 0 errors.
+- **Tests:** 2/2 passed (Engine + Api), 0 failures.
+- **Migration:** `InitialSchema` generated, not applied.
+- **CI:** `pr-check.yml` + `deploy.yml` in place, old postgres workflow deleted.
+- **Swagger contract:** All 11 endpoints wired with full metadata — ready for UI team to consume on May 8.
+
+### Open items for Day 2
+
+- [ ] Align with Anand on AWS Organizations / RDS provisioning approach.
+- [ ] Apply `InitialSchema` migration once RDS endpoint is available.
+- [ ] Implement `VerticalService` + `IVerticalService` (enrollment, CRUD, credential encryption).
+- [ ] Implement `VerticalConnectivityValidator` (STS AssumeRole dry-run + GitHub org check).
+- [ ] SonarCloud bootstrap (org `clarivex-tech`, project `clarivex-tech_pervaxis-forge`, `SONAR_TOKEN` from Anand).
+- [ ] Update `docs/FORGE_SOLUTION_STRUCTURE.md` — Scriban `5.*` → `7.*`, drop DataProtection PackageReference, drop Testcontainers.
+
+### How to resume on another machine
+
+1. `git fetch && git checkout feature/api-vertical-enrollment && git pull`
+2. Read this entry top-to-bottom.
+3. `dotnet restore && dotnet build && dotnet test --filter "Category!=Integration"` — should all be green.
+4. Continue with Day 2 open items above.
+
+---
+
 ## 2026-05-06 — Phase 0 Day 1: Alignment + skeleton fill-in
 
 **Branch:** `feature/api-vertical-enrollment`

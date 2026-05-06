@@ -16,16 +16,11 @@
  ************************************************************************
  */
 
-namespace Pervaxis.Forge.Api.Models.Responses;
+namespace Pervaxis.Forge.Api.Models.Requests;
 
-public record VerticalSummaryResponse
+public record GenerationMetadata
 {
-    public required Guid Id { get; init; }
-    public required string Slug { get; init; }
-    public required string DisplayName { get; init; }
-    public string? Description { get; init; }
-    public required string CloudProvider { get; init; }
-    public required string SourceControl { get; init; }
-    public int ServiceCount { get; init; }
-    public required DateTimeOffset EnrolledAt { get; init; }
+    public bool DeployInfrastructure { get; init; }
+    public bool PushToGitHub { get; init; }
+    public string Environment { get; init; } = "test";
 }
