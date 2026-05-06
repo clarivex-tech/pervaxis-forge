@@ -1,6 +1,6 @@
 ## Session Log
 
-### 2026-05-05
+### 2026-05-05 (Part 1 - Enrollment + Dashboard)
 
 **What we did**
 - Reviewed UI blueprint and workspace scaffolds for Launchpad.
@@ -36,16 +36,60 @@
   - Installed Angular/Nx dependencies and added missing `@angular/build` package.
 - Resolved strict union typing error in enrollment state sync (`CloudProvider`, `SourceControlPlatform`, `RepoVisibility`).
 - Verified build success with `npx nx build launchpad` (development build completed; output in `dist/apps/launchpad`).
+- Implemented Screen 1 — Vertical Dashboard with Material Card grid:
+  - Listed 3 seeded verticals (clarivolt, stellarlink, neofinance) with service counts and last-generated timestamps.
+  - Added provider badges (AWS, GitHub) with brand colors.
+  - Empty state with "No verticals enrolled" message and CTA.
+  - Open button routes to `/verticals/:slug` (workspace placeholder).
+  - + Enroll New Vertical button routes to `/enroll` (enrollment wizard).
+  - Integrated with mock API service; 600ms delay for realism.
 
 **Challenges**
 - Nx interactive prompts (analytics/extension recommendations) can interrupt non-interactive runs in this environment; we now use `NX_INTERACTIVE=false` for reliable automation.
+- Angular Material v21 Sass function naming required m2-prefixed versions (mat.m2-define-palette) for compatibility.
 - Build currently succeeds but with large bundle sizes for the enrollment lazy chunk, indicating follow-up optimization work is needed.
 
+**Next (Part 1 Complete)**
+- Continue to Part 2: Layout Shell implementation.
+
+---
+
+### 2026-05-05 (Part 2 - Layout Shell)
+
+**What we did**
+- Implemented persistent layout shell (Priority 1 Phase 1 task):
+  - Created `app-header.component.ts` — fixed top bar (64px, z-50) with logo, nav tabs (Verticals/Resources/Pipeline), search box, Create Service button, notification/help icons, avatar.
+  - Created `app-sidenav.component.ts` — fixed left sidebar (256px, z-40) with Forge Engine branding, 6 nav links (Infrastructure/Deployments/Monitoring/Security/Clusters/Settings), System Health widget (green status dot, 99.9% Uptime).
+  - Created `app-layout.component.ts` — wrapper grid positioning header + sidenav + router-outlet main area (ml-256px, mt-64px, p-24).
+  - Refactored `app.component.ts` to use AppLayoutComponent instead of inline shell.
+  - Restructured `app.routes.ts` with guard + children pattern for cleaner route organization.
+  - Created 7 placeholder components for inactive nav links: Resources, Pipeline, Deployments, Monitoring, Security, Clusters, Settings (all render "Coming Soon" cards).
+  - Wired all nav links with `routerLink` + `routerLinkActive` for in-frame navigation and active state highlighting.
+  - Applied Stitch Design System tokens (primary #4f378a, secondary colors, spacing 8px unit, typography Inter).
+  - All nav clicks stay in-frame (no page reloads); active route detection works on both header tabs and sidenav links.
+- Verified layout visually:
+  - Header renders at top with logo, nav tabs, search, icons, avatar.
+  - Sidenav renders on left with nav links and System Health widget.
+  - Dashboard (Screen 1) renders in main area with card grid visible.
+  - Enrollment wizard loads inside layout at `/verticals/enroll`.
+  - All 7 placeholder pages load correctly with Coming Soon message.
+- Build passes: `npx nx build launchpad` succeeds with no TypeScript errors.
+- Dev server runs: `npx nx serve launchpad --port 4201` up and running.
+- Committed all changes to `feature/ui-vertical-enrollment` branch (commit: a890cd5).
+- Pushed to GitHub remote.
+
+**Status**
+- ✅ Phase 0 Vertical Enrollment Wizard: COMPLETE (all 5 steps, validation, state management, mock API)
+- ✅ Phase 1 Screen 1 Dashboard: COMPLETE (card grid, empty state, mock data, navigation)
+- ✅ Phase 1 Layout Shell: COMPLETE (persistent header + sidenav + 7 nav pages)
+- 🟡 Phase 1 Screen 2-7 (Workspace + other features): NOT STARTED
+
 **Next**
-- Run `npx nx serve launchpad` and manually verify the full enrollment wizard path with mock API enabled.
-- Add unit tests for enrollment state mapper, masking helpers, and mock API service contract behavior.
-- Implement step-level validation UX (touched/submitted error surfacing) and accessibility checks per guide.
-- Start Phase 0 quality gate checks: lint, unit tests, and initial Cypress enrollment flow.
+- Implement Screen 2-7 (vertical workspace, service generation wizard, detail pages).
+- Add unit tests for layout navigation, mock API contract, enrollment state management.
+- Swap mock API to real BFF API (zero code change via `useMockApi` flag).
+- Add e2e tests for full enrollment → dashboard → workspace flow.
+- Start Phase 2 quality gate checks: lint, unit tests, accessibility, CI/Sonar.
 
 ---
 
@@ -54,6 +98,9 @@
 ### YYYY-MM-DD
 
 **What we did**
+- 
+
+**Status**
 - 
 
 **Next**

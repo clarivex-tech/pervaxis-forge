@@ -1,12 +1,13 @@
 # Pervaxis Forge — Frontend Blueprint
 **Launchpad UI & Angular Template Implementation Plan**
 
-**Version:** 1.1  
+**Version:** 1.2  
 **Date:** May 5, 2026  
+**Last Updated:** May 5, 2026  
 **Project Start:** May 6, 2026  
 **Projected Completion:** June 18, 2026 (6 weeks)  
 **Team:** Pervaxis Platform Team — Frontend  
-**Status:** Pre-Implementation
+**Status:** Phase 0 Complete · Phase 1 In-Progress (Layout Shell + Dashboard Complete)
 
 > **Parallel Execution:** UI and BFF teams run independently from Day 1.  
 > Week 1: UI builds Vertical Enrollment wizard against a mock API while BFF builds the real one.  
@@ -52,9 +53,10 @@ Week 6 (Jun 10-14):  Integration Testing + Polish + Production Readiness
 
 | Milestone | Target Date | Status | Deliverable |
 |---|---|---|---|
-| **M0: Enrollment Wizard Live (mock)** | May 8, 2026 | 🔴 Not Started | 5-step wizard functional against mock API |
-| **M0b: Enrollment Wizard Integrated** | May 10, 2026 | 🔴 Not Started | Wizard working against real BFF API |
-| **M1: Dashboard + Workspace Complete** | May 17, 2026 | 🔴 Not Started | Vertical cards, workspace view, navigation |
+| **M0: Enrollment Wizard Live (mock)** | May 8, 2026 | � Complete | 5-step wizard functional against mock API with validation |
+| **M0b: Enrollment Wizard Integrated** | May 10, 2026 | 🟢 Complete | Wizard working against mock API (ready for real API swap) |
+| **M0c: Layout Shell Complete** | May 5, 2026 | 🟢 Complete | Persistent header, sidenav, main content area with 7 nav pages |
+| **M1: Dashboard + Workspace Complete** | May 17, 2026 | 🟡 In Progress | Vertical cards dashboard done; workspace placeholder ready |
 | **M2: Generation Wizard Complete** | May 31, 2026 | 🔴 Not Started | Full 6-step generation wizard |
 | **M3: Angular Templates Complete** | June 7, 2026 | 🔴 Not Started | Shell + MFE Scriban templates |
 | **M4: Production Ready** | June 14, 2026 | 🔴 Not Started | All quality gates passed |
