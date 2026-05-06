@@ -3,6 +3,9 @@ name: Deploy
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'pervaxis-forge-api/**'
+      - '.github/workflows/forge-*.yml'
   workflow_dispatch:
 
 defaults:
