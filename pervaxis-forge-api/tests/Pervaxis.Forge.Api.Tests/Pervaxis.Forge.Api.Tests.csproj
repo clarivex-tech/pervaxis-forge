@@ -6,6 +6,5 @@
     <PackageReference Include="FluentAssertions" Version="*" />
     <PackageReference Include="Moq" Version="*" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.*" />
-    <PackageReference Include="Testcontainers.PostgreSql" Version="*" />
   </ItemGroup>
 </Project>
