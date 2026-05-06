@@ -3,6 +3,9 @@ name: PR Check
 on:
   pull_request:
     branches: [main, develop]
+    paths:
+      - 'pervaxis-forge-api/**'
+      - '.github/workflows/forge-*.yml'
 
 defaults:
   run:
