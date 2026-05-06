@@ -1,0 +1,40 @@
+name: Launchpad Deploy
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'pervaxis-forge-launchpad/**'
+      - '.github/workflows/launchpad-*.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: pervaxis-forge-launchpad
+
+jobs:
+  build:
+    name: Build Artifact
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: pervaxis-forge-launchpad/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npx nx build launchpad --configuration=production
+
+      - name: Upload launchpad dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: launchpad-dist
+          path: pervaxis-forge-launchpad/dist/apps/launchpad
