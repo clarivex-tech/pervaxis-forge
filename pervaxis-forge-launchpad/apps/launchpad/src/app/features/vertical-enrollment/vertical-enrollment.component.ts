@@ -16,7 +16,6 @@
  ************************************************************************
  */
 
-import { CommonModule } from '@angular/common';
 import {
 	ChangeDetectionStrategy,
 	Component,
@@ -26,12 +25,7 @@ import {
 } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
-import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
-import { MatCheckboxModule } from '@angular/material/checkbox';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
 import { MatStepperModule } from '@angular/material/stepper';
 
 import {
@@ -44,20 +38,29 @@ import {
 	toEnrollmentRequest,
 } from './enrollment.state';
 import { ConnectivityValidationResponse, VerticalSummaryResponse } from '../../core/models/vertical.model';
+import { CloudProvider } from '../../core/models/cloud-provider.model';
+import {
+	RepoVisibility,
+	SourceControlPlatform,
+} from '../../core/models/enrollment.model';
+import { VerticalIdentityStepComponent } from './steps/vertical-identity-step/vertical-identity-step.component';
+import { CloudProviderStepComponent } from './steps/cloud-provider-step/cloud-provider-step.component';
+import { SourceControlStepComponent } from './steps/source-control-step/source-control-step.component';
+import { TechDefaultsStepComponent } from './steps/tech-defaults-step/tech-defaults-step.component';
+import { ReviewEnrollStepComponent } from './steps/review-enroll-step/review-enroll-step.component';
 
 @Component({
 	selector: 'forge-vertical-enrollment',
 	standalone: true,
 	imports: [
-		CommonModule,
 		ReactiveFormsModule,
 		MatStepperModule,
-		MatFormFieldModule,
-		MatInputModule,
-		MatSelectModule,
-		MatCheckboxModule,
-		MatButtonModule,
 		MatCardModule,
+		VerticalIdentityStepComponent,
+		CloudProviderStepComponent,
+		SourceControlStepComponent,
+		TechDefaultsStepComponent,
+		ReviewEnrollStepComponent,
 	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	template: `
@@ -65,132 +68,29 @@ import { ConnectivityValidationResponse, VerticalSummaryResponse } from '../../c
 			<h2>Vertical Enrollment Wizard</h2>
 			<mat-stepper [linear]="true" [selectedIndex]="currentStep()" (selectionChange)="onStepSelection($event.selectedIndex)">
 				<mat-step [stepControl]="identityForm" label="Vertical Identity">
-					<form [formGroup]="identityForm" class="form-grid">
-						<mat-form-field appearance="outline">
-							<mat-label>Slug</mat-label>
-							<input matInput type="text" formControlName="slug" />
-						</mat-form-field>
-						<mat-form-field appearance="outline">
-							<mat-label>Display Name</mat-label>
-							<input matInput type="text" formControlName="displayName" />
-						</mat-form-field>
-						<mat-form-field appearance="outline" class="full-width">
-							<mat-label>Description</mat-label>
-							<textarea matInput rows="3" formControlName="description"></textarea>
-						</mat-form-field>
-						<mat-form-field appearance="outline">
-							<mat-label>Owner Team</mat-label>
-							<input matInput type="text" formControlName="ownerTeam" />
-						</mat-form-field>
-						<mat-form-field appearance="outline">
-							<mat-label>Owner Email</mat-label>
-							<input matInput type="email" formControlName="ownerEmail" />
-						</mat-form-field>
-						<div class="actions full-width">
-							<button mat-raised-button color="primary" matStepperNext (click)="syncStateFromForms()">Next</button>
-						</div>
-					</form>
+					<forge-vertical-identity-step [formGroup]="identityForm" />
 				</mat-step>
 
 				<mat-step [stepControl]="cloudForm" label="Cloud Provider">
-					<form [formGroup]="cloudForm" class="form-grid">
-						<mat-form-field appearance="outline">
-							<mat-label>Provider</mat-label>
-							<mat-select formControlName="provider">
-								<mat-option value="AWS">AWS</mat-option>
-								<mat-option value="Azure" disabled>Azure (coming soon)</mat-option>
-								<mat-option value="GCP" disabled>GCP (coming soon)</mat-option>
-							</mat-select>
-						</mat-form-field>
-						<mat-form-field appearance="outline">
-							<mat-label>AWS Account Id</mat-label>
-							<input matInput type="text" formControlName="awsAccountId" />
-						</mat-form-field>
-						<mat-form-field appearance="outline" class="full-width">
-							<mat-label>IAM Role ARN</mat-label>
-							<input matInput type="text" formControlName="iamRoleArn" />
-						</mat-form-field>
-						<mat-form-field appearance="outline">
-							<mat-label>Default Region</mat-label>
-							<input matInput type="text" formControlName="defaultRegion" />
-						</mat-form-field>
-						<div class="actions full-width">
-							<button mat-button matStepperPrevious (click)="syncStateFromForms()">Back</button>
-							<button mat-raised-button color="primary" matStepperNext (click)="syncStateFromForms()">Next</button>
-						</div>
-					</form>
+					<forge-cloud-provider-step [formGroup]="cloudForm" />
 				</mat-step>
 
 				<mat-step [stepControl]="sourceControlForm" label="Source Control">
-					<form [formGroup]="sourceControlForm" class="form-grid">
-						<mat-form-field appearance="outline">
-							<mat-label>Platform</mat-label>
-							<mat-select formControlName="platform">
-								<mat-option value="GitHub">GitHub</mat-option>
-							</mat-select>
-						</mat-form-field>
-						<mat-form-field appearance="outline">
-							<mat-label>GitHub Organization</mat-label>
-							<input matInput type="text" formControlName="gitHubOrg" />
-						</mat-form-field>
-						<mat-form-field appearance="outline" class="full-width">
-							<mat-label>Access Token</mat-label>
-							<input matInput type="password" formControlName="accessToken" />
-						</mat-form-field>
-						<mat-form-field appearance="outline">
-							<mat-label>Visibility</mat-label>
-							<mat-select formControlName="defaultVisibility">
-								<mat-option value="private">private</mat-option>
-								<mat-option value="internal">internal</mat-option>
-								<mat-option value="public">public</mat-option>
-							</mat-select>
-						</mat-form-field>
-						<mat-checkbox formControlName="defaultBranchProtection">Default branch protection</mat-checkbox>
-						<div class="actions full-width">
-							<button mat-button matStepperPrevious (click)="syncStateFromForms()">Back</button>
-							<button mat-raised-button color="primary" matStepperNext (click)="syncStateFromForms()">Next</button>
-						</div>
-					</form>
+					<forge-source-control-step [formGroup]="sourceControlForm" />
 				</mat-step>
 
 				<mat-step [stepControl]="techDefaultsForm" label="Tech Defaults">
-					<form [formGroup]="techDefaultsForm" class="form-grid">
-						<mat-form-field appearance="outline" class="full-width">
-							<mat-label>Environments (comma separated)</mat-label>
-							<input matInput type="text" formControlName="environmentsCsv" />
-						</mat-form-field>
-						<mat-form-field appearance="outline">
-							<mat-label>Default Environment</mat-label>
-							<input matInput type="text" formControlName="defaultEnvironment" />
-						</mat-form-field>
-						<mat-form-field appearance="outline">
-							<mat-label>Default DB Engine</mat-label>
-							<input matInput type="text" formControlName="defaultDbEngine" />
-						</mat-form-field>
-						<mat-checkbox formControlName="generateTerraform">Generate Terraform</mat-checkbox>
-						<mat-checkbox formControlName="generateCdk">Generate CDK</mat-checkbox>
-						<div class="actions full-width">
-							<button mat-button matStepperPrevious (click)="syncStateFromForms()">Back</button>
-							<button mat-raised-button color="primary" matStepperNext (click)="syncStateFromForms()">Next</button>
-						</div>
-					</form>
+					<forge-tech-defaults-step [formGroup]="techDefaultsForm" />
 				</mat-step>
 
 				<mat-step label="Review & Enroll">
-					<div class="form-grid">
-						<pre class="full-width">{{ state() | json }}</pre>
-						<div class="actions full-width">
-							<button mat-stroked-button type="button" (click)="validateConnectivity()" [disabled]="state().connectivity.isChecking">
-								Validate Connectivity
-							</button>
-							<button mat-raised-button color="primary" type="button" (click)="enrollVertical()" [disabled]="state().submit.isSubmitting">
-								Enroll Vertical
-							</button>
-						</div>
-						<p class="full-width" *ngIf="state().connectivity.errorMessage">{{ state().connectivity.errorMessage }}</p>
-						<p class="full-width" *ngIf="state().submit.submitError">{{ state().submit.submitError }}</p>
-						<p class="full-width" *ngIf="state().submit.submitSuccess">Vertical enrolled successfully.</p>
-					</div>
+					<forge-review-enroll-step
+						[state]="state()"
+						[maskedIamRoleArn]="maskedIamRoleArn()"
+						[maskedAccessToken]="maskedAccessToken()"
+						(validateConnectivity)="validateConnectivity()"
+						(enrollVertical)="enrollVertical()"
+					/>
 				</mat-step>
 			</mat-stepper>
 		</mat-card>
@@ -200,22 +100,6 @@ import { ConnectivityValidationResponse, VerticalSummaryResponse } from '../../c
 			mat-card {
 				max-width: 64rem;
 				margin: 0 auto;
-			}
-
-			.form-grid {
-				display: grid;
-				grid-template-columns: repeat(2, minmax(0, 1fr));
-				gap: 0.75rem;
-			}
-
-			.full-width {
-				grid-column: 1 / -1;
-			}
-
-			.actions {
-				display: flex;
-				gap: 0.5rem;
-				justify-content: flex-end;
 			}
 		`,
 	],
@@ -234,31 +118,58 @@ export class VerticalEnrollmentComponent {
 	});
 
 	readonly identityForm = this.fb.nonNullable.group({
-		slug: ['', Validators.required],
+		slug: [
+			'',
+			[
+				Validators.required,
+				Validators.pattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+			],
+		],
 		displayName: ['', Validators.required],
-		description: ['', Validators.required],
+		description: ['', [Validators.required, Validators.minLength(10)]],
 		ownerTeam: ['', Validators.required],
 		ownerEmail: ['', [Validators.required, Validators.email]],
 	});
 
 	readonly cloudForm = this.fb.nonNullable.group({
 		provider: ['AWS'],
-		awsAccountId: ['', Validators.required],
-		iamRoleArn: ['', Validators.required],
+		awsAccountId: ['', [Validators.required, Validators.pattern(/^\d{12}$/)]],
+		iamRoleArn: [
+			'',
+			[
+				Validators.required,
+				Validators.pattern(/^arn:aws:iam::\d{12}:role\/[\w+=,.@\-_/]+$/),
+			],
+		],
 		defaultRegion: ['ap-south-1', Validators.required],
 	});
 
 	readonly sourceControlForm = this.fb.nonNullable.group({
 		platform: ['GitHub'],
-		gitHubOrg: ['', Validators.required],
-		accessToken: ['', Validators.required],
+		gitHubOrg: [
+			'',
+			[
+				Validators.required,
+				Validators.pattern(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/),
+			],
+		],
+		accessToken: ['', [Validators.required, Validators.minLength(8)]],
 		defaultVisibility: ['private'],
 		defaultBranchProtection: [true],
 	});
 
 	readonly techDefaultsForm = this.fb.nonNullable.group({
-		environmentsCsv: ['test,accp,prod', Validators.required],
-		defaultEnvironment: ['test', Validators.required],
+		environmentsCsv: [
+			'test,accp,prod',
+			[
+				Validators.required,
+				Validators.pattern(/^[a-z0-9-]+(?:\s*,\s*[a-z0-9-]+)*$/),
+			],
+		],
+		defaultEnvironment: [
+			'test',
+			[Validators.required, Validators.pattern(/^[a-z0-9-]+$/)],
+		],
 		generateTerraform: [true],
 		generateCdk: [true],
 		defaultDbEngine: [''],
@@ -270,6 +181,14 @@ export class VerticalEnrollmentComponent {
 
 	currentStep(): number {
 		return this.state().currentStepIndex;
+	}
+
+	maskedIamRoleArn(): string {
+		return this.maskSecret(this.state().cloudProvider.iamRoleArn);
+	}
+
+	maskedAccessToken(): string {
+		return this.maskSecret(this.state().sourceControl.accessToken);
 	}
 
 	onStepSelection(index: number): void {
@@ -358,6 +277,10 @@ export class VerticalEnrollmentComponent {
 	}
 
 	private syncStateFromForms(): void {
+		const cloudFormValue = this.cloudForm.getRawValue();
+		const sourceControlFormValue = this.sourceControlForm.getRawValue();
+		const techDefaultsValue = this.techDefaultsForm.getRawValue();
+
 		const environments = this.techDefaultsForm
 			.controls
 			.environmentsCsv
@@ -368,16 +291,23 @@ export class VerticalEnrollmentComponent {
 		this.state.update((current: EnrollmentState) => ({
 			...current,
 			identity: { ...this.identityForm.getRawValue() },
-			cloudProvider: { ...this.cloudForm.getRawValue() },
-			sourceControl: { ...this.sourceControlForm.getRawValue() },
+			cloudProvider: {
+				...cloudFormValue,
+				provider: cloudFormValue.provider as CloudProvider,
+			},
+			sourceControl: {
+				...sourceControlFormValue,
+				platform: sourceControlFormValue.platform as SourceControlPlatform,
+				defaultVisibility: sourceControlFormValue.defaultVisibility as RepoVisibility,
+			},
 			techDefaults: {
 				environments,
-				defaultEnvironment: this.techDefaultsForm.controls.defaultEnvironment.value,
-				generateTerraform: this.techDefaultsForm.controls.generateTerraform.value,
-				generateCdk: this.techDefaultsForm.controls.generateCdk.value,
+				defaultEnvironment: techDefaultsValue.defaultEnvironment,
+				generateTerraform: techDefaultsValue.generateTerraform,
+				generateCdk: techDefaultsValue.generateCdk,
 				defaultDbEngine:
-					this.techDefaultsForm.controls.defaultDbEngine.value.trim().length > 0
-						? this.techDefaultsForm.controls.defaultDbEngine.value.trim()
+					techDefaultsValue.defaultDbEngine.trim().length > 0
+						? techDefaultsValue.defaultDbEngine.trim()
 						: null,
 			},
 		}));
@@ -405,5 +335,19 @@ export class VerticalEnrollmentComponent {
 		} catch {
 			sessionStorage.removeItem(this.storageKey);
 		}
+	}
+
+	private maskSecret(value: string): string {
+		if (!value) {
+			return 'Not provided';
+		}
+
+		if (value.length <= 6) {
+			return '*'.repeat(value.length);
+		}
+
+		const prefix = value.slice(0, 3);
+		const suffix = value.slice(-3);
+		return `${prefix}${'*'.repeat(Math.max(value.length - 6, 4))}${suffix}`;
 	}
 }

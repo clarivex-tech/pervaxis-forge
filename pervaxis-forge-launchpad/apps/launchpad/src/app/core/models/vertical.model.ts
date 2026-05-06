@@ -32,6 +32,8 @@ export interface VerticalSummaryResponse {
 	githubOrg: string;
 	environments: string[];
 	enrolledAt: string;
+	serviceCount?: number;
+	lastGeneratedAt?: string;
 }
 
 export interface VerticalResponse extends VerticalSummaryResponse {

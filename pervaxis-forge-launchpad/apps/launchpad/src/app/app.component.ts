@@ -16,47 +16,14 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { Component } from '@angular/core';
+import { AppLayoutComponent } from './layout/app-layout.component';
 
 @Component({
 	selector: 'forge-root',
 	standalone: true,
-	imports: [RouterOutlet, RouterLink, RouterLinkActive],
-	changeDetection: ChangeDetectionStrategy.OnPush,
-	template: `
-		<header>
-			<h1>Pervaxis Forge Launchpad</h1>
-			<nav>
-				<a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }">Dashboard</a>
-				<a routerLink="/verticals/enroll" routerLinkActive="active">Enroll Vertical</a>
-			</nav>
-		</header>
-
-		<main>
-			<router-outlet />
-		</main>
-	`,
-	styles: [
-		`
-			:host {
-				display: block;
-				padding: 1.25rem;
-			}
-
-			header {
-				margin-bottom: 1rem;
-			}
-
-			nav {
-				display: flex;
-				gap: 1rem;
-			}
-
-			.active {
-				font-weight: 700;
-			}
-		`,
-	],
+	imports: [AppLayoutComponent],
+	template: `<forge-app-layout></forge-app-layout>`,
+	styles: [],
 })
 export class AppComponent {}
