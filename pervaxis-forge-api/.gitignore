@@ -4,3 +4,5 @@ obj/
 .vs/
 *.slnx.user
 .env
+appsettings.Development.json
+appsettings.*.local.json
