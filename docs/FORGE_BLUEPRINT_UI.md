@@ -88,7 +88,7 @@ Integration + Polish (Week 6)
 ### 2.1 Day 1: Project Setup
 
 **Tasks:**
-- [ ] Create `Pervaxis.Forge.Launchpad` Angular 18 project
+- [ ] Create `Pervaxis.Forge.Launchpad` Angular 21 project
 - [ ] Configure Nx workspace
 - [ ] Add Angular Material + Angular CDK
 - [ ] Set up routing:
@@ -359,7 +359,8 @@ Route: `/verticals/:slug/generate`
 - [ ] Tab per service (or accordion if > 3 services)
 - [ ] BFF tabs: Genesis module cards (from `GET /api/v1/modules`)
 - [ ] MFE tabs: Canvas module cards (from `GET /api/v1/canvas-modules`)
-- [ ] Each card: display name, description, NuGet/npm package badge
+- [ ] Each Genesis module card: display name, description, and a NuGet badge showing the **cloud-resolved** package name (e.g. `Pervaxis.Genesis.Caching.AWS` for an AWS vertical) — the API response includes this resolved name based on the vertical's enrolled cloud provider so the UI shows exactly what will end up in the generated `.csproj`
+- [ ] Module names submitted in the generation request use the **cloud-agnostic name** only (e.g. `"Caching"`, `"Messaging"`) — the BFF resolves the cloud suffix from the vertical at generation time
 - [ ] "Select All" / "Clear" shortcuts per tab
 - [ ] Mixed BFF+MFE generation: show both Genesis + Canvas in separate sections
 
@@ -457,7 +458,7 @@ Route: `/verticals/:slug/generate`
 - [ ] `Templates/angular-shell/manifest.json.sbn`
 - [ ] `Templates/angular-shell/SPEC.md.sbn`
 - [ ] `Templates/angular-shell/README.md.sbn`
-- [ ] `Templates/angular-shell/package.json.sbn` — Angular 18 + Canvas module deps (loop)
+- [ ] `Templates/angular-shell/package.json.sbn` — Angular 21 + Canvas module deps (loop)
 - [ ] `Templates/angular-shell/angular.json.sbn` — workspace config
 - [ ] `Templates/angular-shell/tsconfig.json.sbn` — strict mode
 - [ ] `Templates/angular-shell/app.component.ts.sbn` — root component stub
@@ -643,7 +644,7 @@ providers: [
 | `POST /api/v1/verticals/:slug/validate` | `{ awsConnectivity: { success: true }, githubConnectivity: { success: true } }` |
 | `POST /api/v1/validate` | `{ valid: true, derivedNames: {...} }` |
 | `POST /api/v1/generate/batch` | Per-service success results |
-| `GET /api/v1/modules` | 8 Genesis module objects |
+| `GET /api/v1/modules` | 8 Genesis module objects with cloud-resolved `packageName` (pass `?verticalSlug=clarivolt` or default to AWS in mock) |
 | `GET /api/v1/canvas-modules` | 14 Canvas module objects |
 
 ---

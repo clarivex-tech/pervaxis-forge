@@ -2,7 +2,7 @@
 
 ## Project Context
 
-Forge Launchpad is an **admin-only Angular 18 web application** for enrolling business verticals and generating production-ready service scaffolds. It is part of Pervaxis Forge — an internal platform tool at Clarivex Technologies.
+Forge Launchpad is an **admin-only Angular 21 web application** for enrolling business verticals and generating production-ready service scaffolds. It is part of Pervaxis Forge — an internal platform tool at Clarivex Technologies.
 
 Before writing any code, read:
 - `docs/FORGE_SOLUTION_STRUCTURE.md` — folder layout, naming conventions
@@ -44,7 +44,7 @@ environments/ environment.ts (mock API) and environment.prod.ts (real API)
 
 | Concern | Choice | Do NOT use |
 |---|---|---|
-| UI components | Angular Material 18 | Tailwind, Bootstrap, custom CSS frameworks |
+| UI components | Angular Material 21.2.9 | Tailwind, Bootstrap, custom CSS frameworks |
 | State | Angular Signals | NgRx, BehaviorSubject, Redux |
 | Build | Nx — use `npx nx` commands | `ng` CLI directly |
 | Testing (unit) | Karma + Jasmine | Vitest, Jest |
@@ -52,6 +52,32 @@ environments/ environment.ts (mock API) and environment.prod.ts (real API)
 | Styling | SCSS + Angular Material theming | Tailwind, Emotion, styled-components |
 | Icons | Angular Material icons (`mat-icon`) | FontAwesome, custom SVG sprites |
 | Platform libraries | None in Launchpad | Canvas libraries (Canvas is for generated code only) |
+
+---
+
+## File Header
+
+Every `.ts` file must start with this exact license header — no exceptions:
+
+```typescript
+/**
+ ************************************************************************
+ * Copyright (C) 2026 Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+```
 
 ---
 

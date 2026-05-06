@@ -1,0 +1,168 @@
+{
+  "apps/launchpad": {
+    "root": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "name": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "$schema": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "projectType": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "sourceRoot": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.executor": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.configurations": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.defaultConfiguration": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options.outputPath": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options.index": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options.browser": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options.polyfills": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options.tsConfig": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options.inlineStyleLanguage": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options.assets": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options.styles": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.options.scripts": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.configurations.production": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.configurations.production.optimization": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.configurations.production.extractLicenses": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.configurations.production.sourceMap": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.configurations.development": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.configurations.development.optimization": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.configurations.development.extractLicenses": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.configurations.development.sourceMap": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve.executor": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve.options": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve.configurations": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve.defaultConfiguration": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve.options.buildTarget": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve.configurations.production": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve.configurations.production.buildTarget": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve.configurations.development": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.serve.configurations.development.buildTarget": [
+      "apps/launchpad/project.json",
+      "nx/core/project-json"
+    ],
+    "targets.build.inputs": [
+      "nx.json",
+      "nx/target-defaults"
+    ],
+    "targets.build.cache": [
+      "nx.json",
+      "nx/target-defaults"
+    ],
+    "targets.build.parallelism": [
+      "nx.json",
+      "nx/target-defaults"
+    ]
+  }
+}

@@ -1,0 +1,579 @@
+{
+  "version": "6.0",
+  "nxVersion": "22.7.0",
+  "pathMappings": {},
+  "nxJsonPlugins": [
+    {
+      "name": "@nx/angular/plugin",
+      "options": {
+        "buildTargetName": "build",
+        "serveTargetName": "serve",
+        "testTargetName": "test",
+        "lintTargetName": "lint"
+      }
+    }
+  ],
+  "fileMap": {
+    "nonProjectFiles": [
+      {
+        "file": ".claude/guides/PRINT_DEVELOPER_GUIDE.md",
+        "hash": "18342843302197891063"
+      },
+      {
+        "file": ".claude/skills/nx-workspace/SKILL.md",
+        "hash": "301930507454570834"
+      },
+      {
+        "file": "package-lock.json",
+        "hash": "2633166006328438206"
+      },
+      {
+        "file": "package.json",
+        "hash": "18088203341800226348"
+      },
+      {
+        "file": "CLAUDE.md",
+        "hash": "12318793869056693644"
+      },
+      {
+        "file": ".claude/skills/nx-workspace/references/AFFECTED.md",
+        "hash": "10577828056523124002"
+      },
+      {
+        "file": "tsconfig.base.json",
+        "hash": "13246989964764725485"
+      },
+      {
+        "file": ".claude/guides/DOMAIN_CONVENTIONS.md",
+        "hash": "12037863260093853358"
+      },
+      {
+        "file": "README.md",
+        "hash": "12131651945870812317"
+      },
+      {
+        "file": "nx.json",
+        "hash": "1608228386060652241"
+      },
+      {
+        "file": ".claude/skills/nx-run-tasks/SKILL.md",
+        "hash": "10723914446406921246"
+      },
+      {
+        "file": ".claude/skills/link-workspace-packages/SKILL.md",
+        "hash": "6638592300654417978"
+      },
+      {
+        "file": ".claude/guides/GIT_WORKFLOW.md",
+        "hash": "5973808966058854296"
+      },
+      {
+        "file": ".gitignore",
+        "hash": "2414763383316909211"
+      },
+      {
+        "file": ".github/workflows/build-test.yml",
+        "hash": "9425540518078297640"
+      },
+      {
+        "file": ".claude/guides/ci-sonarcloud-setup.md",
+        "hash": "9649201436665366178"
+      }
+    ],
+    "projectFileMap": {
+      "launchpad": [
+        {
+          "file": "apps/launchpad/project.json",
+          "hash": "1814377476000342563"
+        },
+        {
+          "file": "apps/launchpad/src/app/app.component.ts",
+          "hash": "1663863049596849755",
+          "deps": [
+            "npm:@angular/core"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/app.config.ts",
+          "hash": "9803846583746944099",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/common",
+            "npm:@angular/router",
+            "npm:@angular/platform-browser"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/app.routes.ts",
+          "hash": "12039038503637025567",
+          "deps": [
+            "npm:@angular/router"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/core/api/generation-api.service.ts",
+          "hash": "17771353631757833977"
+        },
+        {
+          "file": "apps/launchpad/src/app/core/api/mock-generation-api.service.ts",
+          "hash": "5578816576321699815"
+        },
+        {
+          "file": "apps/launchpad/src/app/core/api/mock-vertical-api.service.ts",
+          "hash": "6580454773476707287",
+          "deps": [
+            "npm:@angular/core",
+            "npm:rxjs"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/core/api/vertical-api.service.ts",
+          "hash": "36755526001527524",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/common",
+            "npm:rxjs"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/core/auth/auth.guard.ts",
+          "hash": "10732692247954016095",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/router"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/core/auth/auth.service.ts",
+          "hash": "9863935378426491398",
+          "deps": [
+            "npm:@angular/core"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/core/models/cloud-provider.model.ts",
+          "hash": "5167359088891519039"
+        },
+        {
+          "file": "apps/launchpad/src/app/core/models/enrollment.model.ts",
+          "hash": "7582774886486348479"
+        },
+        {
+          "file": "apps/launchpad/src/app/core/models/generation.model.ts",
+          "hash": "13202577080528353976"
+        },
+        {
+          "file": "apps/launchpad/src/app/core/models/module.model.ts",
+          "hash": "3198616474409003307"
+        },
+        {
+          "file": "apps/launchpad/src/app/core/models/source-control.model.ts",
+          "hash": "2659851387105723591"
+        },
+        {
+          "file": "apps/launchpad/src/app/core/models/vertical.model.ts",
+          "hash": "13439752405787130697"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/clusters/clusters.component.ts",
+          "hash": "18278241395605352925",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/deployments/deployments.component.ts",
+          "hash": "10709777383562521697",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/monitoring/monitoring.component.ts",
+          "hash": "14482447497595063253",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/pipeline/pipeline.component.ts",
+          "hash": "1305977349576746959",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/resources/resources.component.ts",
+          "hash": "10248415129408433413",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/security/security.component.ts",
+          "hash": "5413880595079262042",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/generation-wizard.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/generation-wizard.component.ts",
+          "hash": "7790553248099663345",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/router"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/generation.state.ts",
+          "hash": "10131776841697540389"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/database-queues-step/database-queues-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/database-queues-step/database-queues-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/database-queues-step/database-queues-step.component.ts",
+          "hash": "9857372054114437433"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/github-config-step/github-config-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/github-config-step/github-config-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/github-config-step/github-config-step.component.ts",
+          "hash": "7745609496233839482"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/infrastructure-step/infrastructure-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/infrastructure-step/infrastructure-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/infrastructure-step/infrastructure-step.component.ts",
+          "hash": "18383518562033417167"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/module-selection-step/module-selection-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/module-selection-step/module-selection-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/module-selection-step/module-selection-step.component.ts",
+          "hash": "6229364963189556701"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/preview-generate-step/preview-generate-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/preview-generate-step/preview-generate-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/preview-generate-step/preview-generate-step.component.ts",
+          "hash": "2053702350035821268"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/service-identity-step/service-identity-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/service-identity-step/service-identity-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/service-generation/steps/service-identity-step/service-identity-step.component.ts",
+          "hash": "14965398072878313043"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/settings/settings.component.ts",
+          "hash": "12565138578114727622",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/unauthorized/unauthorized.component.ts",
+          "hash": "3740944731437374079",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/router"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-dashboard/vertical-dashboard.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-dashboard/vertical-dashboard.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-dashboard/vertical-dashboard.component.ts",
+          "hash": "14131621435251190387",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/common",
+            "npm:@angular/material",
+            "npm:@angular/router",
+            "npm:rxjs"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/enrollment.state.ts",
+          "hash": "4362484805019570719"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/cloud-provider-step/cloud-provider-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/cloud-provider-step/cloud-provider-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/cloud-provider-step/cloud-provider-step.component.ts",
+          "hash": "10544671470961165752",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/forms",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/review-enroll-step/review-enroll-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/review-enroll-step/review-enroll-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/review-enroll-step/review-enroll-step.component.ts",
+          "hash": "6511311934755507894",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/source-control-step/source-control-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/source-control-step/source-control-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/source-control-step/source-control-step.component.ts",
+          "hash": "15093942720155823370",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/forms",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/tech-defaults-step/tech-defaults-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/tech-defaults-step/tech-defaults-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/tech-defaults-step/tech-defaults-step.component.ts",
+          "hash": "4389901142787302637",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/forms",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/vertical-identity-step/vertical-identity-step.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/vertical-identity-step/vertical-identity-step.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/steps/vertical-identity-step/vertical-identity-step.component.ts",
+          "hash": "12510196712624679756",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/forms",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/vertical-enrollment.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-enrollment/vertical-enrollment.component.ts",
+          "hash": "4562901133432547301",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/forms",
+            "npm:@angular/router",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-workspace/vertical-settings/vertical-settings.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-workspace/vertical-settings/vertical-settings.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-workspace/vertical-settings/vertical-settings.component.ts",
+          "hash": "8338563913142716080"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-workspace/vertical-workspace.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-workspace/vertical-workspace.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/features/vertical-workspace/vertical-workspace.component.ts",
+          "hash": "13281652883033232549",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/router"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/layout/app-header.component.ts",
+          "hash": "8713238006601326335",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/router",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/layout/app-layout.component.ts",
+          "hash": "3673755334537098577",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/router"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/layout/app-sidenav.component.ts",
+          "hash": "11941767242340795856",
+          "deps": [
+            "npm:@angular/core",
+            "npm:@angular/router",
+            "npm:@angular/material"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/app/shared/components/module-card/module-card.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/shared/components/module-card/module-card.component.ts",
+          "hash": "1914164238900972898"
+        },
+        {
+          "file": "apps/launchpad/src/app/shared/components/naming-preview/naming-preview.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/shared/components/naming-preview/naming-preview.component.scss",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/shared/components/naming-preview/naming-preview.component.ts",
+          "hash": "117821577705949553"
+        },
+        {
+          "file": "apps/launchpad/src/app/shared/components/provider-card/provider-card.component.html",
+          "hash": "3244421341483603138"
+        },
+        {
+          "file": "apps/launchpad/src/app/shared/components/provider-card/provider-card.component.ts",
+          "hash": "3207175195035749278"
+        },
+        {
+          "file": "apps/launchpad/src/app/shared/directives/kebab-case-validator.directive.ts",
+          "hash": "233425717591318285"
+        },
+        {
+          "file": "apps/launchpad/src/app/shared/pipes/mask-secret.pipe.ts",
+          "hash": "1519293798754173708"
+        },
+        {
+          "file": "apps/launchpad/src/assets/google-stich/DESIGN.md",
+          "hash": "15473654499927960687"
+        },
+        {
+          "file": "apps/launchpad/src/assets/google-stich/Design-Token.md",
+          "hash": "9669366450859500050"
+        },
+        {
+          "file": "apps/launchpad/src/environments/environment.prod.ts",
+          "hash": "14613412869435810966"
+        },
+        {
+          "file": "apps/launchpad/src/environments/environment.ts",
+          "hash": "11442366109723395195"
+        },
+        {
+          "file": "apps/launchpad/src/index.html",
+          "hash": "13811910668939425589"
+        },
+        {
+          "file": "apps/launchpad/src/main.ts",
+          "hash": "17452980144681109806",
+          "deps": [
+            "npm:@angular/platform-browser"
+          ]
+        },
+        {
+          "file": "apps/launchpad/src/styles.scss",
+          "hash": "11039266439025311884"
+        },
+        {
+          "file": "apps/launchpad/tsconfig.app.json",
+          "hash": "8636384411687735550"
+        }
+      ]
+    }
+  },
+  "externalNodesHash": "13400582686531529973"
+}
