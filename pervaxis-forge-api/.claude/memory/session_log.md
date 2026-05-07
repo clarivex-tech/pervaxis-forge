@@ -79,6 +79,145 @@ Known conflicts the guides will pull you toward — use the CLAUDE.md / Forge-sp
 
 ---
 
+## 2026-05-07 — Codex CLI (gpt-mini) handoff: 2 narrow tasks delegated
+
+> **For the Codex CLI agent picking this up:** read this entire entry top-to-bottom, then read the bootstrap section at the very top of this file (`How to bootstrap a fresh session`), then do exactly the tasks below — nothing more. Push to the branch listed for each task and stop. Anand or Claude (Opus) will review and merge.
+
+**Why split work this way:** Claude (Opus) is implementing the medium- and high-risk Phase 0 / Phase 1 items (connectivity validator, auth, deploy pipeline, Engine generation core). Codex CLI gets two small, fully spec'd tasks where the design is unambiguous and easy to review. **Do not extend scope.** If you discover ambiguity, stop and write a question into the session log under your task; do not invent an answer.
+
+### Hard guardrails — apply to every change you make
+
+1. **Read first:** `pervaxis-forge-api/CLAUDE.md` (file header, dependency rules, C# standards) and the spec sections referenced per task.
+2. **Multi-line Clarivex license header** on every new `.cs` file. Copy the exact block from any existing file in `src/Pervaxis.Forge.Api/Services/`. Not the one-liner from Genesis-sourced guides.
+3. **Forge ≠ Genesis** — no references to `Pervaxis.Core` or `Pervaxis.Genesis`. Don't add NuGet packages with those prefixes. If you think you need one, you're solving the wrong problem.
+4. **Don't refactor or "clean up" surrounding code** — touch only what the task requires.
+5. **C# standards (already enforced via `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`):** `record` for DTOs/value objects, `class` for EF entities, `required` modifier on mandatory props, `async`/`await` all the way down (no `.Result` / `.Wait()`), one type per file, file name matches type.
+6. **Test stack is xUnit + FluentAssertions + Moq** (not NSubstitute, not the in-memory Pervaxis test helpers).
+7. **No local emulation** — no Docker, no Testcontainers, no LocalStack. EF in-memory provider is also out for this work; if a unit test needs a DB, mock at the service boundary instead.
+8. **Run before reporting done:** `dotnet build pervaxis-forge-api/Pervaxis.Forge.slnx` and `dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category!=Integration"` — both must be 0 errors / 0 failures.
+9. **Branch + PR:** push to the task's named branch off `feature/api-vertical-enrollment` (so it stacks on the latest BFF work). Open a PR targeting `feature/api-vertical-enrollment`. Do not merge.
+10. **Append a session log entry** under your branch with: what you did, what tests you added, build/test counts, any open questions. Convention: new dated entry at the top of `pervaxis-forge-api/.claude/memory/session_log.md`. Don't edit prior entries.
+
+---
+
+### Task A — Server-side enrollment input validation
+
+**Branch:** `feature/api-input-validation` (cut from `feature/api-vertical-enrollment`)
+
+**Goal:** Reject malformed `VerticalEnrollmentRequest` payloads with `400 ValidationProblemDetails` before they hit the DB. Today the BFF trusts UI-side validation; mismatches surface as opaque 500s. This is defense-in-depth.
+
+**Spec references:** `docs/FORGE_TECHNICAL_SPECIFICATION.md` §3.2 (field rules) and §3.5 (request DTOs). Don't invent new rules — use exactly the rules below.
+
+**Validation rules to implement:**
+| Field | Rule |
+|---|---|
+| `Slug` | Regex `^[a-z][a-z0-9-]*$`, length 1–100, no consecutive hyphens (`--`), no trailing hyphen |
+| `DisplayName` | Trimmed length 1–255 |
+| `OwnerTeam` | Trimmed length 1–255 |
+| `OwnerEmail` | Regex `^\S+@\S+\.\S+$`, length 1–255 |
+| `CloudProvider.Provider` | Must equal `"AWS"` (Phase 0 only supports AWS) |
+| `CloudProvider.AwsAccountId` | Regex `^\d{12}$` |
+| `CloudProvider.IamRoleArn` | Starts with `arn:aws:iam::`, contains `:role/`, length ≤ 2048 |
+| `CloudProvider.DefaultRegion` | Regex `^[a-z]{2}-[a-z]+-\d$` (e.g., `us-east-1`) |
+| `SourceControl.Platform` | Must equal `"GitHub"` |
+| `SourceControl.GitHubOrg` | Trimmed length 1–255, no whitespace |
+| `SourceControl.AccessToken` | Trimmed length 1–512 |
+| `SourceControl.DefaultVisibility` | One of `"Private"`, `"Public"` |
+| `TechDefaults.Environments` | Non-empty, each entry kebab-case, each unique |
+| `TechDefaults.DefaultEnvironment` | Must be one of the entries in `Environments` |
+| `TechDefaults.DefaultDbEngine` | Null OR one of `"postgresql"`, `"mysql"`, `"none"` |
+
+**Implementation outline:**
+
+1. New file `src/Pervaxis.Forge.Api/Services/VerticalRequestValidator.cs` — `public static class VerticalRequestValidator` with one method:
+   ```csharp
+   public static IReadOnlyList<ValidationFailure> Validate(VerticalEnrollmentRequest request);
+   ```
+   `ValidationFailure` is a new `public sealed record ValidationFailure(string Field, string Message)` — one per file, in the same `Services/` folder.
+
+2. New file `src/Pervaxis.Forge.Api/Services/ValidationException.cs` — mirrors `SlugConflictException`:
+   ```csharp
+   public sealed class ValidationException(IReadOnlyList<ValidationFailure> failures)
+       : Exception("Request validation failed.")
+   {
+       public IReadOnlyList<ValidationFailure> Failures { get; } = failures;
+   }
+   ```
+
+3. In `VerticalService.EnrollAsync`, **before** the slug-existence pre-check, call:
+   ```csharp
+   var failures = VerticalRequestValidator.Validate(request);
+   if (failures.Count > 0) throw new ValidationException(failures);
+   ```
+
+4. In `VerticalEndpoints.EnrollVertical`, add a `catch (ValidationException ex)` arm that returns `Results.ValidationProblem(...)`:
+   ```csharp
+   var errors = ex.Failures.GroupBy(f => f.Field)
+       .ToDictionary(g => g.Key, g => g.Select(f => f.Message).ToArray());
+   return Results.ValidationProblem(errors);
+   ```
+
+5. **Do not** add validation to `UpdateVerticalRequest` in this task — keep scope tight. (If you have time, note in the session log that update-validation is a follow-up.)
+
+**Tests to add** (under `tests/Pervaxis.Forge.Api.Tests/Services/`):
+
+- New file `VerticalRequestValidatorTests.cs` — one `[Theory]` per rule with valid + invalid examples. Use `FluentAssertions`. Aim for ~15 tests total. Pure function — no DB, no mocks needed.
+- Optionally extend `VerticalServiceTests.cs` with one test confirming `EnrollAsync` throws `ValidationException` when given a bad slug. **Don't** add a real-DB integration test for validation — pure unit tests are enough.
+
+**Acceptance criteria:**
+- Build green: 4/4 projects, 0 warnings, 0 errors.
+- Unit tests green (filter `Category!=Integration`): all existing tests still pass + your new validator tests pass.
+- A POST to `/api/v1/verticals` with `{"slug": "Bad_Slug", ...}` returns `400` with a JSON body containing `{ "errors": { "Slug": ["..."] } }`.
+
+**Open question for you to surface in the log if it bites:** the request DTOs use `required` modifiers, so missing fields produce a `JsonException` from the framework, not a friendly 400. Don't try to fix that in this task — just note it in the session log.
+
+---
+
+### Task B — `NamingConvention` pure helpers in `Pervaxis.Forge.Engine`
+
+**Branch:** `feature/engine-naming-convention` (cut from `feature/api-vertical-enrollment`)
+
+**Goal:** Implement the four pure transformation functions per `docs/FORGE_TECHNICAL_SPECIFICATION.md` §10.1. These are foundational for Phase 1 generation. Pure functions, no I/O, trivially testable.
+
+**File to edit:** `src/Pervaxis.Forge.Engine/Naming/NamingConvention.cs` (currently a minimal stub created on Day 1 — replace its body, keep the multi-line license header and namespace).
+
+**Functions to implement (signatures verbatim from §10.1):**
+
+```csharp
+public static string ToPascalCase(string kebab);        // "intake-service" → "IntakeService"
+public static string StripServiceSuffix(string name);   // "intake-service" → "intake"
+public static string GetFirstSegment(string name);      // "intake-service" → "intake"
+public static string GetComponentPrefix(string product);// "clarivolt"      → "clv"
+```
+
+**Behavior contracts beyond the spec one-liners:**
+- `ToPascalCase`: throws `ArgumentException` on null/empty/whitespace. Handles single-segment input (`"intake"` → `"Intake"`). Preserves digits.
+- `StripServiceSuffix`: case-insensitive match on `-service`, but only when it's a true suffix (don't strip `"my-service-account"`). Returns the input unchanged if no suffix.
+- `GetFirstSegment`: returns the input unchanged if no hyphen present.
+- `GetComponentPrefix`: lowercases first; returns the full string when length < 3; otherwise first 3 chars.
+
+**Tests to add** (under `tests/Pervaxis.Forge.Engine.Tests/Naming/`):
+
+- New file `NamingConventionTests.cs`. One `[Theory]` per function with at least 5 cases each (happy path + edges: empty, single segment, mixed case, digits, very short input).
+- The existing smoke test `NamingConvention_ClassExists_InExpectedNamespace` can stay or be deleted — your call.
+
+**Acceptance criteria:**
+- Build green.
+- Engine test count goes from 1 to ~20+. All pass.
+- No new dependencies in `Pervaxis.Forge.Engine.csproj` — Engine stays Scriban-only.
+
+---
+
+### Review process
+
+1. Push your branch.
+2. Open a PR targeting `feature/api-vertical-enrollment` (not `develop`, not `main`).
+3. Mention the branch + PR in your session log entry.
+4. Anand pings Claude (Opus) for review. Claude reads the diff, runs tests locally, and either approves + merges or requests changes.
+5. **Don't** open PRs for both tasks in one branch — one branch = one PR = one task.
+
+---
+
 ## 2026-05-07 — Phase 0 Day 2 Session 3: UI handoff package (CORS + Swagger snapshot + HANDOFF.md)
 
 **Branch:** `feature/api-vertical-enrollment`

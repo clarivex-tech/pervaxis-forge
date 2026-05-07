@@ -90,6 +90,20 @@
 
 ---
 
+### 2026-05-07 — BFF: Codex CLI handoff (2 narrow tasks delegated)
+
+**What we did**
+- Delegated two small, fully-spec'd tasks to Codex CLI (gpt-mini) so BFF work can run in parallel with Claude (Opus) on the higher-risk items. Full briefs (rules, files to touch, acceptance criteria, branch names, review process) live at the top of `pervaxis-forge-api/.claude/memory/session_log.md` under the entry "Codex CLI (gpt-mini) handoff".
+- **Task A** — server-side input validation for `VerticalEnrollmentRequest` (slug regex, AWS account format, ARN, email, etc.). Branch `feature/api-input-validation`.
+- **Task B** — `NamingConvention` pure helpers in `Pervaxis.Forge.Engine` per technical spec §10.1. Branch `feature/engine-naming-convention`.
+- Hard guardrails captured in the engineer log: no Genesis refs, mirror existing patterns (`SlugConflictException`-style), xUnit + FluentAssertions + Moq only, no local emulation in tests.
+
+**Next**
+- Codex pushes branches + opens PRs targeting `feature/api-vertical-enrollment`. Anand pings Claude (Opus) for review and merge.
+- Claude (Opus) continues with `VerticalConnectivityValidator` (STS + Octokit) in parallel.
+
+---
+
 ### 2026-05-07 — BFF: UI handoff package (CORS + Swagger snapshot + HANDOFF.md)
 
 **What we did**
