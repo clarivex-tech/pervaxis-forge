@@ -75,6 +75,21 @@
 
 ---
 
+### 2026-05-07 — BFF: RDS Migration (Resolved on Home Laptop)
+
+**What we did**
+- Switched to home laptop (no ZScaler). DNS now resolves the `forge-dev` RDS endpoint to a real public AWS IP (`18.211.4.220`) instead of the ZPA `100.64.x.x` range.
+- Added home laptop public IP `73.197.181.23/32` to the RDS `forge-dev` security group inbound rule (PostgreSQL/TCP/5432).
+- Reverted the office-only ZScaler workaround: changed `SSL Mode=Disable` → `SSL Mode=Require;Trust Server Certificate=true` in `appsettings.Development.json` (gitignored, local-only). RDS has `rds.force_ssl=1` and `pg_hba.conf` only allows `hostssl`.
+- Applied `20260506140655_InitialSchema` migration cleanly. All 6 tables (`verticals`, `vertical_cloud_configs`, `vertical_source_control_configs`, `vertical_tech_defaults`, `generation_logs`, `deployment_outputs`) and all spec indexes/FKs created. EF migrations history row recorded.
+
+**Next**
+- Implement `VerticalService` CRUD against the real DB.
+- Wire `VerticalConnectivityValidator` to real AWS/GitHub.
+- Replace 11 endpoint `501` stubs with real handlers — May 10 deadline (UI swaps mock for real API in dev).
+
+---
+
 ## Template For Next Sessions
 
 ### YYYY-MM-DD

@@ -79,6 +79,62 @@ Known conflicts the guides will pull you toward — use the CLAUDE.md / Forge-sp
 
 ---
 
+## 2026-05-07 — Phase 0 Day 2 (Home Laptop): RDS migration applied
+
+**Branch:** `feature/api-vertical-enrollment`
+**Engineer:** Anand Jayaseelan (with Claude as implementing engineer)
+**Phase:** Phase 0 — Vertical Enrollment Backend (Week 1, May 6–10)
+**Machine:** Home laptop (no ZScaler) — moved off office laptop because ZPA was mangling the Postgres wire protocol.
+
+### What was done this session
+
+1. **Confirmed ZScaler block is gone on home network.** DNS now resolves `forge-dev.cafy4a22q90j.us-east-1.rds.amazonaws.com` to a real AWS public IP (`18.211.4.220`), not the ZPA `100.64.x.x` range that the office laptop was getting.
+
+2. **Added home laptop's public IP to the RDS security group.** Inbound rule: PostgreSQL/TCP/5432 from `73.197.181.23/32`. TCP test against the RDS endpoint then succeeded.
+
+3. **Reverted the office-only ZScaler workaround in `appsettings.Development.json`:** flipped `SSL Mode=Disable` → `SSL Mode=Require;Trust Server Certificate=true`. RDS has `rds.force_ssl=1` and only `hostssl` lines in `pg_hba.conf`, so unencrypted connections are rejected (`28000: no pg_hba.conf entry for host "...", no encryption`). The file is gitignored (per commit `a32b33e`), so this change is local-only and does not propagate to the office laptop.
+
+4. **Applied `20260506140655_InitialSchema` to `forge-dev`** via `dotnet ef database update --project src/Pervaxis.Forge.Api`. Clean run:
+   - 6 tables created: `verticals`, `vertical_cloud_configs`, `vertical_source_control_configs`, `vertical_tech_defaults`, `generation_logs`, `deployment_outputs`.
+   - All indexes from the spec (`idx_verticals_slug` UNIQUE, `idx_generation_logs_vertical`, `idx_generation_logs_created_at DESC`, `idx_deployment_outputs_generation`) and all uniqueness constraints (`IX_vertical_cloud_configs_VerticalId`, etc.).
+   - All FK constraints with the spec's cascade rules (`ON DELETE CASCADE` for the per-vertical config tables; `ON DELETE RESTRICT` for `generation_logs.VerticalId`).
+   - `__EFMigrationsHistory` row inserted: `20260506140655_InitialSchema` / `10.0.7`.
+
+### End-of-session state
+
+- **DB:** `forge-dev` schema is live. Migration recorded.
+- **Build/tests:** unchanged from Day 1 Session 2 — 4/4 projects, 0 warnings, 0 errors, 2/2 tests passing.
+
+### Gotchas resolved this session
+
+| Issue | Root cause | Fix |
+|---|---|---|
+| TCP 5432 timeout from home laptop | RDS SG had no inbound rule for the home public IP | Added `73.197.181.23/32` to the SG |
+| `28000: no pg_hba.conf entry for host "73.197.181.23", user "postgres", ..., no encryption` | `SSL Mode=Disable` was an office-only workaround for ZScaler; RDS forces SSL | `SSL Mode=Require;Trust Server Certificate=true` in `appsettings.Development.json` |
+
+### Cross-machine notes (read this on the office laptop)
+
+- `appsettings.Development.json` is per-machine and gitignored. The office laptop still has `SSL Mode=Disable` because ZScaler ZPA strips SSL mid-handshake. If/when ZPA stops intercepting Postgres traffic, flip the office laptop to `SSL Mode=Require;Trust Server Certificate=true` to match.
+- The home laptop's IP (`73.197.181.23/32`) is now in the `forge-dev` SG. If the home IP rotates or you're done with home-laptop work, revoke the rule.
+- Office laptop's public IP is presumably already in the SG (TCP succeeded yesterday before SSL failed) — leave it.
+
+### Next up — Phase 0 Day 2/3
+
+- [ ] Implement `IVerticalService` + `VerticalService` against the real DB — CRUD with credential encryption via Data Protection (`EncryptedStringConverter` is already wired in `ForgeDbContext`).
+- [ ] Implement `VerticalConnectivityValidator` (STS `AssumeRole` dry-run + GitHub org check).
+- [ ] Replace the eleven `501 Not Implemented` endpoint stubs with real handlers — **May 10 deadline** (UI team swaps mock for real API in dev).
+- [ ] SonarCloud bootstrap when `SONAR_TOKEN` lands (org `clarivex-tech`, project `clarivex-tech_pervaxis-forge`).
+
+### How to resume on another machine
+
+1. `git fetch && git checkout feature/api-vertical-enrollment && git pull`
+2. Read this entry top-to-bottom, then `appsettings.Development.json` notes above.
+3. If you're on a network with no ZScaler/proxy: copy this laptop's connection string (`SSL Mode=Require;Trust Server Certificate=true`). If you're on the office laptop: keep `SSL Mode=Disable` until ZPA is bypassed.
+4. Make sure your machine's public IP is in the `forge-dev` RDS security group.
+5. `dotnet build && dotnet test --filter "Category!=Integration"` — should be green. The migration is already applied; `dotnet ef database update` will be a no-op.
+
+---
+
 ## 2026-05-06 — Phase 0 Day 1 (Session 2): Contract + entities + CI + tests
 
 **Branch:** `feature/api-vertical-enrollment`
