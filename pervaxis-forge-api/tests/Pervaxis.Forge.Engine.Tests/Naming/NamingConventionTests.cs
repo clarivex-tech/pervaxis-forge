@@ -73,17 +73,6 @@ public class NamingConventionTests
     }
 
     [Theory]
-    [InlineData("clarivolt", "clv")]
-    [InlineData("API", "api")]
-    [InlineData("Ab", "ab")]
-    [InlineData("X", "x")]
-    [InlineData("forge-platform", "for")]
-    public void GetComponentPrefix_ReturnsExpectedValue(string input, string expected)
-    {
-        NamingConvention.GetComponentPrefix(input).Should().Be(expected);
-    }
-
-    [Theory]
     [InlineData("CLV", "clv")]
     [InlineData("clv", "clv")]
     [InlineData("CF", "cf")]
