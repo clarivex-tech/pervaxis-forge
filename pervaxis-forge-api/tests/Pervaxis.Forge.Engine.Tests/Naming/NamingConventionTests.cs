@@ -82,4 +82,32 @@ public class NamingConventionTests
     {
         NamingConvention.GetComponentPrefix(input).Should().Be(expected);
     }
+
+    [Theory]
+    [InlineData("CLV", "clv")]
+    [InlineData("clv", "clv")]
+    [InlineData("CF", "cf")]
+    [InlineData("forge", "forge")]   // 5 chars — valid upper bound
+    [InlineData("AB", "ab")]
+    public void GetComponentPrefix_NormalisesRegisteredAbbreviation(string input, string expected)
+    {
+        var result = NamingConvention.GetComponentPrefix(input);
+
+        result.Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("x")]          // too short
+    [InlineData("toolong")]    // too long
+    [InlineData("cl1")]        // digit
+    [InlineData("cl-v")]       // hyphen
+    public void GetComponentPrefix_ThrowsOnInvalidInput(string input)
+    {
+        var action = () => NamingConvention.GetComponentPrefix(input);
+
+        action.Should().Throw<ArgumentException>()
+            .WithParameterName("registeredAbbreviation");
+    }
 }
