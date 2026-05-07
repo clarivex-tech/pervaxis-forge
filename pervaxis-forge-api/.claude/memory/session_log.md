@@ -71,11 +71,533 @@ Known conflicts the guides will pull you toward — use the CLAUDE.md / Forge-sp
 - **CI/CD from Day 1** — GitHub Actions + SonarCloud (org `clarivex-tech`, project `clarivex-tech_pervaxis-forge`; `SONAR_TOKEN` lives in GitHub repo secrets, configured by Anand).
 - **Append, don't rewrite** — add a new dated entry at the top of this file; do not edit prior entries except for typo fixes.
 
+### Model tier strategy — conserve usage for the full 4-week build
+
+Spawn a **Haiku** subagent for all implementation work. Keep planning, design, and review on **Sonnet**. Use **Opus** only for genuinely hard architectural decisions.
+
+| Tier | Model ID | Use for |
+|---|---|---|
+| Haiku | `claude-haiku-4-5-20251001` | Writing C# files, tests, any file edits |
+| Sonnet | `claude-sonnet-4-6` | Planning, design calls, session log, PR review |
+| Opus | `claude-opus-4-7` | Complex architecture or hard bug diagnosis only |
+
+**How:** `Agent(model="haiku", prompt="...self-contained brief...")`. Never write code directly in the Sonnet conversation unless it's a single-line fix.
+
+### Terse mode
+
+Start every session with **terse mode on** (`/clear` then type "terse mode" or just keep responses short). Anand reads diffs — don't narrate what you just did. One sentence per update maximum.
+
 ### What you do NOT need to read on bootstrap
 
 - The user's auto-memory under `C:\Users\anand\.claude\…` — machine-local, may not exist here. Anything load-bearing has been promoted to this log.
 - Anything under `pervaxis-forge-launchpad/` — that's the UI repo's concern, separate team.
 - Build/IDE artifacts: `bin/`, `obj/`, `.vs/`, `.idea/`, `*.user`.
+
+---
+
+## 2026-05-07 — Phase 0 Day 2 Session 4: ComponentPrefix, NamingConvention redesign, Task A/B merge
+
+**Branch:** `feature/api-vertical-enrollment`
+**Engineer:** Anand Jayaseelan (with Claude Sonnet as lead, Haiku for implementation)
+**Phase:** Phase 0 — Vertical Enrollment Backend (Week 1, May 6–10)
+**Machine:** Home laptop (no ZScaler).
+
+### What was done this session
+
+1. **Reviewed and merged Codex Task A** (`feature/codex-bff`) — server-side `VerticalEnrollmentRequest` validation. Approved with one noted gap (trailing hyphen slug test — assigned to Task C). Merged into `feature/api-vertical-enrollment`.
+
+2. **Reviewed Codex Task B** (`feature/engine-naming-convention`) — `NamingConvention` helpers. Identified design flaw: `GetComponentPrefix("clarivolt") → "clv"` contradicts the "first 3 chars" rule, and any algorithm would collide for Clarivolt/Clarifrost (both start `"clar"`).
+
+3. **Redesigned `GetComponentPrefix`** — changed from a derivation algorithm to a **registered-abbreviation normaliser**: caller supplies a pre-registered 2–5-letter abbreviation; function validates (letters only, 2–5 chars) and lowercases. Uniqueness is the caller's responsibility at enrolment time. Updated implementation + tests. Merged Task B.
+
+4. **Added `ComponentPrefix` to the full enrollment stack** (Haiku):
+   - `VerticalEnrollmentRequest` — new `required string ComponentPrefix`
+   - `Vertical` entity — new `required string ComponentPrefix`
+   - `ForgeDbContext` — `HasMaxLength(5).IsRequired()`
+   - `VerticalResponse` + `VerticalSummaryResponse` — new `required string ComponentPrefix`
+   - `VerticalService.EnrollAsync` — calls `NamingConvention.GetComponentPrefix(request.ComponentPrefix)` to normalise before storing
+   - `VerticalService.MapToResponse` — projects `ComponentPrefix`
+   - `VerticalRequestValidator` — `ValidateComponentPrefix` via `NamingConvention.GetComponentPrefix` (catches `ArgumentException` → `ValidationFailure`)
+   - EF migration `20260507173119_AddComponentPrefix` generated (NOT applied — apply manually against forge-dev)
+   - Tests updated; 6 new `ComponentPrefix` validator test cases added
+
+5. **Assigned Codex Task C** — brief is at the top of this log. Branch: `feature/api-task-c`.
+
+6. **Session conventions** added to this log and `docs/FORGE_BLUEPRINT_BFF.md`: model-tier strategy (Haiku/Sonnet/Opus) and terse mode.
+
+### End-of-session state
+
+- **Build:** 4/4 projects, 0 warnings, 0 errors.
+- **Unit tests (CI gate):** 95 passing — 31 Engine, 64 API.
+- **Migration:** `20260507173119_AddComponentPrefix` generated, **not applied** — run `dotnet ef database update` from home laptop with RDS connection string set.
+
+### Deferred to next session
+
+- [ ] **Apply `AddComponentPrefix` migration** to `forge-dev` RDS (`dotnet ef database update --project src/Pervaxis.Forge.Api`). Requires home laptop + `appsettings.Development.json` with RDS connection string.
+- [ ] **Re-export `openapi.json`** — DTOs changed (ComponentPrefix added). Boot API on `localhost:5500`, `Invoke-WebRequest /swagger/v1/swagger.json`, save to `pervaxis-forge-api/contract/openapi.json`.
+- [ ] **Codex Task C** — `feature/api-task-c`: trailing hyphen test, `.gitignore` hygiene, `UpdateVerticalRequest` validation.
+- [ ] **`VerticalConnectivityValidator`** — STS AssumeRole + Octokit org check. Wire `POST /api/v1/verticals/{slug}/validate` (slug-only, validates stored creds). `AWSSDK.SecurityToken` and `Octokit` already in csproj.
+- [ ] **SonarCloud bootstrap** — waiting on `SONAR_TOKEN` from Anand.
+
+### How to resume on another machine
+
+1. `git fetch && git checkout feature/api-vertical-enrollment && git pull`
+2. Read this entry top-to-bottom and the bootstrap section at the top of this file.
+3. `dotnet build && dotnet test --filter "Category!=Integration"` — should be 95 green.
+4. Apply the migration if on home laptop with RDS access.
+5. Pick up from Deferred list above.
+
+---
+
+## 2026-05-07 — Codex: Task C — validation fixes + gitignore hygiene + UpdateVerticalRequest validation
+
+> **For the Codex CLI agent picking this up:** read the bootstrap section at the top of this file, then do exactly the three items below on branch `feature/api-task-c` cut from `feature/api-vertical-enrollment`. Open one PR targeting `feature/api-vertical-enrollment`. Do not merge.
+
+**Branch:** `feature/api-task-c` (cut from `feature/api-vertical-enrollment`)
+
+### Item 1 — Trailing hyphen slug test (1 line)
+
+In `tests/Pervaxis.Forge.Api.Tests/Services/VerticalRequestValidatorTests.cs`, add one `[InlineData]` to `ValidateSlug_Rules_AreEnforced`:
+
+```csharp
+[InlineData("slug-", false)]   // trailing hyphen
+```
+
+### Item 2 — `.gitignore` hygiene
+
+In `pervaxis-forge-api/.gitignore`, add entries to prevent stray files from polluting future commits:
+
+```
+# IDE / launch profiles
+**/Properties/launchSettings.json
+
+# Local Claude settings artefacts
+docs/.claude/
+.claude/settings.local.json.bak
+```
+
+### Item 3 — `UpdateVerticalRequest` server-side validation
+
+Same pattern as `VerticalRequestValidator.Validate(VerticalEnrollmentRequest)` — add a second overload:
+
+```csharp
+public static IReadOnlyList<ValidationFailure> Validate(UpdateVerticalRequest request);
+```
+
+Rules (from `docs/FORGE_TECHNICAL_SPECIFICATION.md` §3.2 — apply only the fields that exist on `UpdateVerticalRequest`):
+
+| Field | Rule |
+|---|---|
+| `DisplayName` | Trimmed length 1–255 (if provided / non-null) |
+| `OwnerTeam` | Trimmed length 1–255 (if provided / non-null) |
+| `OwnerEmail` | Regex `^\S+@\S+\.\S+$`, length 1–255 (if provided / non-null) |
+| `SourceControl.AccessToken` | Trimmed length 1–512 (if provided / non-null) |
+| `TechDefaults.Environments` | Non-empty, each kebab-case, each unique (if provided / non-null) |
+| `TechDefaults.DefaultEnvironment` | Must be one of `Environments` (if `Environments` provided) |
+| `TechDefaults.DefaultDbEngine` | Null OR one of `"postgresql"`, `"mysql"`, `"none"` (if provided) |
+
+Wire it in `VerticalService.UpdateAsync` before any DB call (same pattern as `EnrollAsync`). Endpoint already catches `ValidationException` — no endpoint change needed.
+
+Add `~10` tests in a new `[Theory]` block in `VerticalRequestValidatorTests.cs`.
+
+### Acceptance criteria
+
+- Build green: 4/4, 0 warnings, 0 errors.
+- All existing tests still pass + new validator tests pass.
+- `dotnet build pervaxis-forge-api/Pervaxis.Forge.slnx` and `dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category!=Integration"` both exit 0.
+- Append a session log entry (branch, what changed, test counts).
+
+All hard guardrails apply: Clarivex license header on any new `.cs` file, Forge ≠ Genesis, xUnit + FluentAssertions + Moq, no `.Result`/`.Wait()`.
+
+---
+
+## 2026-05-07 — Codex: Task B + Task A review fixes
+
+> **For the Codex CLI agent picking this up:** read the bootstrap section at the top of this file, then complete the two items below. Push to the branch listed and open a PR targeting `feature/api-vertical-enrollment`. Do not merge.
+
+### Item 1 — Fix Task A review gaps (branch: `feature/codex-bff`)
+
+In `tests/Pervaxis.Forge.Api.Tests/Services/VerticalRequestValidatorTests.cs`, add the missing test case to `ValidateSlug_Rules_AreEnforced`:
+
+```csharp
+[InlineData("slug-", false)]   // trailing hyphen
+```
+
+Then run `dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category!=Integration"` — must stay green.
+
+Amend or add a commit on `feature/codex-bff` and push. Do **not** open a new PR — the existing one covers this fix.
+
+### Item 2 — Task B: NamingConvention helpers (branch: `feature/engine-naming-convention`, cut from `feature/api-vertical-enrollment`)
+
+Full spec is in the entry **"2026-05-07 — Codex CLI (gpt-mini) handoff: 2 narrow tasks delegated"** → **Task B** section below. Summary:
+
+- Edit `src/Pervaxis.Forge.Engine/Naming/NamingConvention.cs` — implement the four functions verbatim.
+- Add `tests/Pervaxis.Forge.Engine.Tests/Naming/NamingConventionTests.cs` — one `[Theory]` per function, ≥5 cases each.
+- No new NuGet packages in Engine.
+- Build green, Engine test count goes from 1 to ~20+.
+- Append a session log entry with: branch, what you did, build/test counts, open questions.
+
+All hard guardrails from the handoff entry apply (license header, Forge ≠ Genesis, xUnit + FluentAssertions + Moq, no `.Result`/`.Wait()`).
+
+---
+
+## 2026-05-07 — Codex implemented
+
+> **Branch:** `feature/codex-bff`
+> **Scope:** Task A from the Codex handoff only — server-side `VerticalEnrollmentRequest` validation, service enforcement, endpoint mapping, and unit tests.
+
+### What I changed
+
+1. Added `ValidationFailure` and `ValidationException` under `src/Pervaxis.Forge.Api/Services/`.
+2. Added `VerticalRequestValidator.Validate(VerticalEnrollmentRequest)` with the requested field rules for slug, owner metadata, cloud provider, source control, and tech defaults.
+3. Updated `VerticalService.EnrollAsync` to validate before the slug existence check and throw `ValidationException` when the payload is malformed.
+4. Updated `VerticalEndpoints.EnrollVertical` to translate `ValidationException` into `400 ValidationProblemDetails`.
+5. Added `VerticalRequestValidatorTests` covering the validation rules with FluentAssertions.
+
+### Verification
+
+- `dotnet build pervaxis-forge-api/Pervaxis.Forge.slnx -p:UseSharedCompilation=false`
+- `dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category!=Integration" -p:UseSharedCompilation=false`
+- Result: build green, tests green, `0` warnings, `0` errors, `58` passing tests in the API test project plus `1` passing Engine test.
+
+### Notes
+
+- I did not add validation to `UpdateVerticalRequest`; that remains a follow-up, per the handoff.
+- Missing `required` fields still surface as framework `JsonException` handling rather than a custom validation response. That was left untouched on purpose.
+
+## 2026-05-07 — Codex CLI (gpt-mini) handoff: 2 narrow tasks delegated
+
+> **For the Codex CLI agent picking this up:** read this entire entry top-to-bottom, then read the bootstrap section at the very top of this file (`How to bootstrap a fresh session`), then do exactly the tasks below — nothing more. Push to the branch listed for each task and stop. Anand or Claude (Opus) will review and merge.
+
+**Why split work this way:** Claude (Opus) is implementing the medium- and high-risk Phase 0 / Phase 1 items (connectivity validator, auth, deploy pipeline, Engine generation core). Codex CLI gets two small, fully spec'd tasks where the design is unambiguous and easy to review. **Do not extend scope.** If you discover ambiguity, stop and write a question into the session log under your task; do not invent an answer.
+
+### Hard guardrails — apply to every change you make
+
+1. **Read first:** `pervaxis-forge-api/CLAUDE.md` (file header, dependency rules, C# standards) and the spec sections referenced per task.
+2. **Multi-line Clarivex license header** on every new `.cs` file. Copy the exact block from any existing file in `src/Pervaxis.Forge.Api/Services/`. Not the one-liner from Genesis-sourced guides.
+3. **Forge ≠ Genesis** — no references to `Pervaxis.Core` or `Pervaxis.Genesis`. Don't add NuGet packages with those prefixes. If you think you need one, you're solving the wrong problem.
+4. **Don't refactor or "clean up" surrounding code** — touch only what the task requires.
+5. **C# standards (already enforced via `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`):** `record` for DTOs/value objects, `class` for EF entities, `required` modifier on mandatory props, `async`/`await` all the way down (no `.Result` / `.Wait()`), one type per file, file name matches type.
+6. **Test stack is xUnit + FluentAssertions + Moq** (not NSubstitute, not the in-memory Pervaxis test helpers).
+7. **No local emulation** — no Docker, no Testcontainers, no LocalStack. EF in-memory provider is also out for this work; if a unit test needs a DB, mock at the service boundary instead.
+8. **Run before reporting done:** `dotnet build pervaxis-forge-api/Pervaxis.Forge.slnx` and `dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category!=Integration"` — both must be 0 errors / 0 failures.
+9. **Branch + PR:** push to the task's named branch off `feature/api-vertical-enrollment` (so it stacks on the latest BFF work). Open a PR targeting `feature/api-vertical-enrollment`. Do not merge.
+10. **Append a session log entry** under your branch with: what you did, what tests you added, build/test counts, any open questions. Convention: new dated entry at the top of `pervaxis-forge-api/.claude/memory/session_log.md`. Don't edit prior entries.
+
+---
+
+### Task A — Server-side enrollment input validation
+
+**Branch:** `feature/api-input-validation` (cut from `feature/api-vertical-enrollment`)
+
+**Goal:** Reject malformed `VerticalEnrollmentRequest` payloads with `400 ValidationProblemDetails` before they hit the DB. Today the BFF trusts UI-side validation; mismatches surface as opaque 500s. This is defense-in-depth.
+
+**Spec references:** `docs/FORGE_TECHNICAL_SPECIFICATION.md` §3.2 (field rules) and §3.5 (request DTOs). Don't invent new rules — use exactly the rules below.
+
+**Validation rules to implement:**
+| Field | Rule |
+|---|---|
+| `Slug` | Regex `^[a-z][a-z0-9-]*$`, length 1–100, no consecutive hyphens (`--`), no trailing hyphen |
+| `DisplayName` | Trimmed length 1–255 |
+| `OwnerTeam` | Trimmed length 1–255 |
+| `OwnerEmail` | Regex `^\S+@\S+\.\S+$`, length 1–255 |
+| `CloudProvider.Provider` | Must equal `"AWS"` (Phase 0 only supports AWS) |
+| `CloudProvider.AwsAccountId` | Regex `^\d{12}$` |
+| `CloudProvider.IamRoleArn` | Starts with `arn:aws:iam::`, contains `:role/`, length ≤ 2048 |
+| `CloudProvider.DefaultRegion` | Regex `^[a-z]{2}-[a-z]+-\d$` (e.g., `us-east-1`) |
+| `SourceControl.Platform` | Must equal `"GitHub"` |
+| `SourceControl.GitHubOrg` | Trimmed length 1–255, no whitespace |
+| `SourceControl.AccessToken` | Trimmed length 1–512 |
+| `SourceControl.DefaultVisibility` | One of `"Private"`, `"Public"` |
+| `TechDefaults.Environments` | Non-empty, each entry kebab-case, each unique |
+| `TechDefaults.DefaultEnvironment` | Must be one of the entries in `Environments` |
+| `TechDefaults.DefaultDbEngine` | Null OR one of `"postgresql"`, `"mysql"`, `"none"` |
+
+**Implementation outline:**
+
+1. New file `src/Pervaxis.Forge.Api/Services/VerticalRequestValidator.cs` — `public static class VerticalRequestValidator` with one method:
+   ```csharp
+   public static IReadOnlyList<ValidationFailure> Validate(VerticalEnrollmentRequest request);
+   ```
+   `ValidationFailure` is a new `public sealed record ValidationFailure(string Field, string Message)` — one per file, in the same `Services/` folder.
+
+2. New file `src/Pervaxis.Forge.Api/Services/ValidationException.cs` — mirrors `SlugConflictException`:
+   ```csharp
+   public sealed class ValidationException(IReadOnlyList<ValidationFailure> failures)
+       : Exception("Request validation failed.")
+   {
+       public IReadOnlyList<ValidationFailure> Failures { get; } = failures;
+   }
+   ```
+
+3. In `VerticalService.EnrollAsync`, **before** the slug-existence pre-check, call:
+   ```csharp
+   var failures = VerticalRequestValidator.Validate(request);
+   if (failures.Count > 0) throw new ValidationException(failures);
+   ```
+
+4. In `VerticalEndpoints.EnrollVertical`, add a `catch (ValidationException ex)` arm that returns `Results.ValidationProblem(...)`:
+   ```csharp
+   var errors = ex.Failures.GroupBy(f => f.Field)
+       .ToDictionary(g => g.Key, g => g.Select(f => f.Message).ToArray());
+   return Results.ValidationProblem(errors);
+   ```
+
+5. **Do not** add validation to `UpdateVerticalRequest` in this task — keep scope tight. (If you have time, note in the session log that update-validation is a follow-up.)
+
+**Tests to add** (under `tests/Pervaxis.Forge.Api.Tests/Services/`):
+
+- New file `VerticalRequestValidatorTests.cs` — one `[Theory]` per rule with valid + invalid examples. Use `FluentAssertions`. Aim for ~15 tests total. Pure function — no DB, no mocks needed.
+- Optionally extend `VerticalServiceTests.cs` with one test confirming `EnrollAsync` throws `ValidationException` when given a bad slug. **Don't** add a real-DB integration test for validation — pure unit tests are enough.
+
+**Acceptance criteria:**
+- Build green: 4/4 projects, 0 warnings, 0 errors.
+- Unit tests green (filter `Category!=Integration`): all existing tests still pass + your new validator tests pass.
+- A POST to `/api/v1/verticals` with `{"slug": "Bad_Slug", ...}` returns `400` with a JSON body containing `{ "errors": { "Slug": ["..."] } }`.
+
+**Open question for you to surface in the log if it bites:** the request DTOs use `required` modifiers, so missing fields produce a `JsonException` from the framework, not a friendly 400. Don't try to fix that in this task — just note it in the session log.
+
+---
+
+### Task B — `NamingConvention` pure helpers in `Pervaxis.Forge.Engine`
+
+**Branch:** `feature/engine-naming-convention` (cut from `feature/api-vertical-enrollment`)
+
+**Goal:** Implement the four pure transformation functions per `docs/FORGE_TECHNICAL_SPECIFICATION.md` §10.1. These are foundational for Phase 1 generation. Pure functions, no I/O, trivially testable.
+
+**File to edit:** `src/Pervaxis.Forge.Engine/Naming/NamingConvention.cs` (currently a minimal stub created on Day 1 — replace its body, keep the multi-line license header and namespace).
+
+**Functions to implement (signatures verbatim from §10.1):**
+
+```csharp
+public static string ToPascalCase(string kebab);        // "intake-service" → "IntakeService"
+public static string StripServiceSuffix(string name);   // "intake-service" → "intake"
+public static string GetFirstSegment(string name);      // "intake-service" → "intake"
+public static string GetComponentPrefix(string product);// "clarivolt"      → "clv"
+```
+
+**Behavior contracts beyond the spec one-liners:**
+- `ToPascalCase`: throws `ArgumentException` on null/empty/whitespace. Handles single-segment input (`"intake"` → `"Intake"`). Preserves digits.
+- `StripServiceSuffix`: case-insensitive match on `-service`, but only when it's a true suffix (don't strip `"my-service-account"`). Returns the input unchanged if no suffix.
+- `GetFirstSegment`: returns the input unchanged if no hyphen present.
+- `GetComponentPrefix`: lowercases first; returns the full string when length < 3; otherwise first 3 chars.
+
+**Tests to add** (under `tests/Pervaxis.Forge.Engine.Tests/Naming/`):
+
+- New file `NamingConventionTests.cs`. One `[Theory]` per function with at least 5 cases each (happy path + edges: empty, single segment, mixed case, digits, very short input).
+- The existing smoke test `NamingConvention_ClassExists_InExpectedNamespace` can stay or be deleted — your call.
+
+**Acceptance criteria:**
+- Build green.
+- Engine test count goes from 1 to ~20+. All pass.
+- No new dependencies in `Pervaxis.Forge.Engine.csproj` — Engine stays Scriban-only.
+
+---
+
+### Review process
+
+1. Push your branch.
+2. Open a PR targeting `feature/api-vertical-enrollment` (not `develop`, not `main`).
+3. Mention the branch + PR in your session log entry.
+4. Anand pings Claude (Opus) for review. Claude reads the diff, runs tests locally, and either approves + merges or requests changes.
+5. **Don't** open PRs for both tasks in one branch — one branch = one PR = one task.
+
+---
+
+## 2026-05-07 — Phase 0 Day 2 Session 3: UI handoff package (CORS + Swagger snapshot + HANDOFF.md)
+
+**Branch:** `feature/api-vertical-enrollment`
+**Engineer:** Anand Jayaseelan (with Claude as implementing engineer)
+**Phase:** Phase 0 — Vertical Enrollment Backend (Week 1, May 6–10)
+**Machine:** Home laptop (no ZScaler).
+
+### What was done this session
+
+1. **CORS** wired in `Program.cs`. Named policy `ForgeUi`. Allowed origins read from `Forge:AllowedOrigins` in `appsettings.json` (default `["http://localhost:4200"]`). `UseCors` is in the pipeline between `UseHttpsRedirection` and the endpoint maps. `AllowAnyHeader` + `AllowAnyMethod`; **no** `AllowCredentials` because Phase 0 has no auth and we don't want to commit to credentialed CORS prematurely.
+
+2. **OpenAPI snapshot committed** at `pervaxis-forge-api/contract/openapi.json` (~26 KB, OpenAPI 3.0.4). Captured by booting the API on HTTP `localhost:5500` (HTTPS redirect skipped silently when no HTTPS port is configured) and `Invoke-WebRequest`-ing `/swagger/v1/swagger.json`. PowerShell 5.1's `Out-File -Encoding utf8` writes BOM, so the file was re-saved via `[System.IO.File]::WriteAllText` with a no-BOM `UTF8Encoding(false)` to keep strict JSON parsers happy. All 7 paths captured: `/api/v1/verticals` (POST, GET), `/api/v1/verticals/{slug}` (GET, PUT, DELETE), `/api/v1/verticals/{slug}/validate` (POST), `/api/v1/generate` (POST), `/api/v1/generate/batch` (POST), `/api/v1/modules` (GET), `/api/v1/canvas-modules` (GET).
+
+3. **`pervaxis-forge-api/HANDOFF.md`** — UI-facing handover doc. Sections: where the contract lives, real-vs-stubbed table, how to run locally (with the ZScaler caveat), CORS, sample request/response payloads for the 5 wired endpoints, behavior gotchas (slug immutable, encrypted fields write-only, soft-delete is invisible to subsequent reads, `enrolledAt` is creation not update, `/validate` URL slug oddity), what's out of scope (auth, validator, generation endpoints, full server-side validation), and a May 10 mock-to-real swap checklist.
+
+### Deferred from this session (handed back to backlog)
+
+- **VerticalConnectivityValidator** (STS AssumeRole + Octokit org check). The packages are already in `Pervaxis.Forge.Api.csproj` (`AWSSDK.SecurityToken`, `Octokit`); just needs `AWSSDK.Extensions.NETCore.Setup` plus the implementation. UI was told to skip / stub the wizard's Validate step until this lands.
+- **Server-side input validation** for `VerticalEnrollmentRequest` (slug regex, AWS account 12-digit, ARN shape, email shape). BFF currently trusts UI-side validation; mismatches surface as 500s. On the backlog as defense-in-depth.
+
+### End-of-session state
+
+- **Build:** 4/4 projects, 0 warnings, 0 errors.
+- **Unit tests (CI gate):** 4/4 still green (no test changes this session).
+- **Files added:**
+  - `pervaxis-forge-api/contract/openapi.json` — committed Swagger snapshot.
+  - `pervaxis-forge-api/HANDOFF.md` — UI-facing handoff doc.
+- **Files changed:**
+  - `pervaxis-forge-api/src/Pervaxis.Forge.Api/Program.cs` — CORS registration + middleware.
+  - `pervaxis-forge-api/src/Pervaxis.Forge.Api/appsettings.json` — `Forge:AllowedOrigins` default.
+
+### Things to remember for the office laptop
+
+- Nothing on the office laptop changed. CORS works regardless of network. Swagger snapshot is in the repo, so the UI team can read the contract without booting the BFF — useful when corporate-network laptops can't reach `forge-dev`.
+
+### Next up
+
+- [ ] **Implement `VerticalConnectivityValidator`** + wire `/api/v1/verticals/{slug}/validate` (next session). Decide URL/body relationship — recommendation: ignore the URL slug, validate the body's credentials. Re-export `openapi.json` after.
+- [ ] **Server-side enrollment input validation** — slug `^[a-z][a-z0-9-]*$`, AWS account 12-digit, ARN format, email shape. Throw a typed `ValidationException`; endpoint maps to `400 ValidationProblemDetails`.
+- [ ] **May 10 (Sunday)** — UI swaps mock for real API in dev. Handoff doc has the checklist.
+- [ ] SonarCloud bootstrap when `SONAR_TOKEN` lands.
+- [ ] **Re-export `openapi.json`** every time an endpoint or DTO changes (this should become a pre-commit hook or a CI step at some point).
+
+### How to resume on another machine
+
+1. `git fetch && git checkout feature/api-vertical-enrollment && git pull`
+2. Read this entry top-to-bottom and the bootstrap section at the top of this file.
+3. `dotnet build && dotnet test --filter "Category!=Integration"` — should be 4/4 green.
+4. Pick up from "Next up" above. The validator is the obvious next chunk.
+
+---
+
+## 2026-05-07 — Phase 0 Day 2 Session 2: VerticalService implemented + tested against real RDS
+
+**Branch:** `feature/api-vertical-enrollment`
+**Engineer:** Anand Jayaseelan (with Claude as implementing engineer)
+**Phase:** Phase 0 — Vertical Enrollment Backend (Week 1, May 6–10)
+**Machine:** Home laptop (no ZScaler).
+
+### What was done this session
+
+1. **Implemented `IVerticalService` + `VerticalService`** (`src/Pervaxis.Forge.Api/Services/`):
+   - Methods: `EnrollAsync`, `ListAsync`, `GetAsync`, `UpdateAsync`, `UnenrollAsync` (soft-delete via `IsActive=false`).
+   - Encryption is transparent — the service deals in plaintext; `EncryptedStringConverter` in `ForgeDbContext` handles `IamRoleArn` and `AccessToken` at the EF write/read boundary. The service does **not** call `IDataProtector` itself.
+   - `EnrollAsync` does a pre-check (`AnyAsync` on slug) for a clean 409 path, with a fallback `PostgresException(23505)` → `SlugConflictException` translation in case of races.
+   - `ListAsync` uses `AsNoTracking()` projections — `ServiceCount` materializes via correlated subquery on `GenerationLogs.Sum(g => g.ServiceCount)`, no `Include` needed.
+   - `MapToResponse` is `public static` so it's testable as a pure function.
+
+2. **`SlugConflictException`** — a sealed `Exception` subclass with the offending slug as a property. Endpoint catches it and returns 409 ProblemDetails.
+
+3. **Wired 5 of 6 vertical endpoints** to the service (`Endpoints/VerticalEndpoints.cs`):
+   - `POST /api/v1/verticals` → `EnrollAsync` → 201 Created (or 409 on slug conflict)
+   - `GET /api/v1/verticals` → `ListAsync` → 200
+   - `GET /api/v1/verticals/{slug}` → `GetAsync` → 200 or 404
+   - `PUT /api/v1/verticals/{slug}` → `UpdateAsync` → 200 or 404
+   - `DELETE /api/v1/verticals/{slug}` → `UnenrollAsync` → 204 or 404
+   - `POST /api/v1/verticals/{slug}/validate` — **left as 501**. That's the `IVerticalConnectivityValidator` task (STS AssumeRole + GitHub org check), separate.
+
+4. **Registered service in DI** — `builder.Services.AddScoped<IVerticalService, VerticalService>();` in `Program.cs`.
+
+5. **Tests:**
+   - **Unit tests** (`tests/.../Services/VerticalServiceTests.cs`):
+     - Pre-existing smoke test (request constructable) preserved.
+     - Added `MapToResponse_ProjectsAllFields_FromVerticalAggregate` — full happy-path mapping.
+     - Added `MapToResponse_FallsBackToDefaults_WhenChildConfigsAreMissing` — defensive null-handling.
+     - Used type aliases (`EntityTechDefaults`, `RequestTechDefaults`) to disambiguate the two `VerticalTechDefaults` types in different namespaces.
+   - **Integration tests** (`tests/.../Services/VerticalServiceIntegrationTests.cs`, new file):
+     - 3 tests, all `[Trait("Category", "Integration")]` so excluded by CI's `--filter "Category!=Integration"`.
+     - Each test early-returns if `RDS_TEST_CONNECTION` env var is unset (so they no-op locally without a real DB).
+     - Covers: encryption round-trip (write encrypted, read back plaintext), slug conflict via PG unique-violation, full Get/Update/Unenroll cycle.
+     - Each test uses a unique slug (`itest-{guid}`) and `IAsyncLifetime.DisposeAsync` deletes the row after.
+     - Constructed `ForgeDbContext` directly with `EphemeralDataProtectionProvider` (in-memory throwaway keys) — no `WebApplicationFactory` plumbing needed.
+
+### End-of-session state
+
+- **Build:** 4/4 projects, 0 warnings, 0 errors.
+- **Unit tests (CI gate, `Category!=Integration`):** 4/4 passing — 1 engine smoke, 1 api smoke, 2 mapping.
+- **Integration tests (`Category=Integration`, `RDS_TEST_CONNECTION` set):** 3/3 passing in ~3s against `forge-dev`.
+
+### Proof points from the integration pass
+
+These are the things that don't show up in unit-test land and that the integration run actually verified against real RDS:
+
+- `EncryptedStringConverter` write/read round-trip works — wrote `ghp_secret_token`, read back `ghp_secret_token`.
+- Postgres unique-violation on `slug` is correctly classified by `PostgresErrorCodes.UniqueViolation` (SQLSTATE `23505`).
+- `gen_random_uuid()` and `NOW()` defaults populate via RETURNING — `vertical.Id` and `vertical.CreatedAt` are non-default after `SaveChangesAsync`, no manual reload needed.
+- `text[]` for `Environments` round-trips as `string[]`.
+- FK cascades work (deleting a Vertical removes its child configs; verified implicitly by cleanup).
+- Soft-delete + `IsActive` filter correctly hides unenrolled rows from `GetAsync`.
+
+### How to run integration tests on another machine
+
+```powershell
+$env:RDS_TEST_CONNECTION='Host=...;Database=forge_dev;Username=postgres;Password=...;Port=5432;SSL Mode=Require;Trust Server Certificate=true'
+dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category=Integration"
+```
+
+Connection string is the same one in `appsettings.Development.json` on this machine. Office laptop will need `SSL Mode=Disable` instead of `SSL Mode=Require` — and integration tests probably won't work there at all because of ZScaler ZPA mangling the wire protocol (see Session 1 entry below).
+
+### Cross-machine notes
+
+- `appsettings.Development.json` is gitignored — unchanged this session, still has `SSL Mode=Require;Trust Server Certificate=true` on home laptop.
+- Home IP `73.197.181.23/32` still in the RDS SG. Revoke when done.
+
+### Next up
+
+- [ ] Implement `IVerticalConnectivityValidator` + `VerticalConnectivityValidator` — STS `AssumeRole` dry-run for AWS, Octokit org membership check for GitHub. Wire into `POST /api/v1/verticals/{slug}/validate`. Likely needs `AWSSDK.SecurityToken` and `Octokit` NuGet packages; check `Pervaxis.Forge.Api.csproj`.
+- [ ] Fix the validate endpoint's signature — currently takes both `string slug` AND `VerticalEnrollmentRequest`, which is awkward. Probably should be slug-only (validate stored creds) OR request-only (validate before enroll). Decide with Anand.
+- [ ] Wire the remaining stub endpoints in `GenerationEndpoints.cs` and `ModuleEndpoints.cs` once the Engine has real generation logic — not Phase 0.
+- [ ] **May 8 (tomorrow)** — Swagger contract handoff to UI team. The 5 wired vertical endpoints are now real; the rest are documented stubs. Confirm UI team is happy with this surface for their mock-to-real swap on May 10.
+- [ ] SonarCloud bootstrap when `SONAR_TOKEN` lands.
+
+### How to resume on another machine
+
+1. `git fetch && git checkout feature/api-vertical-enrollment && git pull`
+2. Read this entry top-to-bottom and the bootstrap section at the top of this file.
+3. `dotnet build && dotnet test --filter "Category!=Integration"` — should be 4/4 green.
+4. If you want to run integration tests, set `RDS_TEST_CONNECTION` and your machine's IP must be in the RDS SG.
+
+---
+
+## 2026-05-07 — Phase 0 Day 2 (Home Laptop): RDS migration applied
+
+**Branch:** `feature/api-vertical-enrollment`
+**Engineer:** Anand Jayaseelan (with Claude as implementing engineer)
+**Phase:** Phase 0 — Vertical Enrollment Backend (Week 1, May 6–10)
+**Machine:** Home laptop (no ZScaler) — moved off office laptop because ZPA was mangling the Postgres wire protocol.
+
+### What was done this session
+
+1. **Confirmed ZScaler block is gone on home network.** DNS now resolves `forge-dev.cafy4a22q90j.us-east-1.rds.amazonaws.com` to a real AWS public IP (`18.211.4.220`), not the ZPA `100.64.x.x` range that the office laptop was getting.
+
+2. **Added home laptop's public IP to the RDS security group.** Inbound rule: PostgreSQL/TCP/5432 from `73.197.181.23/32`. TCP test against the RDS endpoint then succeeded.
+
+3. **Reverted the office-only ZScaler workaround in `appsettings.Development.json`:** flipped `SSL Mode=Disable` → `SSL Mode=Require;Trust Server Certificate=true`. RDS has `rds.force_ssl=1` and only `hostssl` lines in `pg_hba.conf`, so unencrypted connections are rejected (`28000: no pg_hba.conf entry for host "...", no encryption`). The file is gitignored (per commit `a32b33e`), so this change is local-only and does not propagate to the office laptop.
+
+4. **Applied `20260506140655_InitialSchema` to `forge-dev`** via `dotnet ef database update --project src/Pervaxis.Forge.Api`. Clean run:
+   - 6 tables created: `verticals`, `vertical_cloud_configs`, `vertical_source_control_configs`, `vertical_tech_defaults`, `generation_logs`, `deployment_outputs`.
+   - All indexes from the spec (`idx_verticals_slug` UNIQUE, `idx_generation_logs_vertical`, `idx_generation_logs_created_at DESC`, `idx_deployment_outputs_generation`) and all uniqueness constraints (`IX_vertical_cloud_configs_VerticalId`, etc.).
+   - All FK constraints with the spec's cascade rules (`ON DELETE CASCADE` for the per-vertical config tables; `ON DELETE RESTRICT` for `generation_logs.VerticalId`).
+   - `__EFMigrationsHistory` row inserted: `20260506140655_InitialSchema` / `10.0.7`.
+
+### End-of-session state
+
+- **DB:** `forge-dev` schema is live. Migration recorded.
+- **Build/tests:** unchanged from Day 1 Session 2 — 4/4 projects, 0 warnings, 0 errors, 2/2 tests passing.
+
+### Gotchas resolved this session
+
+| Issue | Root cause | Fix |
+|---|---|---|
+| TCP 5432 timeout from home laptop | RDS SG had no inbound rule for the home public IP | Added `73.197.181.23/32` to the SG |
+| `28000: no pg_hba.conf entry for host "73.197.181.23", user "postgres", ..., no encryption` | `SSL Mode=Disable` was an office-only workaround for ZScaler; RDS forces SSL | `SSL Mode=Require;Trust Server Certificate=true` in `appsettings.Development.json` |
+
+### Cross-machine notes (read this on the office laptop)
+
+- `appsettings.Development.json` is per-machine and gitignored. The office laptop still has `SSL Mode=Disable` because ZScaler ZPA strips SSL mid-handshake. If/when ZPA stops intercepting Postgres traffic, flip the office laptop to `SSL Mode=Require;Trust Server Certificate=true` to match.
+- The home laptop's IP (`73.197.181.23/32`) is now in the `forge-dev` SG. If the home IP rotates or you're done with home-laptop work, revoke the rule.
+- Office laptop's public IP is presumably already in the SG (TCP succeeded yesterday before SSL failed) — leave it.
+
+### Next up — Phase 0 Day 2/3
+
+- [ ] Implement `IVerticalService` + `VerticalService` against the real DB — CRUD with credential encryption via Data Protection (`EncryptedStringConverter` is already wired in `ForgeDbContext`).
+- [ ] Implement `VerticalConnectivityValidator` (STS `AssumeRole` dry-run + GitHub org check).
+- [ ] Replace the eleven `501 Not Implemented` endpoint stubs with real handlers — **May 10 deadline** (UI team swaps mock for real API in dev).
+- [ ] SonarCloud bootstrap when `SONAR_TOKEN` lands (org `clarivex-tech`, project `clarivex-tech_pervaxis-forge`).
+
+### How to resume on another machine
+
+1. `git fetch && git checkout feature/api-vertical-enrollment && git pull`
+2. Read this entry top-to-bottom, then `appsettings.Development.json` notes above.
+3. If you're on a network with no ZScaler/proxy: copy this laptop's connection string (`SSL Mode=Require;Trust Server Certificate=true`). If you're on the office laptop: keep `SSL Mode=Disable` until ZPA is bypassed.
+4. Make sure your machine's public IP is in the `forge-dev` RDS security group.
+5. `dotnet build && dotnet test --filter "Category!=Integration"` — should be green. The migration is already applied; `dotnet ef database update` will be a no-op.
 
 ---
 

@@ -1,0 +1,1074 @@
+{
+  "openapi": "3.0.4",
+  "info": {
+    "title": "Pervaxis Forge API",
+    "description": "Internal admin API for vertical enrollment and service generation. Forge is the provisioning backbone for all Clarivex business verticals.",
+    "contact": {
+      "name": "Clarivex Technologies",
+      "url": "https://clarivex.tech"
+    },
+    "version": "v1"
+  },
+  "paths": {
+    "/api/v1/generate": {
+      "post": {
+        "tags": [
+          "Generation"
+        ],
+        "summary": "Generate a single service within an enrolled vertical",
+        "operationId": "GenerateService",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/generate/batch": {
+      "post": {
+        "tags": [
+          "Generation"
+        ],
+        "summary": "Generate multiple services within an enrolled vertical",
+        "operationId": "GenerateServiceBatch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BatchGenerationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchGenerationResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/modules": {
+      "get": {
+        "tags": [
+          "Modules"
+        ],
+        "summary": "List all available Genesis modules",
+        "operationId": "ListGenesisModules",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/canvas-modules": {
+      "get": {
+        "tags": [
+          "Modules"
+        ],
+        "summary": "List all available Canvas modules",
+        "operationId": "ListCanvasModules",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/verticals": {
+      "post": {
+        "tags": [
+          "Verticals"
+        ],
+        "summary": "Enroll a new vertical",
+        "operationId": "EnrollVertical",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerticalEnrollmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerticalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Verticals"
+        ],
+        "summary": "List all enrolled verticals",
+        "operationId": "ListVerticals",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VerticalSummaryResponse"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/verticals/{slug}": {
+      "get": {
+        "tags": [
+          "Verticals"
+        ],
+        "summary": "Get vertical details by slug",
+        "operationId": "GetVertical",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerticalResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Verticals"
+        ],
+        "summary": "Update mutable vertical fields",
+        "operationId": "UpdateVertical",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateVerticalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerticalResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HttpValidationProblemDetails"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Verticals"
+        ],
+        "summary": "Unenroll (soft-delete) a vertical",
+        "operationId": "UnenrollVertical",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/verticals/{slug}/validate": {
+      "post": {
+        "tags": [
+          "Verticals"
+        ],
+        "summary": "Validate cloud and source control connectivity without enrolling",
+        "operationId": "ValidateVerticalConnectivity",
+        "parameters": [
+          {
+            "name": "slug",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerticalEnrollmentRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectivityValidationResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetails"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AwsConnectivityResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "accountId": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BatchGenerationRequest": {
+        "required": [
+          "services",
+          "verticalSlug"
+        ],
+        "type": "object",
+        "properties": {
+          "verticalSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServiceGenerationSpec"
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "BatchGenerationResult": {
+        "required": [
+          "failedCount",
+          "generatedAt",
+          "results",
+          "succeededCount",
+          "totalServices",
+          "verticalSlug"
+        ],
+        "type": "object",
+        "properties": {
+          "verticalSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationResult"
+            },
+            "nullable": true
+          },
+          "totalServices": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "succeededCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "failedCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CloudProviderConfig": {
+        "required": [
+          "awsAccountId",
+          "defaultRegion",
+          "iamRoleArn",
+          "provider"
+        ],
+        "type": "object",
+        "properties": {
+          "provider": {
+            "type": "string",
+            "nullable": true
+          },
+          "awsAccountId": {
+            "type": "string",
+            "nullable": true
+          },
+          "iamRoleArn": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultRegion": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "ConnectivityValidationResponse": {
+        "required": [
+          "awsConnectivity",
+          "gitHubConnectivity"
+        ],
+        "type": "object",
+        "properties": {
+          "awsConnectivity": {
+            "$ref": "#/components/schemas/AwsConnectivityResult"
+          },
+          "gitHubConnectivity": {
+            "$ref": "#/components/schemas/GitHubConnectivityResult"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GenerationDatabaseConfig": {
+        "required": [
+          "engine",
+          "schema"
+        ],
+        "type": "object",
+        "properties": {
+          "engine": {
+            "type": "string",
+            "nullable": true
+          },
+          "schema": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "GenerationMetadata": {
+        "type": "object",
+        "properties": {
+          "deployInfrastructure": {
+            "type": "boolean"
+          },
+          "pushToGitHub": {
+            "type": "boolean"
+          },
+          "environment": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "GenerationQueueConfig": {
+        "required": [
+          "name",
+          "role"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "GenerationRequest": {
+        "required": [
+          "description",
+          "displayName",
+          "name",
+          "type",
+          "version",
+          "verticalSlug"
+        ],
+        "type": "object",
+        "properties": {
+          "verticalSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "genesisModules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "database": {
+            "$ref": "#/components/schemas/GenerationDatabaseConfig"
+          },
+          "queues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationQueueConfig"
+            },
+            "nullable": true
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/GenerationMetadata"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GenerationResult": {
+        "required": [
+          "generatedAt",
+          "serviceName",
+          "verticalSlug"
+        ],
+        "type": "object",
+        "properties": {
+          "serviceName": {
+            "type": "string",
+            "nullable": true
+          },
+          "verticalSlug": {
+            "type": "string",
+            "nullable": true
+          },
+          "gitHubRepoUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "infrastructureDeployed": {
+            "type": "boolean"
+          },
+          "deployedResources": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "generatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "additionalProperties": false
+      },
+      "GitHubConnectivityResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "org": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "HttpValidationProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          },
+          "errors": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "nullable": true
+          }
+        },
+        "additionalProperties": { }
+      },
+      "ProblemDetails": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "detail": {
+            "type": "string",
+            "nullable": true
+          },
+          "instance": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": { }
+      },
+      "ServiceGenerationSpec": {
+        "required": [
+          "description",
+          "displayName",
+          "name",
+          "type",
+          "version"
+        ],
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "version": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string",
+            "nullable": true
+          },
+          "genesisModules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "database": {
+            "$ref": "#/components/schemas/GenerationDatabaseConfig"
+          },
+          "queues": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerationQueueConfig"
+            },
+            "nullable": true
+          },
+          "metadata": {
+            "$ref": "#/components/schemas/GenerationMetadata"
+          }
+        },
+        "additionalProperties": false
+      },
+      "SourceControlConfig": {
+        "required": [
+          "accessToken",
+          "defaultVisibility",
+          "gitHubOrg",
+          "platform"
+        ],
+        "type": "object",
+        "properties": {
+          "platform": {
+            "type": "string",
+            "nullable": true
+          },
+          "gitHubOrg": {
+            "type": "string",
+            "nullable": true
+          },
+          "accessToken": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultVisibility": {
+            "type": "string",
+            "nullable": true
+          },
+          "defaultBranchProtection": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "UpdateVerticalRequest": {
+        "required": [
+          "displayName",
+          "ownerEmail",
+          "ownerTeam",
+          "techDefaults"
+        ],
+        "type": "object",
+        "properties": {
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "ownerTeam": {
+            "type": "string",
+            "nullable": true
+          },
+          "ownerEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "techDefaults": {
+            "$ref": "#/components/schemas/VerticalTechDefaults"
+          }
+        },
+        "additionalProperties": false
+      },
+      "VerticalEnrollmentRequest": {
+        "required": [
+          "cloudProvider",
+          "componentPrefix",
+          "description",
+          "displayName",
+          "ownerEmail",
+          "ownerTeam",
+          "slug",
+          "sourceControl",
+          "techDefaults"
+        ],
+        "type": "object",
+        "properties": {
+          "slug": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "ownerTeam": {
+            "type": "string",
+            "nullable": true
+          },
+          "ownerEmail": {
+            "type": "string",
+            "nullable": true
+          },
+          "componentPrefix": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudProvider": {
+            "$ref": "#/components/schemas/CloudProviderConfig"
+          },
+          "sourceControl": {
+            "$ref": "#/components/schemas/SourceControlConfig"
+          },
+          "techDefaults": {
+            "$ref": "#/components/schemas/VerticalTechDefaults"
+          }
+        },
+        "additionalProperties": false
+      },
+      "VerticalResponse": {
+        "required": [
+          "cloudProvider",
+          "componentPrefix",
+          "displayName",
+          "enrolledAt",
+          "environments",
+          "gitHubOrg",
+          "id",
+          "slug",
+          "sourceControl"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudProvider": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceControl": {
+            "type": "string",
+            "nullable": true
+          },
+          "gitHubOrg": {
+            "type": "string",
+            "nullable": true
+          },
+          "environments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "enrolledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "componentPrefix": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "VerticalSummaryResponse": {
+        "required": [
+          "cloudProvider",
+          "componentPrefix",
+          "displayName",
+          "enrolledAt",
+          "id",
+          "slug",
+          "sourceControl"
+        ],
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string",
+            "nullable": true
+          },
+          "displayName": {
+            "type": "string",
+            "nullable": true
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "cloudProvider": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceControl": {
+            "type": "string",
+            "nullable": true
+          },
+          "serviceCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "enrolledAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "componentPrefix": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "VerticalTechDefaults": {
+        "type": "object",
+        "properties": {
+          "environments": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "nullable": true
+          },
+          "defaultEnvironment": {
+            "type": "string",
+            "nullable": true
+          },
+          "generateTerraform": {
+            "type": "boolean"
+          },
+          "generateCdk": {
+            "type": "boolean"
+          },
+          "defaultDbEngine": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

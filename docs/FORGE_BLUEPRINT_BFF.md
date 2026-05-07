@@ -6,7 +6,7 @@
 **Project Start:** May 6, 2026  
 **Projected Completion:** May 31, 2026 (4 weeks)  
 **Team:** Pervaxis Platform Team — Backend  
-**Status:** Pre-Implementation
+**Status:** Phase 0 Complete — Phase 1 In Progress
 
 > **Parallel Execution:** BFF and UI teams run independently from Day 1.  
 > Week 1: BFF builds Vertical Enrollment API while UI builds the Enrollment Wizard against a mock.  
@@ -14,6 +14,30 @@
 > From Week 2 onwards: fully independent until final integration test.
 >
 > **Solution Structure:** See [FORGE_SOLUTION_STRUCTURE.md](FORGE_SOLUTION_STRUCTURE.md) for the full repo layout, project structure, folder conventions, and `.csproj` contents. Read this before writing a single file on Day 1.
+
+---
+
+## Must Read — AI Session Conventions
+
+> These rules apply to every Claude Code session working on the BFF. They are load-bearing — ignoring them wastes tokens or produces the wrong output.
+
+### Model tier strategy (conserve usage for the full 4-week build)
+
+| Tier | Model | Use for |
+|---|---|---|
+| **Haiku** | `claude-haiku-4-5-20251001` | All implementation: writing C# files, tests, edits |
+| **Sonnet** | `claude-sonnet-4-6` | Planning, design decisions, session log updates, PR review |
+| **Opus** | `claude-opus-4-7` | Hard architectural calls or complex bug diagnosis only |
+
+**Rule:** Before writing any code, spawn `Agent(model="haiku")` for the implementation. Do not write code directly in the Sonnet conversation unless the change is a single-line fix.
+
+### Other session conventions
+
+- **Discuss before coding** — propose a plan and get explicit go-ahead before changing code.
+- **One question at a time** — surface clarifications individually, never as a bundled list.
+- **Forge ≠ Genesis** — zero references to `Pervaxis.Core` or `Pervaxis.Genesis` in Forge code.
+- **No local emulation** — real AWS resources only; no Docker, LocalStack, or Testcontainers.
+- **Append session log** — every session ends with a new dated entry at the top of `pervaxis-forge-api/.claude/memory/session_log.md`.
 
 ---
 
@@ -48,7 +72,7 @@ Week 4 (May 27-31):  Phase 2 (wrap) + Phase 3 — Infrastructure + GitHub
 
 | Milestone | Target Date | Status | Deliverable |
 |---|---|---|---|
-| **M0: Vertical Enrollment API Live** | May 10, 2026 | 🔴 Not Started | Enroll endpoint, DB schema, AWS + GitHub validation |
+| **M0: Vertical Enrollment API Live** | May 10, 2026 | ✅ Complete | Enroll endpoint, DB schema, AWS + GitHub validation |
 | **M1: Engine Core Complete** | May 17, 2026 | 🔴 Not Started | Manifest parsing, naming derivation, template engine, ZIP |
 | **M2: REST API Templates Complete** | May 24, 2026 | 🔴 Not Started | 18 templates, generated service compiles + tests pass |
 | **M3: Infrastructure + GitHub Complete** | May 31, 2026 | 🔴 Not Started | AWS resources deployed, GitHub repos created |

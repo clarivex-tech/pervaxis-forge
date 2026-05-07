@@ -39,6 +39,10 @@ ScaffoldingReadMe.txt
 # dotenv environment variables file
 .env
 
+# Local dev config with secrets — never commit
+appsettings.Development.json
+appsettings.*.local.json
+
 # IDE
 .vs/
 .idea/

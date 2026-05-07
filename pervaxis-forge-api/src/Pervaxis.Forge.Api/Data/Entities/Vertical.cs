@@ -26,6 +26,7 @@ public class Vertical
     public string? Description { get; set; }
     public required string OwnerTeam { get; set; }
     public required string OwnerEmail { get; set; }
+    public required string ComponentPrefix { get; set; }
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }

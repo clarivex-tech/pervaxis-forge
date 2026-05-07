@@ -16,17 +16,10 @@
  ************************************************************************
  */
 
-namespace Pervaxis.Forge.Api.Models.Responses;
+namespace Pervaxis.Forge.Api.Services;
 
-public record VerticalSummaryResponse
+public sealed class SlugConflictException(string slug)
+    : Exception($"A vertical with slug '{slug}' already exists.")
 {
-    public required Guid Id { get; init; }
-    public required string Slug { get; init; }
-    public required string DisplayName { get; init; }
-    public string? Description { get; init; }
-    public required string CloudProvider { get; init; }
-    public required string SourceControl { get; init; }
-    public int ServiceCount { get; init; }
-    public required DateTimeOffset EnrolledAt { get; init; }
-    public required string ComponentPrefix { get; init; }
+    public string Slug { get; } = slug;
 }

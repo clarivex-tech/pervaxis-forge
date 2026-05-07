@@ -10,6 +10,7 @@
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
     <PackageReference Include="AWSSDK.SecurityToken" Version="*" />
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.*" />
     <PackageReference Include="AWSSDK.ElastiCache" Version="*" />
     <PackageReference Include="AWSSDK.RDS" Version="*" />
     <PackageReference Include="AWSSDK.S3" Version="*" />
