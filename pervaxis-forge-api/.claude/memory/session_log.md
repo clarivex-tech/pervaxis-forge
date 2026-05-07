@@ -95,6 +95,68 @@ Start every session with **terse mode on** (`/clear` then type "terse mode" or j
 
 ---
 
+## 2026-05-07 — Codex: Task C — validation fixes + gitignore hygiene + UpdateVerticalRequest validation
+
+> **For the Codex CLI agent picking this up:** read the bootstrap section at the top of this file, then do exactly the three items below on branch `feature/api-task-c` cut from `feature/api-vertical-enrollment`. Open one PR targeting `feature/api-vertical-enrollment`. Do not merge.
+
+**Branch:** `feature/api-task-c` (cut from `feature/api-vertical-enrollment`)
+
+### Item 1 — Trailing hyphen slug test (1 line)
+
+In `tests/Pervaxis.Forge.Api.Tests/Services/VerticalRequestValidatorTests.cs`, add one `[InlineData]` to `ValidateSlug_Rules_AreEnforced`:
+
+```csharp
+[InlineData("slug-", false)]   // trailing hyphen
+```
+
+### Item 2 — `.gitignore` hygiene
+
+In `pervaxis-forge-api/.gitignore`, add entries to prevent stray files from polluting future commits:
+
+```
+# IDE / launch profiles
+**/Properties/launchSettings.json
+
+# Local Claude settings artefacts
+docs/.claude/
+.claude/settings.local.json.bak
+```
+
+### Item 3 — `UpdateVerticalRequest` server-side validation
+
+Same pattern as `VerticalRequestValidator.Validate(VerticalEnrollmentRequest)` — add a second overload:
+
+```csharp
+public static IReadOnlyList<ValidationFailure> Validate(UpdateVerticalRequest request);
+```
+
+Rules (from `docs/FORGE_TECHNICAL_SPECIFICATION.md` §3.2 — apply only the fields that exist on `UpdateVerticalRequest`):
+
+| Field | Rule |
+|---|---|
+| `DisplayName` | Trimmed length 1–255 (if provided / non-null) |
+| `OwnerTeam` | Trimmed length 1–255 (if provided / non-null) |
+| `OwnerEmail` | Regex `^\S+@\S+\.\S+$`, length 1–255 (if provided / non-null) |
+| `SourceControl.AccessToken` | Trimmed length 1–512 (if provided / non-null) |
+| `TechDefaults.Environments` | Non-empty, each kebab-case, each unique (if provided / non-null) |
+| `TechDefaults.DefaultEnvironment` | Must be one of `Environments` (if `Environments` provided) |
+| `TechDefaults.DefaultDbEngine` | Null OR one of `"postgresql"`, `"mysql"`, `"none"` (if provided) |
+
+Wire it in `VerticalService.UpdateAsync` before any DB call (same pattern as `EnrollAsync`). Endpoint already catches `ValidationException` — no endpoint change needed.
+
+Add `~10` tests in a new `[Theory]` block in `VerticalRequestValidatorTests.cs`.
+
+### Acceptance criteria
+
+- Build green: 4/4, 0 warnings, 0 errors.
+- All existing tests still pass + new validator tests pass.
+- `dotnet build pervaxis-forge-api/Pervaxis.Forge.slnx` and `dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category!=Integration"` both exit 0.
+- Append a session log entry (branch, what changed, test counts).
+
+All hard guardrails apply: Clarivex license header on any new `.cs` file, Forge ≠ Genesis, xUnit + FluentAssertions + Moq, no `.Result`/`.Wait()`.
+
+---
+
 ## 2026-05-07 — Codex: Task B + Task A review fixes
 
 > **For the Codex CLI agent picking this up:** read the bootstrap section at the top of this file, then complete the two items below. Push to the branch listed and open a PR targeting `feature/api-vertical-enrollment`. Do not merge.
