@@ -90,6 +90,27 @@
 
 ---
 
+### 2026-05-07 — BFF: VerticalService implemented and validated against real RDS
+
+**What we did**
+- Implemented `IVerticalService` + `VerticalService` (full CRUD: enroll / list / get / update / unenroll). Soft-delete via `IsActive=false`. Encryption is transparent at the EF boundary via the existing `EncryptedStringConverter` — the service handles plaintext.
+- Added `SlugConflictException` for clean 409 mapping; service translates Postgres `unique_violation` (SQLSTATE 23505) to it on save races.
+- Wired 5 of 6 vertical endpoints to the service. `POST /api/v1/verticals/{slug}/validate` is still 501 — that's the next task (`VerticalConnectivityValidator`).
+- Registered the service in DI as `Scoped`.
+- Added 2 pure mapping unit tests and 3 RDS-backed integration tests gated by `[Trait("Category","Integration")]` + `RDS_TEST_CONNECTION` env var. Integration tests verify encryption round-trip, slug-conflict translation, and the full enroll / get / update / unenroll lifecycle.
+
+**Test results**
+- Build: 4/4 projects, 0 warnings, 0 errors.
+- CI-gate tests (`Category!=Integration`): 4/4 passing.
+- Integration tests against `forge-dev` RDS: 3/3 passing in ~3s.
+
+**Next**
+- Implement `VerticalConnectivityValidator` (STS AssumeRole + Octokit org check) and wire `/validate`.
+- Hand the Swagger contract to the UI team (May 8 deadline). 5 vertical endpoints are real; generation/module endpoints remain documented stubs until Phase 1.
+- UI swaps mock for real API on May 10.
+
+---
+
 ## Template For Next Sessions
 
 ### YYYY-MM-DD

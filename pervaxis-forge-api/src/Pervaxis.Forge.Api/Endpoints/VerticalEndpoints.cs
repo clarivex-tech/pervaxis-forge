@@ -18,6 +18,7 @@
 
 using Pervaxis.Forge.Api.Models.Requests;
 using Pervaxis.Forge.Api.Models.Responses;
+using Pervaxis.Forge.Api.Services;
 
 namespace Pervaxis.Forge.Api.Endpoints;
 
@@ -68,21 +69,77 @@ internal static class VerticalEndpoints
         return app;
     }
 
-    private static IResult EnrollVertical(VerticalEnrollmentRequest request)
-        => Results.Problem(statusCode: 501, title: "Not implemented");
+    private static async Task<IResult> EnrollVertical(
+        VerticalEnrollmentRequest request,
+        IVerticalService service,
+        CancellationToken ct)
+    {
+        try
+        {
+            var vertical = await service.EnrollAsync(request, ct);
+            return Results.Created($"/api/v1/verticals/{vertical.Slug}", vertical);
+        }
+        catch (SlugConflictException ex)
+        {
+            return Results.Problem(
+                statusCode: StatusCodes.Status409Conflict,
+                title: "Slug already exists",
+                detail: ex.Message);
+        }
+    }
 
-    private static IResult ListVerticals()
-        => Results.Problem(statusCode: 501, title: "Not implemented");
+    private static async Task<IResult> ListVerticals(
+        IVerticalService service,
+        CancellationToken ct)
+    {
+        var verticals = await service.ListAsync(ct);
+        return Results.Ok(verticals);
+    }
 
-    private static IResult GetVertical(string slug)
-        => Results.Problem(statusCode: 501, title: "Not implemented");
+    private static async Task<IResult> GetVertical(
+        string slug,
+        IVerticalService service,
+        CancellationToken ct)
+    {
+        var vertical = await service.GetAsync(slug, ct);
+        return vertical is null
+            ? Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Vertical not found",
+                detail: $"No vertical with slug '{slug}'.")
+            : Results.Ok(vertical);
+    }
 
-    private static IResult UpdateVertical(string slug, UpdateVerticalRequest request)
-        => Results.Problem(statusCode: 501, title: "Not implemented");
+    private static async Task<IResult> UpdateVertical(
+        string slug,
+        UpdateVerticalRequest request,
+        IVerticalService service,
+        CancellationToken ct)
+    {
+        var vertical = await service.UpdateAsync(slug, request, ct);
+        return vertical is null
+            ? Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Vertical not found",
+                detail: $"No vertical with slug '{slug}'.")
+            : Results.Ok(vertical);
+    }
 
-    private static IResult UnenrollVertical(string slug)
-        => Results.Problem(statusCode: 501, title: "Not implemented");
+    private static async Task<IResult> UnenrollVertical(
+        string slug,
+        IVerticalService service,
+        CancellationToken ct)
+    {
+        var unenrolled = await service.UnenrollAsync(slug, ct);
+        return unenrolled
+            ? Results.NoContent()
+            : Results.Problem(
+                statusCode: StatusCodes.Status404NotFound,
+                title: "Vertical not found",
+                detail: $"No vertical with slug '{slug}'.");
+    }
 
+    // TODO: implement once IVerticalConnectivityValidator is wired (next session).
     private static IResult ValidateConnectivity(string slug, VerticalEnrollmentRequest request)
-        => Results.Problem(statusCode: 501, title: "Not implemented");
+        => Results.Problem(statusCode: StatusCodes.Status501NotImplemented, title: "Not implemented");
 }

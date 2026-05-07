@@ -21,6 +21,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
+using Pervaxis.Forge.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -37,6 +38,9 @@ var keysPath = Path.Combine(
 builder.Services.AddDataProtection()
     .SetApplicationName("Pervaxis.Forge.Api")
     .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+
+// ── Domain services ──────────────────────────────────────────────────────────
+builder.Services.AddScoped<IVerticalService, VerticalService>();
 
 // ── OpenAPI / Swagger ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();

@@ -79,6 +79,95 @@ Known conflicts the guides will pull you toward — use the CLAUDE.md / Forge-sp
 
 ---
 
+## 2026-05-07 — Phase 0 Day 2 Session 2: VerticalService implemented + tested against real RDS
+
+**Branch:** `feature/api-vertical-enrollment`
+**Engineer:** Anand Jayaseelan (with Claude as implementing engineer)
+**Phase:** Phase 0 — Vertical Enrollment Backend (Week 1, May 6–10)
+**Machine:** Home laptop (no ZScaler).
+
+### What was done this session
+
+1. **Implemented `IVerticalService` + `VerticalService`** (`src/Pervaxis.Forge.Api/Services/`):
+   - Methods: `EnrollAsync`, `ListAsync`, `GetAsync`, `UpdateAsync`, `UnenrollAsync` (soft-delete via `IsActive=false`).
+   - Encryption is transparent — the service deals in plaintext; `EncryptedStringConverter` in `ForgeDbContext` handles `IamRoleArn` and `AccessToken` at the EF write/read boundary. The service does **not** call `IDataProtector` itself.
+   - `EnrollAsync` does a pre-check (`AnyAsync` on slug) for a clean 409 path, with a fallback `PostgresException(23505)` → `SlugConflictException` translation in case of races.
+   - `ListAsync` uses `AsNoTracking()` projections — `ServiceCount` materializes via correlated subquery on `GenerationLogs.Sum(g => g.ServiceCount)`, no `Include` needed.
+   - `MapToResponse` is `public static` so it's testable as a pure function.
+
+2. **`SlugConflictException`** — a sealed `Exception` subclass with the offending slug as a property. Endpoint catches it and returns 409 ProblemDetails.
+
+3. **Wired 5 of 6 vertical endpoints** to the service (`Endpoints/VerticalEndpoints.cs`):
+   - `POST /api/v1/verticals` → `EnrollAsync` → 201 Created (or 409 on slug conflict)
+   - `GET /api/v1/verticals` → `ListAsync` → 200
+   - `GET /api/v1/verticals/{slug}` → `GetAsync` → 200 or 404
+   - `PUT /api/v1/verticals/{slug}` → `UpdateAsync` → 200 or 404
+   - `DELETE /api/v1/verticals/{slug}` → `UnenrollAsync` → 204 or 404
+   - `POST /api/v1/verticals/{slug}/validate` — **left as 501**. That's the `IVerticalConnectivityValidator` task (STS AssumeRole + GitHub org check), separate.
+
+4. **Registered service in DI** — `builder.Services.AddScoped<IVerticalService, VerticalService>();` in `Program.cs`.
+
+5. **Tests:**
+   - **Unit tests** (`tests/.../Services/VerticalServiceTests.cs`):
+     - Pre-existing smoke test (request constructable) preserved.
+     - Added `MapToResponse_ProjectsAllFields_FromVerticalAggregate` — full happy-path mapping.
+     - Added `MapToResponse_FallsBackToDefaults_WhenChildConfigsAreMissing` — defensive null-handling.
+     - Used type aliases (`EntityTechDefaults`, `RequestTechDefaults`) to disambiguate the two `VerticalTechDefaults` types in different namespaces.
+   - **Integration tests** (`tests/.../Services/VerticalServiceIntegrationTests.cs`, new file):
+     - 3 tests, all `[Trait("Category", "Integration")]` so excluded by CI's `--filter "Category!=Integration"`.
+     - Each test early-returns if `RDS_TEST_CONNECTION` env var is unset (so they no-op locally without a real DB).
+     - Covers: encryption round-trip (write encrypted, read back plaintext), slug conflict via PG unique-violation, full Get/Update/Unenroll cycle.
+     - Each test uses a unique slug (`itest-{guid}`) and `IAsyncLifetime.DisposeAsync` deletes the row after.
+     - Constructed `ForgeDbContext` directly with `EphemeralDataProtectionProvider` (in-memory throwaway keys) — no `WebApplicationFactory` plumbing needed.
+
+### End-of-session state
+
+- **Build:** 4/4 projects, 0 warnings, 0 errors.
+- **Unit tests (CI gate, `Category!=Integration`):** 4/4 passing — 1 engine smoke, 1 api smoke, 2 mapping.
+- **Integration tests (`Category=Integration`, `RDS_TEST_CONNECTION` set):** 3/3 passing in ~3s against `forge-dev`.
+
+### Proof points from the integration pass
+
+These are the things that don't show up in unit-test land and that the integration run actually verified against real RDS:
+
+- `EncryptedStringConverter` write/read round-trip works — wrote `ghp_secret_token`, read back `ghp_secret_token`.
+- Postgres unique-violation on `slug` is correctly classified by `PostgresErrorCodes.UniqueViolation` (SQLSTATE `23505`).
+- `gen_random_uuid()` and `NOW()` defaults populate via RETURNING — `vertical.Id` and `vertical.CreatedAt` are non-default after `SaveChangesAsync`, no manual reload needed.
+- `text[]` for `Environments` round-trips as `string[]`.
+- FK cascades work (deleting a Vertical removes its child configs; verified implicitly by cleanup).
+- Soft-delete + `IsActive` filter correctly hides unenrolled rows from `GetAsync`.
+
+### How to run integration tests on another machine
+
+```powershell
+$env:RDS_TEST_CONNECTION='Host=...;Database=forge_dev;Username=postgres;Password=...;Port=5432;SSL Mode=Require;Trust Server Certificate=true'
+dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category=Integration"
+```
+
+Connection string is the same one in `appsettings.Development.json` on this machine. Office laptop will need `SSL Mode=Disable` instead of `SSL Mode=Require` — and integration tests probably won't work there at all because of ZScaler ZPA mangling the wire protocol (see Session 1 entry below).
+
+### Cross-machine notes
+
+- `appsettings.Development.json` is gitignored — unchanged this session, still has `SSL Mode=Require;Trust Server Certificate=true` on home laptop.
+- Home IP `73.197.181.23/32` still in the RDS SG. Revoke when done.
+
+### Next up
+
+- [ ] Implement `IVerticalConnectivityValidator` + `VerticalConnectivityValidator` — STS `AssumeRole` dry-run for AWS, Octokit org membership check for GitHub. Wire into `POST /api/v1/verticals/{slug}/validate`. Likely needs `AWSSDK.SecurityToken` and `Octokit` NuGet packages; check `Pervaxis.Forge.Api.csproj`.
+- [ ] Fix the validate endpoint's signature — currently takes both `string slug` AND `VerticalEnrollmentRequest`, which is awkward. Probably should be slug-only (validate stored creds) OR request-only (validate before enroll). Decide with Anand.
+- [ ] Wire the remaining stub endpoints in `GenerationEndpoints.cs` and `ModuleEndpoints.cs` once the Engine has real generation logic — not Phase 0.
+- [ ] **May 8 (tomorrow)** — Swagger contract handoff to UI team. The 5 wired vertical endpoints are now real; the rest are documented stubs. Confirm UI team is happy with this surface for their mock-to-real swap on May 10.
+- [ ] SonarCloud bootstrap when `SONAR_TOKEN` lands.
+
+### How to resume on another machine
+
+1. `git fetch && git checkout feature/api-vertical-enrollment && git pull`
+2. Read this entry top-to-bottom and the bootstrap section at the top of this file.
+3. `dotnet build && dotnet test --filter "Category!=Integration"` — should be 4/4 green.
+4. If you want to run integration tests, set `RDS_TEST_CONNECTION` and your machine's IP must be in the RDS SG.
+
+---
+
 ## 2026-05-07 — Phase 0 Day 2 (Home Laptop): RDS migration applied
 
 **Branch:** `feature/api-vertical-enrollment`

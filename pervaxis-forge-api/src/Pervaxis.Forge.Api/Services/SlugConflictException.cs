@@ -16,25 +16,10 @@
  ************************************************************************
  */
 
-using Pervaxis.Forge.Api.Models.Requests;
-using Pervaxis.Forge.Api.Models.Responses;
-
 namespace Pervaxis.Forge.Api.Services;
 
-public interface IVerticalService
+public sealed class SlugConflictException(string slug)
+    : Exception($"A vertical with slug '{slug}' already exists.")
 {
-    Task<VerticalResponse> EnrollAsync(
-        VerticalEnrollmentRequest request,
-        CancellationToken ct = default);
-
-    Task<IReadOnlyList<VerticalSummaryResponse>> ListAsync(CancellationToken ct = default);
-
-    Task<VerticalResponse?> GetAsync(string slug, CancellationToken ct = default);
-
-    Task<VerticalResponse?> UpdateAsync(
-        string slug,
-        UpdateVerticalRequest request,
-        CancellationToken ct = default);
-
-    Task<bool> UnenrollAsync(string slug, CancellationToken ct = default);
+    public string Slug { get; } = slug;
 }
