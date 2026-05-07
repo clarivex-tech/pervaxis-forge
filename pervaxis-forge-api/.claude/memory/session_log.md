@@ -79,6 +79,58 @@ Known conflicts the guides will pull you toward — use the CLAUDE.md / Forge-sp
 
 ---
 
+## 2026-05-07 — Phase 0 Day 2 Session 3: UI handoff package (CORS + Swagger snapshot + HANDOFF.md)
+
+**Branch:** `feature/api-vertical-enrollment`
+**Engineer:** Anand Jayaseelan (with Claude as implementing engineer)
+**Phase:** Phase 0 — Vertical Enrollment Backend (Week 1, May 6–10)
+**Machine:** Home laptop (no ZScaler).
+
+### What was done this session
+
+1. **CORS** wired in `Program.cs`. Named policy `ForgeUi`. Allowed origins read from `Forge:AllowedOrigins` in `appsettings.json` (default `["http://localhost:4200"]`). `UseCors` is in the pipeline between `UseHttpsRedirection` and the endpoint maps. `AllowAnyHeader` + `AllowAnyMethod`; **no** `AllowCredentials` because Phase 0 has no auth and we don't want to commit to credentialed CORS prematurely.
+
+2. **OpenAPI snapshot committed** at `pervaxis-forge-api/contract/openapi.json` (~26 KB, OpenAPI 3.0.4). Captured by booting the API on HTTP `localhost:5500` (HTTPS redirect skipped silently when no HTTPS port is configured) and `Invoke-WebRequest`-ing `/swagger/v1/swagger.json`. PowerShell 5.1's `Out-File -Encoding utf8` writes BOM, so the file was re-saved via `[System.IO.File]::WriteAllText` with a no-BOM `UTF8Encoding(false)` to keep strict JSON parsers happy. All 7 paths captured: `/api/v1/verticals` (POST, GET), `/api/v1/verticals/{slug}` (GET, PUT, DELETE), `/api/v1/verticals/{slug}/validate` (POST), `/api/v1/generate` (POST), `/api/v1/generate/batch` (POST), `/api/v1/modules` (GET), `/api/v1/canvas-modules` (GET).
+
+3. **`pervaxis-forge-api/HANDOFF.md`** — UI-facing handover doc. Sections: where the contract lives, real-vs-stubbed table, how to run locally (with the ZScaler caveat), CORS, sample request/response payloads for the 5 wired endpoints, behavior gotchas (slug immutable, encrypted fields write-only, soft-delete is invisible to subsequent reads, `enrolledAt` is creation not update, `/validate` URL slug oddity), what's out of scope (auth, validator, generation endpoints, full server-side validation), and a May 10 mock-to-real swap checklist.
+
+### Deferred from this session (handed back to backlog)
+
+- **VerticalConnectivityValidator** (STS AssumeRole + Octokit org check). The packages are already in `Pervaxis.Forge.Api.csproj` (`AWSSDK.SecurityToken`, `Octokit`); just needs `AWSSDK.Extensions.NETCore.Setup` plus the implementation. UI was told to skip / stub the wizard's Validate step until this lands.
+- **Server-side input validation** for `VerticalEnrollmentRequest` (slug regex, AWS account 12-digit, ARN shape, email shape). BFF currently trusts UI-side validation; mismatches surface as 500s. On the backlog as defense-in-depth.
+
+### End-of-session state
+
+- **Build:** 4/4 projects, 0 warnings, 0 errors.
+- **Unit tests (CI gate):** 4/4 still green (no test changes this session).
+- **Files added:**
+  - `pervaxis-forge-api/contract/openapi.json` — committed Swagger snapshot.
+  - `pervaxis-forge-api/HANDOFF.md` — UI-facing handoff doc.
+- **Files changed:**
+  - `pervaxis-forge-api/src/Pervaxis.Forge.Api/Program.cs` — CORS registration + middleware.
+  - `pervaxis-forge-api/src/Pervaxis.Forge.Api/appsettings.json` — `Forge:AllowedOrigins` default.
+
+### Things to remember for the office laptop
+
+- Nothing on the office laptop changed. CORS works regardless of network. Swagger snapshot is in the repo, so the UI team can read the contract without booting the BFF — useful when corporate-network laptops can't reach `forge-dev`.
+
+### Next up
+
+- [ ] **Implement `VerticalConnectivityValidator`** + wire `/api/v1/verticals/{slug}/validate` (next session). Decide URL/body relationship — recommendation: ignore the URL slug, validate the body's credentials. Re-export `openapi.json` after.
+- [ ] **Server-side enrollment input validation** — slug `^[a-z][a-z0-9-]*$`, AWS account 12-digit, ARN format, email shape. Throw a typed `ValidationException`; endpoint maps to `400 ValidationProblemDetails`.
+- [ ] **May 10 (Sunday)** — UI swaps mock for real API in dev. Handoff doc has the checklist.
+- [ ] SonarCloud bootstrap when `SONAR_TOKEN` lands.
+- [ ] **Re-export `openapi.json`** every time an endpoint or DTO changes (this should become a pre-commit hook or a CI step at some point).
+
+### How to resume on another machine
+
+1. `git fetch && git checkout feature/api-vertical-enrollment && git pull`
+2. Read this entry top-to-bottom and the bootstrap section at the top of this file.
+3. `dotnet build && dotnet test --filter "Category!=Integration"` — should be 4/4 green.
+4. Pick up from "Next up" above. The validator is the obvious next chunk.
+
+---
+
 ## 2026-05-07 — Phase 0 Day 2 Session 2: VerticalService implemented + tested against real RDS
 
 **Branch:** `feature/api-vertical-enrollment`

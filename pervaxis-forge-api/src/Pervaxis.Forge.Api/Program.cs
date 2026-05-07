@@ -42,6 +42,23 @@ builder.Services.AddDataProtection()
 // ── Domain services ──────────────────────────────────────────────────────────
 builder.Services.AddScoped<IVerticalService, VerticalService>();
 
+// ── CORS ─────────────────────────────────────────────────────────────────────
+// Allows the Launchpad Angular app (default http://localhost:4200) to call the BFF
+// once it swaps its mock VerticalApiService for the real one. Origins come from
+// Forge:AllowedOrigins so deployed environments can override without code changes.
+const string ForgeUiCorsPolicy = "ForgeUi";
+builder.Services.AddCors(options =>
+{
+    var allowedOrigins = builder.Configuration
+        .GetSection("Forge:AllowedOrigins")
+        .Get<string[]>() ?? ["http://localhost:4200"];
+
+    options.AddPolicy(ForgeUiCorsPolicy, policy => policy
+        .WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
+
 // ── OpenAPI / Swagger ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
@@ -72,6 +89,8 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors(ForgeUiCorsPolicy);
 
 app.MapVerticalEndpoints();
 app.MapGenerationEndpoints();

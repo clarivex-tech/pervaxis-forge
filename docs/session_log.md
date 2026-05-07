@@ -90,6 +90,24 @@
 
 ---
 
+### 2026-05-07 — BFF: UI handoff package (CORS + Swagger snapshot + HANDOFF.md)
+
+**What we did**
+- Added CORS to `Program.cs` with a named `ForgeUi` policy. Origins come from `Forge:AllowedOrigins` (default `["http://localhost:4200"]`). Closes the silent landmine where the UI's mock → real swap on May 10 would otherwise fail in-browser with no useful error.
+- Committed an OpenAPI snapshot at `pervaxis-forge-api/contract/openapi.json` so the UI team can codegen / read the contract without booting the BFF. ~26 KB, OpenAPI 3.0.4, all 7 paths captured.
+- Wrote `pervaxis-forge-api/HANDOFF.md` for the UI team — what's real, what's stub, sample payloads, behavior gotchas (slug immutable, encrypted fields write-only, soft-delete returns 404 on subsequent reads), CORS info, and a May 10 mock-to-real swap checklist.
+
+**Deferred (next session)**
+- Implementing `VerticalConnectivityValidator` (STS + Octokit) and wiring `/validate` — UI was told to skip this in their wizard until it lands.
+- Server-side enrollment input validation as defense-in-depth.
+
+**Next**
+- Land the validator + re-export `openapi.json`.
+- May 8 (tomorrow): nothing new required from BFF — handoff package is complete.
+- May 10: UI swap.
+
+---
+
 ### 2026-05-07 — BFF: VerticalService implemented and validated against real RDS
 
 **What we did**
