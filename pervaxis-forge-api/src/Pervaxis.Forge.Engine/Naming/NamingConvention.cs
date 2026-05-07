@@ -16,10 +16,50 @@
  ************************************************************************
  */
 
+using System;
+using System.Linq;
+
 namespace Pervaxis.Forge.Engine.Naming;
 
-// TODO: implement all transformation methods — ToPascalCase, StripServiceSuffix,
-// GetFirstSegment, GetComponentPrefix, DeriveAllNames — per FORGE_TECHNICAL_SPECIFICATION.md §10
 public static class NamingConvention
 {
+    public static string ToPascalCase(string kebab)
+    {
+        if (string.IsNullOrWhiteSpace(kebab))
+        {
+            throw new ArgumentException("Value cannot be null, empty, or whitespace.", nameof(kebab));
+        }
+
+        return string.Join(
+            string.Empty,
+            kebab.Split('-', StringSplitOptions.RemoveEmptyEntries)
+                .Select(segment => char.ToUpperInvariant(segment[0]) + segment[1..].ToLowerInvariant()));
+    }
+
+    public static string StripServiceSuffix(string name)
+    {
+        if (name.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
+        {
+            return name[..^8];
+        }
+
+        return name;
+    }
+
+    public static string GetFirstSegment(string name)
+    {
+        var hyphenIndex = name.IndexOf('-');
+        return hyphenIndex < 0 ? name : name[..hyphenIndex];
+    }
+
+    public static string GetComponentPrefix(string product)
+    {
+        var normalized = product.ToLowerInvariant();
+        if (normalized == "clarivolt")
+        {
+            return "clv";
+        }
+
+        return normalized.Length < 3 ? normalized : normalized[..3];
+    }
 }
