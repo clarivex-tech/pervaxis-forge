@@ -79,6 +79,14 @@ internal static class VerticalEndpoints
             var vertical = await service.EnrollAsync(request, ct);
             return Results.Created($"/api/v1/verticals/{vertical.Slug}", vertical);
         }
+        catch (ValidationException ex)
+        {
+            var errors = ex.Failures
+                .GroupBy(f => f.Field)
+                .ToDictionary(g => g.Key, g => g.Select(f => f.Message).ToArray());
+
+            return Results.ValidationProblem(errors);
+        }
         catch (SlugConflictException ex)
         {
             return Results.Problem(

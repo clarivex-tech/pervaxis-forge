@@ -79,6 +79,30 @@ Known conflicts the guides will pull you toward — use the CLAUDE.md / Forge-sp
 
 ---
 
+## 2026-05-07 — Codex implemented
+
+> **Branch:** `feature/codex-bff`
+> **Scope:** Task A from the Codex handoff only — server-side `VerticalEnrollmentRequest` validation, service enforcement, endpoint mapping, and unit tests.
+
+### What I changed
+
+1. Added `ValidationFailure` and `ValidationException` under `src/Pervaxis.Forge.Api/Services/`.
+2. Added `VerticalRequestValidator.Validate(VerticalEnrollmentRequest)` with the requested field rules for slug, owner metadata, cloud provider, source control, and tech defaults.
+3. Updated `VerticalService.EnrollAsync` to validate before the slug existence check and throw `ValidationException` when the payload is malformed.
+4. Updated `VerticalEndpoints.EnrollVertical` to translate `ValidationException` into `400 ValidationProblemDetails`.
+5. Added `VerticalRequestValidatorTests` covering the validation rules with FluentAssertions.
+
+### Verification
+
+- `dotnet build pervaxis-forge-api/Pervaxis.Forge.slnx -p:UseSharedCompilation=false`
+- `dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category!=Integration" -p:UseSharedCompilation=false`
+- Result: build green, tests green, `0` warnings, `0` errors, `58` passing tests in the API test project plus `1` passing Engine test.
+
+### Notes
+
+- I did not add validation to `UpdateVerticalRequest`; that remains a follow-up, per the handoff.
+- Missing `required` fields still surface as framework `JsonException` handling rather than a custom validation response. That was left untouched on purpose.
+
 ## 2026-05-07 — Codex CLI (gpt-mini) handoff: 2 narrow tasks delegated
 
 > **For the Codex CLI agent picking this up:** read this entire entry top-to-bottom, then read the bootstrap section at the very top of this file (`How to bootstrap a fresh session`), then do exactly the tasks below — nothing more. Push to the branch listed for each task and stop. Anand or Claude (Opus) will review and merge.
