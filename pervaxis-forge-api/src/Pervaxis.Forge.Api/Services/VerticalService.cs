@@ -33,6 +33,9 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
         VerticalEnrollmentRequest request,
         CancellationToken ct = default)
     {
+        var failures = VerticalRequestValidator.Validate(request);
+        if (failures.Count > 0) throw new ValidationException(failures);
+
         if (await db.Verticals.AnyAsync(v => v.Slug == request.Slug, ct))
             throw new SlugConflictException(request.Slug);
 
