@@ -97,7 +97,29 @@ Should return temporary credentials. If it errors, fix trust policy before enrol
 
 ---
 
-## 5. Post-enrollment
+## 5. ComponentPrefix — migration note
+
+The `componentPrefix` column was added via migration `20260507173119_AddComponentPrefix` with `DEFAULT ''` (empty string). Any verticals enrolled **before this migration** will have `componentPrefix = ""` in the DB, which is invalid per the 2–5 letter rule.
+
+**Phase 0 impact:** no real verticals exist in `forge-dev` yet — only test rows that are cleaned up automatically. No backfill needed today.
+
+**Before enrolling the first real vertical:** confirm `componentPrefix` is non-empty on all existing rows:
+
+```sql
+SELECT slug, component_prefix FROM verticals WHERE component_prefix = '';
+```
+
+If any rows exist, update them manually before using the API:
+
+```sql
+UPDATE verticals SET component_prefix = 'XXX' WHERE component_prefix = '';
+```
+
+Replace `'XXX'` with the correct registered abbreviation per vertical.
+
+---
+
+## 6. Post-enrollment
 
 - [ ] Call `POST /api/v1/verticals/{slug}/validate` — confirms AWS role is assumable and GitHub org is reachable.
 - [ ] Verify response shows `awsConnectivity.success: true` and `gitHubConnectivity.success: true`.
