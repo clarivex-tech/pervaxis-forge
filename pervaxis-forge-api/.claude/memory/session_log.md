@@ -71,6 +71,22 @@ Known conflicts the guides will pull you toward — use the CLAUDE.md / Forge-sp
 - **CI/CD from Day 1** — GitHub Actions + SonarCloud (org `clarivex-tech`, project `clarivex-tech_pervaxis-forge`; `SONAR_TOKEN` lives in GitHub repo secrets, configured by Anand).
 - **Append, don't rewrite** — add a new dated entry at the top of this file; do not edit prior entries except for typo fixes.
 
+### Model tier strategy — conserve usage for the full 4-week build
+
+Spawn a **Haiku** subagent for all implementation work. Keep planning, design, and review on **Sonnet**. Use **Opus** only for genuinely hard architectural decisions.
+
+| Tier | Model ID | Use for |
+|---|---|---|
+| Haiku | `claude-haiku-4-5-20251001` | Writing C# files, tests, any file edits |
+| Sonnet | `claude-sonnet-4-6` | Planning, design calls, session log, PR review |
+| Opus | `claude-opus-4-7` | Complex architecture or hard bug diagnosis only |
+
+**How:** `Agent(model="haiku", prompt="...self-contained brief...")`. Never write code directly in the Sonnet conversation unless it's a single-line fix.
+
+### Terse mode
+
+Start every session with **terse mode on** (`/clear` then type "terse mode" or just keep responses short). Anand reads diffs — don't narrate what you just did. One sentence per update maximum.
+
 ### What you do NOT need to read on bootstrap
 
 - The user's auto-memory under `C:\Users\anand\.claude\…` — machine-local, may not exist here. Anything load-bearing has been promoted to this log.
@@ -78,6 +94,60 @@ Known conflicts the guides will pull you toward — use the CLAUDE.md / Forge-sp
 - Build/IDE artifacts: `bin/`, `obj/`, `.vs/`, `.idea/`, `*.user`.
 
 ---
+
+## 2026-05-07 — Codex: Task B + Task A review fixes
+
+> **For the Codex CLI agent picking this up:** read the bootstrap section at the top of this file, then complete the two items below. Push to the branch listed and open a PR targeting `feature/api-vertical-enrollment`. Do not merge.
+
+### Item 1 — Fix Task A review gaps (branch: `feature/codex-bff`)
+
+In `tests/Pervaxis.Forge.Api.Tests/Services/VerticalRequestValidatorTests.cs`, add the missing test case to `ValidateSlug_Rules_AreEnforced`:
+
+```csharp
+[InlineData("slug-", false)]   // trailing hyphen
+```
+
+Then run `dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category!=Integration"` — must stay green.
+
+Amend or add a commit on `feature/codex-bff` and push. Do **not** open a new PR — the existing one covers this fix.
+
+### Item 2 — Task B: NamingConvention helpers (branch: `feature/engine-naming-convention`, cut from `feature/api-vertical-enrollment`)
+
+Full spec is in the entry **"2026-05-07 — Codex CLI (gpt-mini) handoff: 2 narrow tasks delegated"** → **Task B** section below. Summary:
+
+- Edit `src/Pervaxis.Forge.Engine/Naming/NamingConvention.cs` — implement the four functions verbatim.
+- Add `tests/Pervaxis.Forge.Engine.Tests/Naming/NamingConventionTests.cs` — one `[Theory]` per function, ≥5 cases each.
+- No new NuGet packages in Engine.
+- Build green, Engine test count goes from 1 to ~20+.
+- Append a session log entry with: branch, what you did, build/test counts, open questions.
+
+All hard guardrails from the handoff entry apply (license header, Forge ≠ Genesis, xUnit + FluentAssertions + Moq, no `.Result`/`.Wait()`).
+
+---
+
+## 2026-05-07 — Codex implemented
+
+> **Branch:** `feature/codex-bff`
+> **Scope:** Task A from the Codex handoff only — server-side `VerticalEnrollmentRequest` validation, service enforcement, endpoint mapping, and unit tests.
+
+### What I changed
+
+1. Added `ValidationFailure` and `ValidationException` under `src/Pervaxis.Forge.Api/Services/`.
+2. Added `VerticalRequestValidator.Validate(VerticalEnrollmentRequest)` with the requested field rules for slug, owner metadata, cloud provider, source control, and tech defaults.
+3. Updated `VerticalService.EnrollAsync` to validate before the slug existence check and throw `ValidationException` when the payload is malformed.
+4. Updated `VerticalEndpoints.EnrollVertical` to translate `ValidationException` into `400 ValidationProblemDetails`.
+5. Added `VerticalRequestValidatorTests` covering the validation rules with FluentAssertions.
+
+### Verification
+
+- `dotnet build pervaxis-forge-api/Pervaxis.Forge.slnx -p:UseSharedCompilation=false`
+- `dotnet test pervaxis-forge-api/Pervaxis.Forge.slnx --filter "Category!=Integration" -p:UseSharedCompilation=false`
+- Result: build green, tests green, `0` warnings, `0` errors, `58` passing tests in the API test project plus `1` passing Engine test.
+
+### Notes
+
+- I did not add validation to `UpdateVerticalRequest`; that remains a follow-up, per the handoff.
+- Missing `required` fields still surface as framework `JsonException` handling rather than a custom validation response. That was left untouched on purpose.
 
 ## 2026-05-07 — Codex CLI (gpt-mini) handoff: 2 narrow tasks delegated
 

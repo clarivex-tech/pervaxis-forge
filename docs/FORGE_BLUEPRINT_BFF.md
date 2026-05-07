@@ -17,6 +17,30 @@
 
 ---
 
+## Must Read — AI Session Conventions
+
+> These rules apply to every Claude Code session working on the BFF. They are load-bearing — ignoring them wastes tokens or produces the wrong output.
+
+### Model tier strategy (conserve usage for the full 4-week build)
+
+| Tier | Model | Use for |
+|---|---|---|
+| **Haiku** | `claude-haiku-4-5-20251001` | All implementation: writing C# files, tests, edits |
+| **Sonnet** | `claude-sonnet-4-6` | Planning, design decisions, session log updates, PR review |
+| **Opus** | `claude-opus-4-7` | Hard architectural calls or complex bug diagnosis only |
+
+**Rule:** Before writing any code, spawn `Agent(model="haiku")` for the implementation. Do not write code directly in the Sonnet conversation unless the change is a single-line fix.
+
+### Other session conventions
+
+- **Discuss before coding** — propose a plan and get explicit go-ahead before changing code.
+- **One question at a time** — surface clarifications individually, never as a bundled list.
+- **Forge ≠ Genesis** — zero references to `Pervaxis.Core` or `Pervaxis.Genesis` in Forge code.
+- **No local emulation** — real AWS resources only; no Docker, LocalStack, or Testcontainers.
+- **Append session log** — every session ends with a new dated entry at the top of `pervaxis-forge-api/.claude/memory/session_log.md`.
+
+---
+
 ## Table of Contents
 1. [Timeline & Milestones](#1-timeline--milestones)
 2. [Phase 0: Vertical Enrollment Backend](#2-phase-0-vertical-enrollment-backend)
