@@ -888,6 +888,7 @@
       "VerticalEnrollmentRequest": {
         "required": [
           "cloudProvider",
+          "componentPrefix",
           "description",
           "displayName",
           "ownerEmail",
@@ -918,6 +919,10 @@
             "type": "string",
             "nullable": true
           },
+          "componentPrefix": {
+            "type": "string",
+            "nullable": true
+          },
           "cloudProvider": {
             "$ref": "#/components/schemas/CloudProviderConfig"
           },
@@ -933,6 +938,7 @@
       "VerticalResponse": {
         "required": [
           "cloudProvider",
+          "componentPrefix",
           "displayName",
           "enrolledAt",
           "environments",
@@ -977,6 +983,10 @@
           "enrolledAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "componentPrefix": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
@@ -984,6 +994,7 @@
       "VerticalSummaryResponse": {
         "required": [
           "cloudProvider",
+          "componentPrefix",
           "displayName",
           "enrolledAt",
           "id",
@@ -1023,6 +1034,10 @@
           "enrolledAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "componentPrefix": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false
