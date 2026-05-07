@@ -95,6 +95,60 @@ Start every session with **terse mode on** (`/clear` then type "terse mode" or j
 
 ---
 
+## 2026-05-07 — Phase 0 Day 2 Session 4: ComponentPrefix, NamingConvention redesign, Task A/B merge
+
+**Branch:** `feature/api-vertical-enrollment`
+**Engineer:** Anand Jayaseelan (with Claude Sonnet as lead, Haiku for implementation)
+**Phase:** Phase 0 — Vertical Enrollment Backend (Week 1, May 6–10)
+**Machine:** Home laptop (no ZScaler).
+
+### What was done this session
+
+1. **Reviewed and merged Codex Task A** (`feature/codex-bff`) — server-side `VerticalEnrollmentRequest` validation. Approved with one noted gap (trailing hyphen slug test — assigned to Task C). Merged into `feature/api-vertical-enrollment`.
+
+2. **Reviewed Codex Task B** (`feature/engine-naming-convention`) — `NamingConvention` helpers. Identified design flaw: `GetComponentPrefix("clarivolt") → "clv"` contradicts the "first 3 chars" rule, and any algorithm would collide for Clarivolt/Clarifrost (both start `"clar"`).
+
+3. **Redesigned `GetComponentPrefix`** — changed from a derivation algorithm to a **registered-abbreviation normaliser**: caller supplies a pre-registered 2–5-letter abbreviation; function validates (letters only, 2–5 chars) and lowercases. Uniqueness is the caller's responsibility at enrolment time. Updated implementation + tests. Merged Task B.
+
+4. **Added `ComponentPrefix` to the full enrollment stack** (Haiku):
+   - `VerticalEnrollmentRequest` — new `required string ComponentPrefix`
+   - `Vertical` entity — new `required string ComponentPrefix`
+   - `ForgeDbContext` — `HasMaxLength(5).IsRequired()`
+   - `VerticalResponse` + `VerticalSummaryResponse` — new `required string ComponentPrefix`
+   - `VerticalService.EnrollAsync` — calls `NamingConvention.GetComponentPrefix(request.ComponentPrefix)` to normalise before storing
+   - `VerticalService.MapToResponse` — projects `ComponentPrefix`
+   - `VerticalRequestValidator` — `ValidateComponentPrefix` via `NamingConvention.GetComponentPrefix` (catches `ArgumentException` → `ValidationFailure`)
+   - EF migration `20260507173119_AddComponentPrefix` generated (NOT applied — apply manually against forge-dev)
+   - Tests updated; 6 new `ComponentPrefix` validator test cases added
+
+5. **Assigned Codex Task C** — brief is at the top of this log. Branch: `feature/api-task-c`.
+
+6. **Session conventions** added to this log and `docs/FORGE_BLUEPRINT_BFF.md`: model-tier strategy (Haiku/Sonnet/Opus) and terse mode.
+
+### End-of-session state
+
+- **Build:** 4/4 projects, 0 warnings, 0 errors.
+- **Unit tests (CI gate):** 95 passing — 31 Engine, 64 API.
+- **Migration:** `20260507173119_AddComponentPrefix` generated, **not applied** — run `dotnet ef database update` from home laptop with RDS connection string set.
+
+### Deferred to next session
+
+- [ ] **Apply `AddComponentPrefix` migration** to `forge-dev` RDS (`dotnet ef database update --project src/Pervaxis.Forge.Api`). Requires home laptop + `appsettings.Development.json` with RDS connection string.
+- [ ] **Re-export `openapi.json`** — DTOs changed (ComponentPrefix added). Boot API on `localhost:5500`, `Invoke-WebRequest /swagger/v1/swagger.json`, save to `pervaxis-forge-api/contract/openapi.json`.
+- [ ] **Codex Task C** — `feature/api-task-c`: trailing hyphen test, `.gitignore` hygiene, `UpdateVerticalRequest` validation.
+- [ ] **`VerticalConnectivityValidator`** — STS AssumeRole + Octokit org check. Wire `POST /api/v1/verticals/{slug}/validate` (slug-only, validates stored creds). `AWSSDK.SecurityToken` and `Octokit` already in csproj.
+- [ ] **SonarCloud bootstrap** — waiting on `SONAR_TOKEN` from Anand.
+
+### How to resume on another machine
+
+1. `git fetch && git checkout feature/api-vertical-enrollment && git pull`
+2. Read this entry top-to-bottom and the bootstrap section at the top of this file.
+3. `dotnet build && dotnet test --filter "Category!=Integration"` — should be 95 green.
+4. Apply the migration if on home laptop with RDS access.
+5. Pick up from Deferred list above.
+
+---
+
 ## 2026-05-07 — Codex: Task C — validation fixes + gitignore hygiene + UpdateVerticalRequest validation
 
 > **For the Codex CLI agent picking this up:** read the bootstrap section at the top of this file, then do exactly the three items below on branch `feature/api-task-c` cut from `feature/api-vertical-enrollment`. Open one PR targeting `feature/api-vertical-enrollment`. Do not merge.
