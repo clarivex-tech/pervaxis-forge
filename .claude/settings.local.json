@@ -30,9 +30,7 @@
       "Bash(gh api *)",
       "Bash(gh pr *)",
       "Bash(git stash *)",
-      "Bash(git checkout *)",
-      "Bash(git merge *)",
-      "Bash(git commit *)"
+      "Bash(git checkout *)"
     ]
   }
 }
