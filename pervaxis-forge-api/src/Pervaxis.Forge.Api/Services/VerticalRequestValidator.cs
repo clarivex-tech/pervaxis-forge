@@ -38,12 +38,26 @@ public static class VerticalRequestValidator
         var failures = new List<ValidationFailure>();
 
         ValidateSlug(request.Slug, failures);
-        ValidateTrimmedLength(request.DisplayName, nameof(request.DisplayName), 1, 255, failures);
-        ValidateTrimmedLength(request.OwnerTeam, nameof(request.OwnerTeam), 1, 255, failures);
+        ValidateDisplayName(request.DisplayName, failures);
+        ValidateOwnerTeam(request.OwnerTeam, failures);
         ValidateEmail(request.OwnerEmail, failures);
         ValidateComponentPrefix(request.ComponentPrefix, failures);
         ValidateCloudProvider(request.CloudProvider, failures);
         ValidateSourceControl(request.SourceControl, failures);
+        ValidateTechDefaults(request.TechDefaults, failures);
+
+        return failures;
+    }
+
+    public static IReadOnlyList<ValidationFailure> Validate(UpdateVerticalRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        var failures = new List<ValidationFailure>();
+
+        ValidateDisplayName(request.DisplayName, failures);
+        ValidateOwnerTeam(request.OwnerTeam, failures);
+        ValidateEmail(request.OwnerEmail, failures);
         ValidateTechDefaults(request.TechDefaults, failures);
 
         return failures;
@@ -81,6 +95,16 @@ public static class VerticalRequestValidator
         {
             failures.Add(new ValidationFailure(nameof(VerticalEnrollmentRequest.OwnerEmail), "Owner email must be a valid email address."));
         }
+    }
+
+    private static void ValidateDisplayName(string displayName, ICollection<ValidationFailure> failures)
+    {
+        ValidateTrimmedLength(displayName, nameof(VerticalEnrollmentRequest.DisplayName), 1, 255, failures);
+    }
+
+    private static void ValidateOwnerTeam(string ownerTeam, ICollection<ValidationFailure> failures)
+    {
+        ValidateTrimmedLength(ownerTeam, nameof(VerticalEnrollmentRequest.OwnerTeam), 1, 255, failures);
     }
 
     private static void ValidateCloudProvider(CloudProviderConfig config, ICollection<ValidationFailure> failures)
