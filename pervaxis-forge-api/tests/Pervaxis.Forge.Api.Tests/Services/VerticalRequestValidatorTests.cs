@@ -45,6 +45,49 @@ public class VerticalRequestValidatorTests
     [InlineData("  Clarivolt  ", true)]
     [InlineData("", false)]
     [InlineData("   ", false)]
+    public void ValidateUpdateDisplayName_TrimmedLength_IsEnforced(string? displayName, bool isValid)
+    {
+        var request = CreateUpdateRequest(displayName: displayName);
+
+        var failures = VerticalRequestValidator.Validate(request);
+
+        failures.Any(f => f.Field == nameof(VerticalEnrollmentRequest.DisplayName)).Should().Be(!isValid);
+    }
+
+    [Theory]
+    [InlineData("Platform Team", true)]
+    [InlineData("  Platform Team  ", true)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    public void ValidateUpdateOwnerTeam_TrimmedLength_IsEnforced(string? ownerTeam, bool isValid)
+    {
+        var request = CreateUpdateRequest(ownerTeam: ownerTeam);
+
+        var failures = VerticalRequestValidator.Validate(request);
+
+        failures.Any(f => f.Field == nameof(VerticalEnrollmentRequest.OwnerTeam)).Should().Be(!isValid);
+    }
+
+    [Theory]
+    [InlineData("team@clarivex.tech", true)]
+    [InlineData(" team@clarivex.tech ", false)]
+    [InlineData("not-an-email", false)]
+    [InlineData("team@", false)]
+    [InlineData("", false)]
+    public void ValidateUpdateOwnerEmail_Rules_AreEnforced(string ownerEmail, bool isValid)
+    {
+        var request = CreateUpdateRequest(ownerEmail: ownerEmail);
+
+        var failures = VerticalRequestValidator.Validate(request);
+
+        failures.Any(f => f.Field == nameof(VerticalEnrollmentRequest.OwnerEmail)).Should().Be(!isValid);
+    }
+
+    [Theory]
+    [InlineData("Clarivolt", true)]
+    [InlineData("  Clarivolt  ", true)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
     public void ValidateDisplayName_TrimmedLength_IsEnforced(string? displayName, bool isValid)
     {
         var request = CreateRequest(displayName: displayName);
@@ -272,6 +315,26 @@ public class VerticalRequestValidatorTests
             OwnerEmail = ownerEmail ?? "team@clarivex.tech",
             CloudProvider = cloudProvider ?? CreateCloudProvider(),
             SourceControl = sourceControl ?? CreateSourceControl(),
+            TechDefaults = techDefaults ?? new VerticalTechDefaults
+            {
+                Environments = ["test", "accp", "prod"],
+                DefaultEnvironment = "test"
+            }
+        };
+    }
+
+    private static UpdateVerticalRequest CreateUpdateRequest(
+        string? displayName = null,
+        string? ownerTeam = null,
+        string? ownerEmail = null,
+        VerticalTechDefaults? techDefaults = null)
+    {
+        return new UpdateVerticalRequest
+        {
+            DisplayName = displayName ?? "Clarivolt",
+            Description = "Sales platform",
+            OwnerTeam = ownerTeam ?? "Platform Team",
+            OwnerEmail = ownerEmail ?? "team@clarivex.tech",
             TechDefaults = techDefaults ?? new VerticalTechDefaults
             {
                 Environments = ["test", "accp", "prod"],

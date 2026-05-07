@@ -123,6 +123,9 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
         UpdateVerticalRequest request,
         CancellationToken ct = default)
     {
+        var failures = VerticalRequestValidator.Validate(request);
+        if (failures.Count > 0) throw new ValidationException(failures);
+
         var vertical = await db.Verticals
             .Include(v => v.CloudConfig)
             .Include(v => v.SourceControlConfig)
