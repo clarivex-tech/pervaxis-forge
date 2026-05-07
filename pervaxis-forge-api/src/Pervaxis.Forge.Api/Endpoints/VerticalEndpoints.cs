@@ -147,7 +147,14 @@ internal static class VerticalEndpoints
                 detail: $"No vertical with slug '{slug}'.");
     }
 
-    // TODO: implement once IVerticalConnectivityValidator is wired (next session).
-    private static IResult ValidateConnectivity(string slug, VerticalEnrollmentRequest request)
-        => Results.Problem(statusCode: StatusCodes.Status501NotImplemented, title: "Not implemented");
+    private static async Task<IResult> ValidateConnectivity(
+        string slug,
+        IVerticalConnectivityValidator validator,
+        CancellationToken ct)
+    {
+        var result = await validator.ValidateAsync(slug, ct);
+        return result is null
+            ? Results.Problem(statusCode: StatusCodes.Status404NotFound, title: "Vertical not found.")
+            : Results.Ok(result);
+    }
 }
