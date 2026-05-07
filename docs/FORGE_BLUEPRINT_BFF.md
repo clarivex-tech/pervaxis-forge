@@ -6,7 +6,7 @@
 **Project Start:** May 6, 2026  
 **Projected Completion:** May 31, 2026 (4 weeks)  
 **Team:** Pervaxis Platform Team — Backend  
-**Status:** Pre-Implementation
+**Status:** Phase 0 Complete — Phase 1 In Progress
 
 > **Parallel Execution:** BFF and UI teams run independently from Day 1.  
 > Week 1: BFF builds Vertical Enrollment API while UI builds the Enrollment Wizard against a mock.  
@@ -72,7 +72,7 @@ Week 4 (May 27-31):  Phase 2 (wrap) + Phase 3 — Infrastructure + GitHub
 
 | Milestone | Target Date | Status | Deliverable |
 |---|---|---|---|
-| **M0: Vertical Enrollment API Live** | May 10, 2026 | 🔴 Not Started | Enroll endpoint, DB schema, AWS + GitHub validation |
+| **M0: Vertical Enrollment API Live** | May 10, 2026 | ✅ Complete | Enroll endpoint, DB schema, AWS + GitHub validation |
 | **M1: Engine Core Complete** | May 17, 2026 | 🔴 Not Started | Manifest parsing, naming derivation, template engine, ZIP |
 | **M2: REST API Templates Complete** | May 24, 2026 | 🔴 Not Started | 18 templates, generated service compiles + tests pass |
 | **M3: Infrastructure + GitHub Complete** | May 31, 2026 | 🔴 Not Started | AWS resources deployed, GitHub repos created |

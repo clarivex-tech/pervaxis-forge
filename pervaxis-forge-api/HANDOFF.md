@@ -1,9 +1,9 @@
 # Pervaxis Forge BFF — UI Handoff
 
 **For:** Pervaxis Forge Launchpad (Angular) team
-**As of:** 2026-05-07
+**As of:** 2026-05-07 (updated end-of-day)
 **Branch:** `feature/api-vertical-enrollment`
-**Status:** Phase 0 vertical enrollment endpoints are wired against real RDS. Generation and module endpoints remain documented stubs (Phase 1).
+**Status:** Phase 0 complete. All vertical enrollment endpoints live. Generation and module endpoints remain documented stubs (Phase 1).
 
 ---
 
@@ -36,7 +36,7 @@ For interactive exploration: run the BFF (see §3) and open `http://localhost:<p
 | GET | `/api/v1/verticals/{slug}` | **Real** | `VerticalService.GetAsync` |
 | PUT | `/api/v1/verticals/{slug}` | **Real** | `VerticalService.UpdateAsync` |
 | DELETE | `/api/v1/verticals/{slug}` | **Real** | `VerticalService.UnenrollAsync` (soft-delete) |
-| POST | `/api/v1/verticals/{slug}/validate` | **Stub (501)** | Connectivity validator lands next session |
+| POST | `/api/v1/verticals/{slug}/validate` | **Real** | `VerticalConnectivityValidator` — STS AssumeRole + GitHub org check |
 | POST | `/api/v1/generate` | **Stub (501)** | Phase 1 |
 | POST | `/api/v1/generate/batch` | **Stub (501)** | Phase 1 |
 | GET | `/api/v1/modules` | **Stub (501)** | Phase 1 |
@@ -183,16 +183,16 @@ Returns `204 No Content` on success, `404 Not Found` if the slug doesn't exist (
 - **Soft-delete is invisible after the fact.** `DELETE /api/v1/verticals/{slug}` flips `is_active=false` in the DB; subsequent `GET`, `PUT`, and `DELETE` on the same slug return `404`. A re-enroll with the same slug currently fails with `409` (the row still exists, just inactive). If re-enroll matters, raise it — it's not in Phase 0 scope.
 - **`enrolledAt` is the original creation timestamp** (`Vertical.CreatedAt`), not the last update. UTC; serialized as ISO-8601 with `+00:00` offset.
 - **`serviceCount` is 0 in Phase 0.** Generation logs don't exist yet. Don't gate UI features on it being non-zero unless you handle the empty case gracefully.
-- **The `/validate` endpoint is currently 501.** Until the connectivity validator ships, the wizard's "Validate" step should either skip the call or display a "validation unavailable" notice. The endpoint's URL signature (`{slug}/validate`) is awkward for a pre-enrollment call — when it lands, the URL slug will be informational only and the body's credentials are what's actually checked. Don't rely on the URL slug existing in the DB.
+- **`/validate` is now live.** `POST /api/v1/verticals/{slug}/validate` — no body, validates the stored credentials for the enrolled vertical. Returns `200 ConnectivityValidationResponse` with `awsConnectivity` and `gitHubConnectivity` result objects (each has `success: bool` and `errorMessage: string?`). Returns `404` if the slug doesn't exist. Runs both checks in parallel with a 15-second timeout.
+- **`componentPrefix` is now a required enrollment field.** Add it to the wizard form — 2–5 uppercase letters (e.g. `CLV` for Clarivolt). Must be unique across verticals (uniqueness is not enforced by the DB today — enforce in the wizard or accept the risk for Phase 0).
 
 ---
 
 ## 7. What's NOT in scope yet
 
 - **Authentication** is deferred. Phase 0 endpoints run unauthenticated — no JWT, no session cookies, no `Authorization` header expected. The `forge-admin` role check happens in the UI's `forgeAuthGuard`; the BFF doesn't enforce it yet. Once auth lands, expect `Authorization: Bearer <jwt>` and `403` for missing roles.
-- **`/api/v1/verticals/{slug}/validate`** — see above.
 - **Generation endpoints** (`/api/v1/generate*`, `/api/v1/modules`, `/api/v1/canvas-modules`) — Phase 1 work, not before mid-May.
-- **Server-side input validation** is minimal in Phase 0 — the BFF trusts the UI to enforce slug kebab-case, AWS account ID format (12 digits), ARN shape, and email shape. The DB will enforce length limits and uniqueness, but mismatches will surface as generic 500s, not `400 ValidationProblem`. Defense-in-depth validation on the BFF side is on the backlog.
+- **Authentication** is deferred — see above.
 
 ---
 
@@ -207,7 +207,7 @@ For the UI's mock → real swap:
 5. Verify enrollment end-to-end against `forge-dev`. Watch for:
    - CORS errors → confirm the UI dev server origin is in the BFF's `Forge:AllowedOrigins`.
    - Connection refused → confirm your machine's public IP is in the `forge-dev` RDS security group, and you're not on a network that proxies port 5432 (ZScaler).
-   - 501 from `/validate` → expected until the validator lands. Skip or stub on the UI side.
+   - `/validate` is now live — the wizard's Validate step can call `POST /api/v1/verticals/{slug}/validate` after enrolment.
 6. Surface `409` distinctly from `400` in the wizard — the slug conflict UX should suggest picking a different slug, not "fix your input".
 
 ---
