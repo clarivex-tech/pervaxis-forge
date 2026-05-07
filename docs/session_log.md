@@ -49,6 +49,32 @@
 
 ---
 
+### 2026-05-07 — BFF: RDS Migration (Partial — ZScaler blocked)
+
+**What we did**
+- Confirmed EF Core migration `20260506140655_InitialSchema` exists and is ready to apply.
+- Added `SSL Mode=Disable` to `appsettings.Development.json` connection string (ZScaler strips SSL mid-handshake on port 5432).
+- TCP connectivity to `forge-dev.cafy4a22q90j.us-east-1.rds.amazonaws.com:5432` succeeded (`TcpTestSucceeded: True`).
+- Migration still failed at authentication phase — ZScaler ZPA is intercepting and mangling the Postgres wire protocol even without SSL.
+
+**Challenges**
+- ZScaler ZPA blocks Postgres binary protocol on port 5432 from the office network even when SSL is disabled.
+- The RDS endpoint resolves to `100.64.1.172` (CGNAT/ZPA range) on the office machine, confirming traffic routes through ZPA.
+
+**What needs to be done on home laptop (no ZScaler)**
+1. Pull `feature/api-vertical-enrollment` branch.
+2. Ensure `ASPNETCORE_ENVIRONMENT=Development` is set (picks up `appsettings.Development.json`).
+3. Run: `dotnet ef database update --project src/Pervaxis.Forge.Api`
+4. Verify migration applies cleanly — expect all 6 tables: `verticals`, `vertical_cloud_configs`, `vertical_source_control_configs`, `vertical_tech_defaults`, `generation_logs`, `deployment_outputs`.
+5. Run the API: `dotnet run --project src/Pervaxis.Forge.Api` and hit Swagger at `https://localhost:<port>/swagger` to confirm DB connectivity.
+
+**Next (after migration succeeds)**
+- Implement `VerticalService` CRUD against real DB (currently stubs).
+- Wire `VerticalConnectivityValidator` to call real AWS/GitHub checks.
+- Start Phase 1: generation endpoint + Engine integration.
+
+---
+
 ## Template For Next Sessions
 
 ### YYYY-MM-DD
