@@ -31,6 +31,7 @@ public class VerticalRequestValidatorTests
     [InlineData("a", true)]
     [InlineData("Bad_Slug", false)]
     [InlineData("bad--slug", false)]
+    [InlineData("slug-", false)]
     public void ValidateSlug_Rules_AreEnforced(string slug, bool isValid)
     {
         var request = CreateRequest(slug: slug);
