@@ -18,6 +18,7 @@
 
 using System.Text.RegularExpressions;
 using Pervaxis.Forge.Api.Models.Requests;
+using Pervaxis.Forge.Engine.Naming;
 
 namespace Pervaxis.Forge.Api.Services;
 
@@ -40,6 +41,7 @@ public static class VerticalRequestValidator
         ValidateTrimmedLength(request.DisplayName, nameof(request.DisplayName), 1, 255, failures);
         ValidateTrimmedLength(request.OwnerTeam, nameof(request.OwnerTeam), 1, 255, failures);
         ValidateEmail(request.OwnerEmail, failures);
+        ValidateComponentPrefix(request.ComponentPrefix, failures);
         ValidateCloudProvider(request.CloudProvider, failures);
         ValidateSourceControl(request.SourceControl, failures);
         ValidateTechDefaults(request.TechDefaults, failures);
@@ -172,6 +174,18 @@ public static class VerticalRequestValidator
         if (trimmed.Length < minLength || trimmed.Length > maxLength)
         {
             failures.Add(new ValidationFailure(field, $"{field} must be between {minLength} and {maxLength} characters after trimming."));
+        }
+    }
+
+    private static void ValidateComponentPrefix(string prefix, ICollection<ValidationFailure> failures)
+    {
+        try
+        {
+            NamingConvention.GetComponentPrefix(prefix);
+        }
+        catch (ArgumentException ex)
+        {
+            failures.Add(new ValidationFailure(nameof(VerticalEnrollmentRequest.ComponentPrefix), ex.Message));
         }
     }
 }

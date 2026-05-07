@@ -22,6 +22,7 @@ using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Data.Entities;
 using Pervaxis.Forge.Api.Models.Requests;
 using Pervaxis.Forge.Api.Models.Responses;
+using Pervaxis.Forge.Engine.Naming;
 
 using EntityTechDefaults = Pervaxis.Forge.Api.Data.Entities.VerticalTechDefaults;
 
@@ -46,6 +47,7 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
             Description = request.Description,
             OwnerTeam = request.OwnerTeam,
             OwnerEmail = request.OwnerEmail,
+            ComponentPrefix = NamingConvention.GetComponentPrefix(request.ComponentPrefix),
             CloudConfig = new VerticalCloudConfig
             {
                 Provider = request.CloudProvider.Provider,
@@ -102,6 +104,7 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
                 SourceControl = v.SourceControlConfig != null ? v.SourceControlConfig.Platform : "Unknown",
                 ServiceCount = v.GenerationLogs.Sum(g => g.ServiceCount),
                 EnrolledAt = new DateTimeOffset(v.CreatedAt, TimeSpan.Zero),
+                ComponentPrefix = v.ComponentPrefix,
             })
             .ToListAsync(ct);
     }
@@ -176,6 +179,7 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
         GitHubOrg = vertical.SourceControlConfig?.GitHubOrg ?? string.Empty,
         Environments = vertical.TechDefaults?.Environments ?? [],
         EnrolledAt = new DateTimeOffset(vertical.CreatedAt, TimeSpan.Zero),
+        ComponentPrefix = vertical.ComponentPrefix,
     };
 
     private static bool IsUniqueViolation(DbUpdateException ex) =>

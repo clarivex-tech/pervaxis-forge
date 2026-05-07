@@ -140,6 +140,7 @@ public sealed class VerticalServiceIntegrationTests : IAsyncLifetime
         Description = "Integration test",
         OwnerTeam = "Team A",
         OwnerEmail = "a@e.com",
+        ComponentPrefix = "TST",
         CloudProvider = new CloudProviderConfig
         {
             Provider = "AWS",

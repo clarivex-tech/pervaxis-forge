@@ -40,6 +40,7 @@ public class VerticalServiceTests
             Description = "Sales upload and validation platform",
             OwnerTeam = "Clarivolt Platform Team",
             OwnerEmail = "team@clarivex.tech",
+            ComponentPrefix = "CLV",
             CloudProvider = new CloudProviderConfig
             {
                 Provider = "AWS",
@@ -77,6 +78,7 @@ public class VerticalServiceTests
             Description = "Sales platform",
             OwnerTeam = "Platform Team",
             OwnerEmail = "team@clarivex.tech",
+            ComponentPrefix = "clv",
             CreatedAt = new DateTime(2026, 5, 7, 10, 0, 0, DateTimeKind.Utc),
             CloudConfig = new VerticalCloudConfig
             {
@@ -110,6 +112,7 @@ public class VerticalServiceTests
         response.GitHubOrg.Should().Be("clarivex-tech");
         response.Environments.Should().BeEquivalentTo(["test", "accp", "prod"]);
         response.EnrolledAt.Should().Be(new DateTimeOffset(2026, 5, 7, 10, 0, 0, TimeSpan.Zero));
+        response.ComponentPrefix.Should().Be("clv");
     }
 
     [Fact]
@@ -121,6 +124,7 @@ public class VerticalServiceTests
             DisplayName = "Bare",
             OwnerTeam = "T",
             OwnerEmail = "t@e.com",
+            ComponentPrefix = "BAR",
             CreatedAt = new DateTime(2026, 5, 7, 0, 0, 0, DateTimeKind.Utc),
         };
 

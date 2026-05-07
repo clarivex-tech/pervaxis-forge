@@ -254,11 +254,28 @@ public class VerticalRequestValidatorTests
         failures.Any(f => f.Field == "TechDefaults.DefaultDbEngine").Should().Be(!isValid);
     }
 
+    [Theory]
+    [InlineData("CLV", false)]      // valid — no failure
+    [InlineData("clv", false)]
+    [InlineData("CF", false)]
+    [InlineData("x", true)]         // too short
+    [InlineData("toolong", true)]   // too long
+    [InlineData("cl1", true)]       // digit
+    public void ValidateComponentPrefix_Rules_AreEnforced(string prefix, bool expectFailure)
+    {
+        var request = CreateRequest(componentPrefix: prefix);
+
+        var failures = VerticalRequestValidator.Validate(request);
+
+        failures.Any(f => f.Field == nameof(VerticalEnrollmentRequest.ComponentPrefix)).Should().Be(expectFailure);
+    }
+
     private static VerticalEnrollmentRequest CreateRequest(
         string? slug = null,
         string? displayName = null,
         string? ownerTeam = null,
         string? ownerEmail = null,
+        string? componentPrefix = null,
         CloudProviderConfig? cloudProvider = null,
         SourceControlConfig? sourceControl = null,
         VerticalTechDefaults? techDefaults = null)
@@ -270,6 +287,7 @@ public class VerticalRequestValidatorTests
             Description = "Sales platform",
             OwnerTeam = ownerTeam ?? "Platform Team",
             OwnerEmail = ownerEmail ?? "team@clarivex.tech",
+            ComponentPrefix = componentPrefix ?? "CLV",
             CloudProvider = cloudProvider ?? CreateCloudProvider(),
             SourceControl = sourceControl ?? CreateSourceControl(),
             TechDefaults = techDefaults ?? new VerticalTechDefaults

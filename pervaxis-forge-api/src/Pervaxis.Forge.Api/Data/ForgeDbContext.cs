@@ -51,6 +51,7 @@ public class ForgeDbContext(
             e.Property(v => v.DisplayName).HasMaxLength(255).IsRequired();
             e.Property(v => v.OwnerTeam).HasMaxLength(255).IsRequired();
             e.Property(v => v.OwnerEmail).HasMaxLength(255).IsRequired();
+            e.Property(v => v.ComponentPrefix).HasMaxLength(5).IsRequired();
             e.Property(v => v.IsActive).HasDefaultValue(true);
             e.Property(v => v.CreatedAt).HasDefaultValueSql("NOW()");
             e.Property(v => v.UpdatedAt).HasDefaultValueSql("NOW()");
