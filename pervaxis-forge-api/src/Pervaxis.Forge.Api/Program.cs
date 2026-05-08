@@ -25,22 +25,35 @@ using Octokit;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
 using Pervaxis.Forge.Api.Services;
+using Amazon.Lambda.AspNetCoreServer;
+using Amazon.AspNetCore.DataProtection.SSM;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Lambda hosting ────────────────────────────────────────────────────────────
+// No-ops when running outside Lambda; activates automatically on cold start.
+builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 // ── Database ─────────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<ForgeDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ForgeDb")));
 
 // ── Data Protection ──────────────────────────────────────────────────────────
-// Dev: keys on local disk. Prod key store (S3/Secrets Manager) is a Phase 3 task.
-var keysPath = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "Pervaxis.Forge", "keys");
+// Dev: keys on local disk. Lambda/prod: SSM Parameter Store (shared across instances).
+var dpBuilder = builder.Services.AddDataProtection()
+    .SetApplicationName("Pervaxis.Forge.Api");
 
-builder.Services.AddDataProtection()
-    .SetApplicationName("Pervaxis.Forge.Api")
-    .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+if (builder.Environment.IsDevelopment())
+{
+    var keysPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "Pervaxis.Forge", "keys");
+    dpBuilder.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+}
+else
+{
+    dpBuilder.PersistKeysToAWSSystemsManager("/pervaxis/forge/dev/data-protection/keys");
+}
 
 // ── Domain services ──────────────────────────────────────────────────────────
 builder.Services.AddScoped<IVerticalService, VerticalService>();

@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-05-08 — Lambda deploy wiring
+
+**Branch:** `feature/api-lambda-deploy` → PR #15 → `develop` (open)
+**Build:** 4/4, 0 errors. Tests: 109 (31 Engine + 78 API).
+
+Added: `Amazon.Lambda.AspNetCoreServer.Hosting` + `Amazon.AspNetCore.DataProtection.SSM`. `Program.cs`: `AddAWSLambdaHosting(HttpApi)`, SSM key storage in non-dev. `aws-lambda-tools-defaults.json`: targets `forge-lambda-dev-api`, `dotnet10`, `us-east-1`. `forge-deploy.yml`: `deploy-lambda` job (OIDC, `dotnet lambda deploy-function`) on `main` only.
+
+**Next:**
+- [ ] Merge PR #15 → develop, then develop → main to trigger first Lambda deploy
+- [ ] Smoke: `GET https://vtxpvx8a10.execute-api.us-east-1.amazonaws.com/api/v1/verticals`
+- [ ] Apply `AddComponentPrefix` migration to forge-dev (home laptop + RDS)
+- [ ] Phase 1 Engine Core (M1: May 17)
+
+---
+
 ## How to bootstrap a fresh session — READ THIS FIRST
 
 > **For a new Claude CLI session on any machine:** read this section before doing anything else. The user's auto-memory under `C:\Users\anand\.claude\projects\…\memory\` is **machine-local** and may not exist on this machine — **this file is the cross-machine source of truth.** All paths below are relative to the repo root (`pervaxis-forge/`) unless stated otherwise.
