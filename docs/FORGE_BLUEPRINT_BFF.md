@@ -86,7 +86,7 @@ Week 4 (May 27-31):  Phase 2 (wrap) + Phase 3 — Infrastructure + GitHub
 
 | Milestone | Target Date | Status | Deliverable |
 |---|---|---|---|
-| **M0: Vertical Enrollment API Live** | May 10, 2026 | ✅ Complete | Enroll endpoint, DB schema, AWS + GitHub validation |
+| **M0: Vertical Enrollment API Live** | May 10, 2026 | ✅ Complete — Deployed to Lambda (ACCP) May 8 | Enroll endpoint, DB schema, AWS + GitHub validation, Lambda deploy pipeline |
 | **M1: Engine Core Complete** | May 17, 2026 | 🔴 Not Started | Manifest parsing, naming derivation, template engine, ZIP |
 | **M2: REST API Templates Complete** | May 24, 2026 | 🔴 Not Started | 18 templates, generated service compiles + tests pass |
 | **M3: Infrastructure + GitHub Complete** | May 31, 2026 | 🔴 Not Started | AWS resources deployed, GitHub repos created |
