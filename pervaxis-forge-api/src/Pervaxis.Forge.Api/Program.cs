@@ -27,6 +27,7 @@ using Pervaxis.Forge.Api.Endpoints;
 using Pervaxis.Forge.Api.Services;
 using Amazon.Lambda.AspNetCoreServer;
 using Amazon.AspNetCore.DataProtection.SSM;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -105,6 +106,39 @@ builder.Services.AddSwaggerGen(options =>
 
 // ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();
+
+// Lambda/API Gateway will otherwise collapse unhandled exceptions into an empty 500 body.
+// Keep the response shape explicit so startup/config/pipeline failures are diagnosable.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Unhandled exception while processing {Method} {Path}", context.Request.Method, context.Request.Path);
+
+        if (context.Response.HasStarted)
+        {
+            throw;
+        }
+
+        context.Response.Clear();
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/problem+json";
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            type = "about:blank",
+            title = "Internal Server Error",
+            status = StatusCodes.Status500InternalServerError,
+            detail = "The request pipeline failed unexpectedly.",
+        });
+
+        await context.Response.WriteAsync(payload);
+    }
+});
 
 // Swagger UI: always in dev; opt-in via Forge:EnableSwagger in other environments.
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:EnableSwagger"))
