@@ -1,0 +1,12 @@
+{
+  "profile": "",
+  "region": "us-east-1",
+  "configuration": "Release",
+  "framework": "net10.0",
+  "function-architecture": "x86_64",
+  "function-runtime": "dotnet10",
+  "function-memory-size": 512,
+  "function-timeout": 30,
+  "function-handler": "Pervaxis.Forge.Api",
+  "function-name": "forge-lambda-dev-api"
+}

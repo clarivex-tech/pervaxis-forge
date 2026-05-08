@@ -10,7 +10,7 @@
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
     <PackageReference Include="AWSSDK.SecurityToken" Version="*" />
-    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.*" />
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.*" />
     <PackageReference Include="AWSSDK.ElastiCache" Version="*" />
     <PackageReference Include="AWSSDK.RDS" Version="*" />
     <PackageReference Include="AWSSDK.S3" Version="*" />
@@ -18,5 +18,7 @@
     <PackageReference Include="AWSSDK.SecretsManager" Version="*" />
     <PackageReference Include="Octokit" Version="*" />
     <PackageReference Include="LibGit2Sharp" Version="*" />
+    <PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="*" />
+    <PackageReference Include="Amazon.AspNetCore.DataProtection.SSM" Version="*" />
   </ItemGroup>
 </Project>

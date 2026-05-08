@@ -84,4 +84,36 @@ jobs:
           path: pervaxis-forge-api/TestResults/
           retention-days: 7
 
-      # TODO: add deploy job here (ECS task update / ECR push) once infra is provisioned
+  deploy-lambda:
+    name: Deploy to Lambda
+    needs: build-test-scan
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main' || github.event_name == 'workflow_dispatch'
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.x"
+
+      - uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: Install Lambda Tools
+        run: dotnet tool install --global Amazon.Lambda.Tools
+
+      - name: Deploy to Lambda
+        working-directory: pervaxis-forge-api/src/Pervaxis.Forge.Api
+        run: dotnet lambda deploy-function --region us-east-1 --disable-interactive
