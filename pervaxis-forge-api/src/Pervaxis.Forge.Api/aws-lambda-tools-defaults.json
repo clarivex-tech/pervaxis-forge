@@ -8,5 +8,6 @@
   "function-memory-size": 512,
   "function-timeout": 30,
   "function-handler": "Pervaxis.Forge.Api",
-  "function-name": "forge-lambda-dev-api"
+  "function-name": "forge-lambda-dev-api",
+  "function-role": "arn:aws:iam::072531338071:role/forge-role-dev-lambda-accp"
 }
