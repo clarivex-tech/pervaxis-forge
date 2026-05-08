@@ -31,6 +31,20 @@
 
 **Rule:** Before writing any code, spawn `Agent(model="haiku")` for the implementation. Do not write code directly in the Sonnet conversation unless the change is a single-line fix.
 
+### Codex delegation rule
+
+Leverage maximum coding, analysis, and bug-fixing work to **Codex**. Claude CLI takes over only when the task is judged too complex or context-heavy for Codex (e.g. multi-file architectural changes, hard bug diagnosis). When Claude CLI does implement, the model tier rules above apply.
+
+### Session log
+
+> **File:** `pervaxis-forge-api/.claude/memory/session_log.md`
+>
+> Engineer-facing log of work, decisions, blockers, and todos for the Forge BFF. Committed to the repo so any machine pulling the branch has full context.
+>
+> **Convention:** Latest entry at the top. Each entry is self-contained — a fresh Claude Code session on a new machine should be able to read the topmost entry and continue without backfill.
+>
+> **Companion docs:** Project narrative lives in `docs/session_log.md`. Authoritative standards in `pervaxis-forge-api/CLAUDE.md` and `docs/FORGE_*` files.
+
 ### Other session conventions
 
 - **Discuss before coding** — propose a plan and get explicit go-ahead before changing code.
