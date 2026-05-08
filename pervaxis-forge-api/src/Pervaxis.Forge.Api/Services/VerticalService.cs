@@ -90,23 +90,27 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
 
     public async Task<IReadOnlyList<VerticalSummaryResponse>> ListAsync(CancellationToken ct = default)
     {
-        return await db.Verticals
+        var verticals = await db.Verticals
             .AsNoTracking()
+            .Include(v => v.CloudConfig)
+            .Include(v => v.SourceControlConfig)
+            .Include(v => v.GenerationLogs)
             .Where(v => v.IsActive)
             .OrderBy(v => v.Slug)
-            .Select(v => new VerticalSummaryResponse
-            {
-                Id = v.Id,
-                Slug = v.Slug,
-                DisplayName = v.DisplayName,
-                Description = v.Description,
-                CloudProvider = v.CloudConfig != null ? v.CloudConfig.Provider : "Unknown",
-                SourceControl = v.SourceControlConfig != null ? v.SourceControlConfig.Platform : "Unknown",
-                ServiceCount = v.GenerationLogs.Sum(g => g.ServiceCount),
-                EnrolledAt = new DateTimeOffset(v.CreatedAt, TimeSpan.Zero),
-                ComponentPrefix = v.ComponentPrefix,
-            })
             .ToListAsync(ct);
+
+        return verticals.Select(v => new VerticalSummaryResponse
+        {
+            Id = v.Id,
+            Slug = v.Slug,
+            DisplayName = v.DisplayName,
+            Description = v.Description,
+            CloudProvider = v.CloudConfig?.Provider ?? "Unknown",
+            SourceControl = v.SourceControlConfig?.Platform ?? "Unknown",
+            ServiceCount = v.GenerationLogs.Sum(g => g.ServiceCount),
+            EnrolledAt = new DateTimeOffset(v.CreatedAt, TimeSpan.Zero),
+            ComponentPrefix = v.ComponentPrefix,
+        }).ToList();
     }
 
     public async Task<VerticalResponse?> GetAsync(string slug, CancellationToken ct = default)
