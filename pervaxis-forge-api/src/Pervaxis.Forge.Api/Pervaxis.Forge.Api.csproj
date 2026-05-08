@@ -19,6 +19,5 @@
     <PackageReference Include="Octokit" Version="*" />
     <PackageReference Include="LibGit2Sharp" Version="*" />
     <PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="*" />
-    <PackageReference Include="Amazon.AspNetCore.DataProtection.SSM" Version="*" />
   </ItemGroup>
 </Project>

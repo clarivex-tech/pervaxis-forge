@@ -16,19 +16,14 @@
  ************************************************************************
  */
 
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Pervaxis.Forge.Api.Data.Entities;
 
 namespace Pervaxis.Forge.Api.Data;
 
 public class ForgeDbContext(
-    DbContextOptions<ForgeDbContext> options,
-    IDataProtectionProvider dataProtectionProvider) : DbContext(options)
+    DbContextOptions<ForgeDbContext> options) : DbContext(options)
 {
-    private readonly IDataProtector _protector =
-        dataProtectionProvider.CreateProtector("VerticalCredentials");
 
     public DbSet<Vertical> Verticals => Set<Vertical>();
     public DbSet<VerticalCloudConfig> VerticalCloudConfigs => Set<VerticalCloudConfig>();
@@ -93,9 +88,7 @@ public class ForgeDbContext(
 
             e.HasIndex(c => new { c.VerticalId, c.Provider }).IsUnique();
 
-            // Encrypt IamRoleArn at rest using Data Protection
-            e.Property(c => c.IamRoleArn)
-                .HasConversion(new EncryptedStringConverter(_protector));
+            e.Property(c => c.IamRoleArn);
         });
 
         // ── VerticalSourceControlConfig ───────────────────────────────────────
@@ -113,9 +106,7 @@ public class ForgeDbContext(
 
             e.HasIndex(c => new { c.VerticalId, c.Platform }).IsUnique();
 
-            // Encrypt AccessToken at rest using Data Protection
-            e.Property(c => c.AccessToken)
-                .HasConversion(new EncryptedStringConverter(_protector));
+            e.Property(c => c.AccessToken);
         });
 
         // ── VerticalTechDefaults ──────────────────────────────────────────────
@@ -170,13 +161,4 @@ public class ForgeDbContext(
             e.HasIndex(d => d.GenerationLogId).HasDatabaseName("idx_deployment_outputs_generation");
         });
     }
-}
-
-// Transparent encrypt/decrypt converter — wraps Data Protection so EF handles it automatically.
-// Null-safe: null stored as null, protecting against unnecessary encryption of empty fields.
-file sealed class EncryptedStringConverter(IDataProtector protector)
-    : ValueConverter<string?, string?>(
-        v => v == null ? null : protector.Protect(v),
-        v => v == null ? null : protector.Unprotect(v))
-{
 }
