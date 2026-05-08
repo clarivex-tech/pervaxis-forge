@@ -71,7 +71,7 @@ jobs:
           dotnet test Pervaxis.Forge.slnx --no-build --configuration Release \
             --filter "Category!=Integration" \
             --collect:"XPlat Code Coverage" --results-directory TestResults \
-            -- DataCollectionRunSettings.DataCollectors.DataCollect.Configuration.Format=opencover
+            -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
 
       - name: SonarQube end
         if: (github.ref_name == 'main' || github.event_name == 'workflow_dispatch') && env.SONAR_TOKEN != ''
