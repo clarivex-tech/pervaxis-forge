@@ -18,7 +18,6 @@
 
 using Amazon.Extensions.NETCore.Setup;
 using Amazon.SecurityToken;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Octokit;
@@ -26,40 +25,17 @@ using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
 using Pervaxis.Forge.Api.Services;
 using Amazon.Lambda.AspNetCoreServer;
-using Amazon.AspNetCore.DataProtection.SSM;
 using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Lambda hosting ────────────────────────────────────────────────────────────
-// No-ops when running outside Lambda; activates automatically on cold start.
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
-// ── Database ─────────────────────────────────────────────────────────────────
 builder.Services.AddDbContext<ForgeDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ForgeDb")));
 
-// ── Data Protection ──────────────────────────────────────────────────────────
-// Dev: keys on local disk. Lambda/prod: SSM Parameter Store (shared across instances).
-var dpBuilder = builder.Services.AddDataProtection()
-    .SetApplicationName("Pervaxis.Forge.Api");
-
-if (builder.Environment.IsDevelopment())
-{
-    var keysPath = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "Pervaxis.Forge", "keys");
-    dpBuilder.PersistKeysToFileSystem(new DirectoryInfo(keysPath));
-}
-else
-{
-    dpBuilder.PersistKeysToAWSSystemsManager("/pervaxis/forge/dev/data-protection/keys");
-}
-
-// ── Domain services ──────────────────────────────────────────────────────────
 builder.Services.AddScoped<IVerticalService, VerticalService>();
 
-// ── AWS ──────────────────────────────────────────────────────────────────────
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonSecurityTokenService>();
 builder.Services.AddSingleton<Func<string, IGitHubClient>>(
@@ -69,10 +45,6 @@ builder.Services.AddSingleton<Func<string, IGitHubClient>>(
     });
 builder.Services.AddScoped<IVerticalConnectivityValidator, VerticalConnectivityValidator>();
 
-// ── CORS ─────────────────────────────────────────────────────────────────────
-// Allows the Launchpad Angular app (default http://localhost:4200) to call the BFF
-// once it swaps its mock VerticalApiService for the real one. Origins come from
-// Forge:AllowedOrigins so deployed environments can override without code changes.
 const string ForgeUiCorsPolicy = "ForgeUi";
 builder.Services.AddCors(options =>
 {
@@ -86,7 +58,6 @@ builder.Services.AddCors(options =>
         .AllowAnyMethod());
 });
 
-// ── OpenAPI / Swagger ─────────────────────────────────────────────────────────
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -104,11 +75,8 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-// Lambda/API Gateway will otherwise collapse unhandled exceptions into an empty 500 body.
-// Keep the response shape explicit so startup/config/pipeline failures are diagnosable.
 app.Use(async (context, next) =>
 {
     try
@@ -140,7 +108,6 @@ app.Use(async (context, next) =>
     }
 });
 
-// Swagger UI: always in dev; opt-in via Forge:EnableSwagger in other environments.
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:EnableSwagger"))
 {
     app.UseSwagger();
@@ -149,7 +116,6 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 }
 
 app.UseHttpsRedirection();
-
 app.UseCors(ForgeUiCorsPolicy);
 
 app.MapVerticalEndpoints();

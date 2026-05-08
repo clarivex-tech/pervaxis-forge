@@ -17,7 +17,6 @@
  */
 
 using FluentAssertions;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Models.Requests;
@@ -130,7 +129,7 @@ public sealed class VerticalServiceIntegrationTests : IAsyncLifetime
         var options = new DbContextOptionsBuilder<ForgeDbContext>()
             .UseNpgsql(_connectionString)
             .Options;
-        return new ForgeDbContext(options, new EphemeralDataProtectionProvider());
+        return new ForgeDbContext(options);
     }
 
     private static VerticalEnrollmentRequest NewRequest(string slug, string token, string roleArn) => new()
