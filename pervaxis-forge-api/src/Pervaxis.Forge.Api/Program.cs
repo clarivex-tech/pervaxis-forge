@@ -23,6 +23,7 @@ using Microsoft.OpenApi.Models;
 using Octokit;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
+using Pervaxis.Forge.Api.Models.Requests;
 using Pervaxis.Forge.Api.Services;
 using Amazon.Lambda.AspNetCoreServer;
 using System.Text.Json;
@@ -122,4 +123,125 @@ app.MapVerticalEndpoints();
 app.MapGenerationEndpoints();
 app.MapModuleEndpoints();
 
+if (app.Environment.IsDevelopment())
+{
+    await SeedSampleVerticalsAsync(app.Services);
+}
+
 app.Run();
+
+static async Task SeedSampleVerticalsAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var verticalService = scope.ServiceProvider.GetRequiredService<IVerticalService>();
+
+    if (await verticalService.ListAsync() is { Count: > 0 })
+    {
+        return;
+    }
+
+    var sampleVerticals = new[]
+    {
+        new VerticalEnrollmentRequest
+        {
+            Slug = "clarivex-ops",
+            DisplayName = "Clarivex Operations",
+            Description = "Operations and internal platform vertical.",
+            OwnerTeam = "Platform Ops",
+            OwnerEmail = "ops@clarivex.tech",
+            ComponentPrefix = "CLV",
+            CloudProvider = new CloudProviderConfig
+            {
+                Provider = "AWS",
+                AwsAccountId = "111111111111",
+                IamRoleArn = "arn:aws:iam::111111111111:role/forge-dev-ops",
+                DefaultRegion = "us-east-1",
+            },
+            SourceControl = new SourceControlConfig
+            {
+                Platform = "GitHub",
+                GitHubOrg = "clarivex-tech",
+                AccessToken = "ghp_sampletoken_ops",
+                DefaultVisibility = "Private",
+                DefaultBranchProtection = true,
+            },
+            TechDefaults = new VerticalTechDefaults
+            {
+                Environments = ["dev", "test", "prod"],
+                DefaultEnvironment = "dev",
+                GenerateTerraform = true,
+                GenerateCdk = true,
+                DefaultDbEngine = "postgresql",
+            },
+        },
+        new VerticalEnrollmentRequest
+        {
+            Slug = "clarivex-analytics",
+            DisplayName = "Clarivex Analytics",
+            Description = "Analytics and reporting vertical.",
+            OwnerTeam = "Data Platform",
+            OwnerEmail = "data@clarivex.tech",
+            ComponentPrefix = "CNA",
+            CloudProvider = new CloudProviderConfig
+            {
+                Provider = "AWS",
+                AwsAccountId = "222222222222",
+                IamRoleArn = "arn:aws:iam::222222222222:role/forge-dev-analytics",
+                DefaultRegion = "us-east-1",
+            },
+            SourceControl = new SourceControlConfig
+            {
+                Platform = "GitHub",
+                GitHubOrg = "clarivex-tech",
+                AccessToken = "ghp_sampletoken_analytics",
+                DefaultVisibility = "Private",
+                DefaultBranchProtection = true,
+            },
+            TechDefaults = new VerticalTechDefaults
+            {
+                Environments = ["dev", "stage", "prod"],
+                DefaultEnvironment = "dev",
+                GenerateTerraform = true,
+                GenerateCdk = true,
+                DefaultDbEngine = "postgresql",
+            },
+        },
+        new VerticalEnrollmentRequest
+        {
+            Slug = "clarivex-customer-portal",
+            DisplayName = "Clarivex Customer Portal",
+            Description = "Customer-facing portal vertical.",
+            OwnerTeam = "Customer Experience",
+            OwnerEmail = "cx@clarivex.tech",
+            ComponentPrefix = "CCP",
+            CloudProvider = new CloudProviderConfig
+            {
+                Provider = "AWS",
+                AwsAccountId = "333333333333",
+                IamRoleArn = "arn:aws:iam::333333333333:role/forge-dev-customer-portal",
+                DefaultRegion = "us-east-1",
+            },
+            SourceControl = new SourceControlConfig
+            {
+                Platform = "GitHub",
+                GitHubOrg = "clarivex-tech",
+                AccessToken = "ghp_sampletoken_portal",
+                DefaultVisibility = "Private",
+                DefaultBranchProtection = true,
+            },
+            TechDefaults = new VerticalTechDefaults
+            {
+                Environments = ["dev", "qa", "prod"],
+                DefaultEnvironment = "dev",
+                GenerateTerraform = true,
+                GenerateCdk = true,
+                DefaultDbEngine = "postgresql",
+            },
+        },
+    };
+
+    foreach (var request in sampleVerticals)
+    {
+        await verticalService.EnrollAsync(request);
+    }
+}
