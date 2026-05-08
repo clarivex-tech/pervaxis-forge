@@ -114,4 +114,4 @@ jobs:
 
       - name: Deploy to Lambda
         working-directory: pervaxis-forge-api/src/Pervaxis.Forge.Api
-        run: dotnet lambda deploy-function --region us-east-1 --disable-interactive
+        run: dotnet lambda deploy-function --region us-east-1
