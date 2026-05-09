@@ -25,23 +25,14 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { Router } from '@angular/router';
 import { finalize } from 'rxjs';
 
-import {
-	IVerticalApiService,
-	VERTICAL_API_SERVICE,
-} from '../../core/api/vertical-api.service';
-import { VerticalSummaryResponse } from '../../core/models/vertical.model';
+import { VerticalSummaryResponse } from '@models/vertical.model';
+import { IVerticalApiService, VERTICAL_API_SERVICE } from '@core/api/vertical-api.service';
 import { inject, signal } from '@angular/core';
 
 @Component({
 	selector: 'forge-vertical-dashboard',
 	standalone: true,
-	imports: [
-		DatePipe,
-		MatButtonModule,
-		MatCardModule,
-		MatChipsModule,
-		MatProgressSpinnerModule,
-	],
+	imports: [DatePipe, MatButtonModule, MatCardModule, MatChipsModule, MatProgressSpinnerModule],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	template: `
 		<section class="dashboard-shell">
@@ -71,7 +62,8 @@ import { inject, signal } from '@angular/core';
 					<div class="empty-illustration" aria-hidden="true">◌</div>
 					<h2>No verticals enrolled</h2>
 					<p>
-						Get started by enrolling your first business vertical to manage infrastructure deployments and service generation.
+						Get started by enrolling your first business vertical to manage infrastructure
+						deployments and service generation.
 					</p>
 					<button mat-raised-button color="primary" type="button" (click)="goToEnrollment()">
 						Enroll Your First Vertical
@@ -97,14 +89,19 @@ import { inject, signal } from '@angular/core';
 								<p>
 									Last generated:
 									@if (vertical.lastGeneratedAt) {
-										{{ vertical.lastGeneratedAt | date:'medium' }}
+										{{ vertical.lastGeneratedAt | date: 'medium' }}
 									} @else {
 										Never
 									}
 								</p>
 							</div>
 
-							<button mat-raised-button color="primary" type="button" (click)="openVertical(vertical.slug)">
+							<button
+								mat-raised-button
+								color="primary"
+								type="button"
+								(click)="openVertical(vertical.slug)"
+							>
 								Open
 							</button>
 						</mat-card>
@@ -241,9 +238,7 @@ import { inject, signal } from '@angular/core';
 })
 export class VerticalDashboardComponent {
 	private readonly router = inject(Router);
-	private readonly verticalApiService = inject(
-		VERTICAL_API_SERVICE,
-	) as IVerticalApiService;
+	private readonly verticalApiService = inject(VERTICAL_API_SERVICE) as IVerticalApiService;
 
 	readonly verticals = signal<VerticalSummaryResponse[]>([]);
 	readonly isLoading = signal<boolean>(true);

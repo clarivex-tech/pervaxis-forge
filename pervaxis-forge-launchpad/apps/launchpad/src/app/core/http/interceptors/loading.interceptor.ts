@@ -16,27 +16,16 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { finalize } from 'rxjs';
 
-@Component({
-	selector: 'forge-generation-wizard',
-	standalone: true,
-	changeDetection: ChangeDetectionStrategy.OnPush,
-	template: `
-		<section>
-			<h2>Service Generation Wizard</h2>
-			<p>
-				Vertical context: <strong>{{ slug }}</strong>
-			</p>
-			<p>Phase 2 implementation is queued after dashboard/workspace completion.</p>
-		</section>
-	`,
-})
-export class GenerationWizardComponent {
-	private readonly route = inject(ActivatedRoute);
+import { HttpRequestTrackerService } from '@core/http/http-request-tracker.service';
 
-	get slug(): string {
-		return this.route.snapshot.paramMap.get('slug') ?? 'unknown';
-	}
-}
+export const loadingInterceptor: HttpInterceptorFn = (request, next) => {
+	const tracker = inject(HttpRequestTrackerService);
+
+	tracker.beginRequest();
+
+	return next(request).pipe(finalize(() => tracker.endRequest()));
+};

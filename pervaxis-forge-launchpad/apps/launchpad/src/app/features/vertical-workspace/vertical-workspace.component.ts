@@ -16,27 +16,134 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import {
+	ChangeDetectionStrategy,
+	Component,
+	inject,
+	signal,
+	computed,
+	effect,
+} from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { ActivatedRoute, RouterLink } from '@angular/router';
+import { MatButtonModule } from '@angular/material/button';
+import { MatIconModule } from '@angular/material/icon';
+import { MatChipsModule } from '@angular/material/chips';
+import { MatTableModule } from '@angular/material/table';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatTooltipModule } from '@angular/material/tooltip';
+import { MatBadgeModule } from '@angular/material/badge';
+import { MatDividerModule } from '@angular/material/divider';
+
+import { VERTICAL_API_SERVICE } from '@core/api/vertical-api.service';
+import { GENERATION_API_SERVICE } from '@core/api/generation-api.service';
+import { VerticalResponse } from '@core/models/vertical.model';
+import { GenerationAuditEntry } from '@core/models/generation.model';
+import { VerticalSettingsPanelComponent } from './vertical-settings/vertical-settings-panel.component';
 
 @Component({
 	selector: 'forge-vertical-workspace',
 	standalone: true,
-	imports: [RouterLink],
+	imports: [
+		CommonModule,
+		RouterLink,
+		MatButtonModule,
+		MatIconModule,
+		MatChipsModule,
+		MatTableModule,
+		MatProgressSpinnerModule,
+		MatTooltipModule,
+		MatBadgeModule,
+		MatDividerModule,
+		VerticalSettingsPanelComponent,
+	],
+	templateUrl: './vertical-workspace.component.html',
+	styleUrls: ['./vertical-workspace.component.scss'],
 	changeDetection: ChangeDetectionStrategy.OnPush,
-	template: `
-		<section>
-			<h2>Vertical Workspace</h2>
-			<p>Selected vertical: <strong>{{ slug }}</strong></p>
-			<p>Workspace details are planned in Phase 1.</p>
-			<a [routerLink]="['/verticals', slug, 'generate']">Open Generation Wizard</a>
-		</section>
-	`,
 })
 export class VerticalWorkspaceComponent {
 	private readonly route = inject(ActivatedRoute);
+	private readonly verticalApiService = inject(VERTICAL_API_SERVICE);
+	private readonly generationApiService = inject(GENERATION_API_SERVICE);
 
-	get slug(): string {
-		return this.route.snapshot.paramMap.get('slug') ?? 'unknown';
+	readonly slug = signal<string>('');
+	readonly vertical = signal<VerticalResponse | null>(null);
+	readonly recentGenerations = signal<GenerationAuditEntry[]>([]);
+	readonly isLoadingVertical = signal(false);
+	readonly isLoadingGenerations = signal(false);
+	readonly showSettingsPanel = signal(false);
+
+	readonly displayColumns = ['timestamp', 'operator', 'services', 'status'];
+
+	readonly hasData = computed(() => this.vertical() !== null);
+	readonly serviceCount = computed(() => this.vertical()?.serviceCount ?? 0);
+	readonly lastGeneratedAt = computed(() => this.vertical()?.lastGeneratedAt);
+
+	constructor() {
+		effect(() => {
+			const slug = this.route.snapshot.paramMap.get('slug');
+			if (slug) {
+				this.slug.set(slug);
+				this.loadVertical(slug);
+				this.loadRecentGenerations(slug);
+			}
+		});
+	}
+
+	private loadVertical(slug: string): void {
+		this.isLoadingVertical.set(true);
+		this.verticalApiService.getVertical(slug).subscribe({
+			next: (vertical) => {
+				this.vertical.set(vertical);
+				this.isLoadingVertical.set(false);
+			},
+			error: () => {
+				this.isLoadingVertical.set(false);
+			},
+		});
+	}
+
+	private loadRecentGenerations(slug: string): void {
+		this.isLoadingGenerations.set(true);
+		this.generationApiService.getRecentGenerations(slug, 10).subscribe({
+			next: (response) => {
+				this.recentGenerations.set(response.generations);
+				this.isLoadingGenerations.set(false);
+			},
+			error: () => {
+				this.isLoadingGenerations.set(false);
+			},
+		});
+	}
+
+	openSettings(): void {
+		this.showSettingsPanel.set(true);
+	}
+
+	closeSettings(): void {
+		this.showSettingsPanel.set(false);
+	}
+
+	getStatusChipColor(status: string): string {
+		switch (status) {
+			case 'success':
+				return 'accent';
+			case 'failed':
+				return 'warn';
+			case 'partial-failure':
+				return 'warn';
+			default:
+				return 'primary';
+		}
+	}
+
+	formatDate(dateString: string): string {
+		return new Date(dateString).toLocaleDateString('en-US', {
+			month: 'short',
+			day: 'numeric',
+			year: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+		});
 	}
 }

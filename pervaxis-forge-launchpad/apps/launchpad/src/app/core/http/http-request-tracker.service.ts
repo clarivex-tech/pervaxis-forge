@@ -16,27 +16,21 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { computed, Injectable, signal } from '@angular/core';
 
-@Component({
-	selector: 'forge-generation-wizard',
-	standalone: true,
-	changeDetection: ChangeDetectionStrategy.OnPush,
-	template: `
-		<section>
-			<h2>Service Generation Wizard</h2>
-			<p>
-				Vertical context: <strong>{{ slug }}</strong>
-			</p>
-			<p>Phase 2 implementation is queued after dashboard/workspace completion.</p>
-		</section>
-	`,
+@Injectable({
+	providedIn: 'root',
 })
-export class GenerationWizardComponent {
-	private readonly route = inject(ActivatedRoute);
+export class HttpRequestTrackerService {
+	private readonly activeRequestCount = signal(0);
 
-	get slug(): string {
-		return this.route.snapshot.paramMap.get('slug') ?? 'unknown';
+	readonly isLoading = computed(() => this.activeRequestCount() > 0);
+
+	beginRequest(): void {
+		this.activeRequestCount.update((count) => count + 1);
+	}
+
+	endRequest(): void {
+		this.activeRequestCount.update((count) => Math.max(0, count - 1));
 	}
 }

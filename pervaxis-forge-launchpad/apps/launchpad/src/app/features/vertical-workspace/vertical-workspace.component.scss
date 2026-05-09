@@ -1,0 +1,259 @@
+/**
+ ******************************************************************************
+ * Copyright (C) 2026 Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ******************************************************************************
+ */
+
+.workspace-container {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	padding: 24px;
+	animation: fadeIn 0.3s ease-in-out;
+
+	@keyframes fadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+}
+
+.loading-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	padding: 48px 24px;
+	color: rgba(0, 0, 0, 0.54);
+
+	p {
+		font-size: 14px;
+		font-weight: 500;
+	}
+}
+
+.workspace-content {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+
+.header-section {
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+}
+
+.header-top {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 24px;
+
+	@media (max-width: 768px) {
+		flex-direction: column;
+		align-items: stretch;
+	}
+}
+
+.vertical-info {
+	flex: 1;
+
+	h1 {
+		margin: 0;
+		font-size: 28px;
+		font-weight: 600;
+		color: #1a1a1a;
+		margin-bottom: 12px;
+	}
+
+	.vertical-description {
+		margin: 12px 0 0;
+		font-size: 14px;
+		color: rgba(0, 0, 0, 0.67);
+		line-height: 1.5;
+	}
+}
+
+.vertical-badges {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+	margin: 8px 0;
+
+	.provider-chip,
+	.org-chip {
+		font-size: 12px;
+		height: 28px;
+
+		mat-icon {
+			margin-right: 4px;
+			font-size: 14px;
+			width: 14px;
+			height: 14px;
+		}
+	}
+
+	.provider-chip {
+		background-color: #f5f5f5;
+		color: #4f378a;
+	}
+
+	.org-chip {
+		background-color: #f5f5f5;
+	}
+}
+
+.header-actions {
+	display: flex;
+	gap: 12px;
+	align-items: center;
+
+	.generate-btn {
+		display: flex;
+		gap: 8px;
+		align-items: center;
+		white-space: nowrap;
+
+		mat-icon {
+			font-size: 18px;
+			width: 18px;
+			height: 18px;
+		}
+	}
+
+	.settings-btn {
+		color: #4f378a;
+	}
+}
+
+.stats-row {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+	gap: 16px;
+
+	@media (max-width: 768px) {
+		grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+	}
+}
+
+.stat-card {
+	background: linear-gradient(135deg, #f5f5f5 0%, #fafafa 100%);
+	border-radius: 8px;
+	padding: 16px;
+	text-align: center;
+	border: 1px solid #e0e0e0;
+
+	.stat-value {
+		font-size: 24px;
+		font-weight: 600;
+		color: #4f378a;
+		margin-bottom: 4px;
+	}
+
+	.stat-label {
+		font-size: 12px;
+		color: rgba(0, 0, 0, 0.6);
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+	}
+}
+
+.section-divider {
+	margin: 8px 0;
+}
+
+.generations-section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+
+	.section-header {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+
+		h2 {
+			margin: 0;
+			font-size: 18px;
+			font-weight: 600;
+			color: #1a1a1a;
+		}
+
+		.empty-message {
+			margin: 0;
+			font-size: 13px;
+			color: rgba(0, 0, 0, 0.54);
+		}
+	}
+}
+
+.generations-table {
+	width: 100%;
+	border-collapse: collapse;
+
+	th {
+		background-color: #fafafa;
+		border-bottom: 2px solid #e0e0e0;
+		font-weight: 600;
+		font-size: 12px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		color: rgba(0, 0, 0, 0.67);
+		padding: 12px;
+		text-align: left;
+	}
+
+	td {
+		padding: 12px;
+		border-bottom: 1px solid #f0f0f0;
+		font-size: 13px;
+	}
+
+	tr {
+		&:hover {
+			background-color: #fafafa;
+		}
+
+		&:last-child td {
+			border-bottom: none;
+		}
+	}
+}
+
+.services-list {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+
+	mat-chip {
+		font-size: 11px;
+		height: 24px;
+		background-color: #e8e8f1 !important;
+		color: #4f378a;
+	}
+}
+
+.status-icon {
+	margin-right: 4px;
+	font-size: 16px;
+	width: 16px;
+	height: 16px;
+}

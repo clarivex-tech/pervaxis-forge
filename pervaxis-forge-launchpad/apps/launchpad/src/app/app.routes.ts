@@ -19,13 +19,6 @@
 import { Routes } from '@angular/router';
 
 import { forgeAuthGuard } from './core/auth/auth.guard';
-import { ResourcesComponent } from './features/resources/resources.component';
-import { PipelineComponent } from './features/pipeline/pipeline.component';
-import { DeploymentsComponent } from './features/deployments/deployments.component';
-import { MonitoringComponent } from './features/monitoring/monitoring.component';
-import { SecurityComponent } from './features/security/security.component';
-import { ClustersComponent } from './features/clusters/clusters.component';
-import { SettingsComponent } from './features/settings/settings.component';
 
 export const appRoutes: Routes = [
 	{
@@ -34,9 +27,10 @@ export const appRoutes: Routes = [
 		children: [
 			{
 				path: '',
+				data: { breadcrumb: 'Dashboard' },
 				loadComponent: () =>
 					import('./features/vertical-dashboard/vertical-dashboard.component').then(
-						(m) => m.VerticalDashboardComponent,
+						(m) => m.VerticalDashboardComponent
 					),
 			},
 			{
@@ -44,67 +38,36 @@ export const appRoutes: Routes = [
 				children: [
 					{
 						path: 'enroll',
+						data: { breadcrumb: 'Enroll Vertical' },
 						loadComponent: () =>
 							import('./features/vertical-enrollment/vertical-enrollment.component').then(
-								(m) => m.VerticalEnrollmentComponent,
+								(m) => m.VerticalEnrollmentComponent
 							),
 					},
 					{
 						path: ':slug',
+						data: { breadcrumb: 'Workspace' },
 						loadComponent: () =>
 							import('./features/vertical-workspace/vertical-workspace.component').then(
-								(m) => m.VerticalWorkspaceComponent,
+								(m) => m.VerticalWorkspaceComponent
 							),
 					},
 					{
 						path: ':slug/generate',
+						data: { breadcrumb: 'Generate Services' },
 						loadComponent: () =>
 							import('./features/service-generation/generation-wizard.component').then(
-								(m) => m.GenerationWizardComponent,
+								(m) => m.GenerationWizardComponent
 							),
 					},
 				],
-			},
-			{
-				path: 'enroll',
-				redirectTo: 'verticals/enroll',
-			},
-			{
-				path: 'resources',
-				component: ResourcesComponent,
-			},
-			{
-				path: 'pipeline',
-				component: PipelineComponent,
-			},
-			{
-				path: 'deployments',
-				component: DeploymentsComponent,
-			},
-			{
-				path: 'monitoring',
-				component: MonitoringComponent,
-			},
-			{
-				path: 'security',
-				component: SecurityComponent,
-			},
-			{
-				path: 'clusters',
-				component: ClustersComponent,
-			},
-			{
-				path: 'settings',
-				component: SettingsComponent,
 			},
 		],
 	},
 	{
 		path: 'unauthorized',
 		loadComponent: () =>
-			import('./features/unauthorized/unauthorized.component').then(
-				(m) => m.UnauthorizedComponent,
-			),
+			import('./features/unauthorized/unauthorized.component').then((m) => m.UnauthorizedComponent),
 	},
 	{
 		path: '**',

@@ -19,10 +19,7 @@
 import { Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
 
-import {
-	UpdateVerticalRequest,
-	VerticalEnrollmentRequest,
-} from '../models/enrollment.model';
+import { UpdateVerticalRequest, VerticalEnrollmentRequest } from '../models/enrollment.model';
 import {
 	ConnectivityValidationResponse,
 	VerticalResponse,
@@ -142,9 +139,7 @@ export class MockVerticalApiService implements IVerticalApiService {
 		},
 	];
 
-	enrollVertical(
-		request: VerticalEnrollmentRequest,
-	): Observable<VerticalSummaryResponse> {
+	enrollVertical(request: VerticalEnrollmentRequest): Observable<VerticalSummaryResponse> {
 		const created: VerticalResponse = {
 			id: `vertical-${request.slug}`,
 			slug: request.slug,
@@ -177,10 +172,7 @@ export class MockVerticalApiService implements IVerticalApiService {
 		return of(existing ?? this.verticals[0]);
 	}
 
-	updateVertical(
-		slug: string,
-		request: UpdateVerticalRequest,
-	): Observable<VerticalResponse> {
+	updateVertical(slug: string, request: UpdateVerticalRequest): Observable<VerticalResponse> {
 		const existing = this.verticals.find((vertical) => vertical.slug === slug);
 
 		if (!existing) {
@@ -191,15 +183,20 @@ export class MockVerticalApiService implements IVerticalApiService {
 		existing.description = request.description;
 		existing.ownerTeam = request.ownerTeam;
 		existing.ownerEmail = request.ownerEmail;
-		existing.cloudProvider = request.cloudProvider.provider;
-		existing.sourceControl = request.sourceControl.platform;
-		existing.githubOrg = request.sourceControl.gitHubOrg;
 		existing.environments = request.techDefaults.environments;
-		existing.cloudProviderConfig = request.cloudProvider;
-		existing.sourceControlConfig = request.sourceControl;
 		existing.techDefaults = request.techDefaults;
 
 		return of(existing);
+	}
+
+	unenrollVertical(slug: string): Observable<void> {
+		const index = this.verticals.findIndex((vertical) => vertical.slug === slug);
+
+		if (index >= 0) {
+			this.verticals.splice(index, 1);
+		}
+
+		return of(void 0);
 	}
 
 	validateConnectivity(_slug: string): Observable<ConnectivityValidationResponse> {
@@ -208,7 +205,7 @@ export class MockVerticalApiService implements IVerticalApiService {
 				success: true,
 				accountId: '123456789012',
 			},
-			githubConnectivity: {
+			gitHubConnectivity: {
 				success: true,
 				org: 'clarivex-tech',
 			},

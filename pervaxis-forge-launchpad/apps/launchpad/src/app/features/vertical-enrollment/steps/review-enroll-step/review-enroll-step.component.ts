@@ -15,6 +15,7 @@ import { EnrollmentState } from '../../enrollment.state';
 			<h4 class="full-width">Identity</h4>
 			<p><strong>Slug:</strong> {{ state().identity.slug }}</p>
 			<p><strong>Display Name:</strong> {{ state().identity.displayName }}</p>
+			<p><strong>Component Prefix:</strong> {{ state().identity.componentPrefix }}</p>
 			<p class="full-width"><strong>Description:</strong> {{ state().identity.description }}</p>
 			<p><strong>Owner Team:</strong> {{ state().identity.ownerTeam }}</p>
 			<p><strong>Owner Email:</strong> {{ state().identity.ownerEmail }}</p>
@@ -30,21 +31,42 @@ import { EnrollmentState } from '../../enrollment.state';
 			<p><strong>GitHub Org:</strong> {{ state().sourceControl.gitHubOrg }}</p>
 			<p class="full-width"><strong>Access Token:</strong> {{ maskedAccessToken() }}</p>
 			<p><strong>Visibility:</strong> {{ state().sourceControl.defaultVisibility }}</p>
-			<p><strong>Branch Protection:</strong> {{ state().sourceControl.defaultBranchProtection ? 'Enabled' : 'Disabled' }}</p>
+			<p>
+				<strong>Branch Protection:</strong>
+				{{ state().sourceControl.defaultBranchProtection ? 'Enabled' : 'Disabled' }}
+			</p>
 
 			<h4 class="full-width">Technical Defaults</h4>
-			<p class="full-width"><strong>Environments:</strong> {{ state().techDefaults.environments.join(', ') }}</p>
+			<p class="full-width">
+				<strong>Environments:</strong> {{ state().techDefaults.environments.join(', ') }}
+			</p>
 			<p><strong>Default Environment:</strong> {{ state().techDefaults.defaultEnvironment }}</p>
-			<p><strong>Generate Terraform:</strong> {{ state().techDefaults.generateTerraform ? 'Yes' : 'No' }}</p>
+			<p>
+				<strong>Generate Terraform:</strong>
+				{{ state().techDefaults.generateTerraform ? 'Yes' : 'No' }}
+			</p>
 			<p><strong>Generate CDK:</strong> {{ state().techDefaults.generateCdk ? 'Yes' : 'No' }}</p>
-			<p><strong>Default DB Engine:</strong> {{ state().techDefaults.defaultDbEngine ?? 'Not set' }}</p>
+			<p>
+				<strong>Default DB Engine:</strong> {{ state().techDefaults.defaultDbEngine ?? 'Not set' }}
+			</p>
 
 			<div class="actions full-width">
 				<button mat-button type="button" matStepperPrevious>Back</button>
-				<button mat-stroked-button type="button" (click)="validateConnectivity.emit()" [disabled]="state().connectivity.isChecking">
+				<button
+					mat-stroked-button
+					type="button"
+					(click)="validateConnectivity.emit()"
+					[disabled]="state().connectivity.isChecking"
+				>
 					Validate Connectivity
 				</button>
-				<button mat-raised-button color="primary" type="button" (click)="enrollVertical.emit()" [disabled]="state().submit.isSubmitting">
+				<button
+					mat-raised-button
+					color="primary"
+					type="button"
+					(click)="enrollVertical.emit()"
+					[disabled]="state().submit.isSubmitting"
+				>
 					Enroll Vertical
 				</button>
 			</div>
