@@ -16,27 +16,33 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { TestBed } from '@angular/core/testing';
 
-@Component({
-	selector: 'forge-generation-wizard',
-	standalone: true,
-	changeDetection: ChangeDetectionStrategy.OnPush,
-	template: `
-		<section>
-			<h2>Service Generation Wizard</h2>
-			<p>
-				Vertical context: <strong>{{ slug }}</strong>
-			</p>
-			<p>Phase 2 implementation is queued after dashboard/workspace completion.</p>
-		</section>
-	`,
-})
-export class GenerationWizardComponent {
-	private readonly route = inject(ActivatedRoute);
+import { HttpRequestTrackerService } from './http-request-tracker.service';
 
-	get slug(): string {
-		return this.route.snapshot.paramMap.get('slug') ?? 'unknown';
-	}
-}
+describe('HttpRequestTrackerService', () => {
+	let service: HttpRequestTrackerService;
+
+	beforeEach(() => {
+		TestBed.configureTestingModule({});
+		service = TestBed.inject(HttpRequestTrackerService);
+	});
+
+	it('tracks loading while requests are active', () => {
+		expect(service.isLoading()).toBe(false);
+
+		service.beginRequest();
+
+		expect(service.isLoading()).toBe(true);
+
+		service.endRequest();
+
+		expect(service.isLoading()).toBe(false);
+	});
+
+	it('never decrements below zero', () => {
+		service.endRequest();
+
+		expect(service.isLoading()).toBe(false);
+	});
+});

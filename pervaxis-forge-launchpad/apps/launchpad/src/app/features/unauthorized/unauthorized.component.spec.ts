@@ -16,27 +16,24 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { provideRouter } from '@angular/router';
+import { TestBed } from '@angular/core/testing';
 
-@Component({
-	selector: 'forge-generation-wizard',
-	standalone: true,
-	changeDetection: ChangeDetectionStrategy.OnPush,
-	template: `
-		<section>
-			<h2>Service Generation Wizard</h2>
-			<p>
-				Vertical context: <strong>{{ slug }}</strong>
-			</p>
-			<p>Phase 2 implementation is queued after dashboard/workspace completion.</p>
-		</section>
-	`,
-})
-export class GenerationWizardComponent {
-	private readonly route = inject(ActivatedRoute);
+import { configureStandaloneComponent } from '../../../testing/component-testbed';
+import { UnauthorizedComponent } from './unauthorized.component';
 
-	get slug(): string {
-		return this.route.snapshot.paramMap.get('slug') ?? 'unknown';
-	}
-}
+describe('UnauthorizedComponent', () => {
+	beforeEach(async () => {
+		await configureStandaloneComponent(UnauthorizedComponent, [provideRouter([])]);
+	});
+
+	it('renders the access denied message', () => {
+		const fixture = TestBed.createComponent(UnauthorizedComponent);
+		fixture.detectChanges();
+
+		const textContent = fixture.nativeElement.textContent as string;
+
+		expect(textContent).toContain('Access Denied');
+		expect(textContent).toContain('Return to Dashboard');
+	});
+});

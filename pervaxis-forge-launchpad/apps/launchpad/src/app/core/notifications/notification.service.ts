@@ -16,27 +16,33 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
-import { ActivatedRoute } from '@angular/router';
+import { Injectable, inject } from '@angular/core';
+import { MatSnackBar } from '@angular/material/snack-bar';
 
-@Component({
-	selector: 'forge-generation-wizard',
-	standalone: true,
-	changeDetection: ChangeDetectionStrategy.OnPush,
-	template: `
-		<section>
-			<h2>Service Generation Wizard</h2>
-			<p>
-				Vertical context: <strong>{{ slug }}</strong>
-			</p>
-			<p>Phase 2 implementation is queued after dashboard/workspace completion.</p>
-		</section>
-	`,
+@Injectable({
+	providedIn: 'root',
 })
-export class GenerationWizardComponent {
-	private readonly route = inject(ActivatedRoute);
+export class NotificationService {
+	private readonly snackBar = inject(MatSnackBar);
 
-	get slug(): string {
-		return this.route.snapshot.paramMap.get('slug') ?? 'unknown';
+	showInfo(message: string): void {
+		this.open(message, 'info-toast');
+	}
+
+	showSuccess(message: string): void {
+		this.open(message, 'success-toast');
+	}
+
+	showError(message: string): void {
+		this.open(message, 'error-toast', 7000);
+	}
+
+	private open(message: string, panelClass: string, duration = 5000): void {
+		this.snackBar.open(message, 'Dismiss', {
+			duration,
+			horizontalPosition: 'right',
+			verticalPosition: 'top',
+			panelClass: [panelClass],
+		});
 	}
 }

@@ -20,10 +20,8 @@ import { inject, Injectable, InjectionToken } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 
-import {
-	UpdateVerticalRequest,
-	VerticalEnrollmentRequest,
-} from '../models/enrollment.model';
+import { environment } from '@env/environment';
+import { UpdateVerticalRequest, VerticalEnrollmentRequest } from '../models/enrollment.model';
 import {
 	ConnectivityValidationResponse,
 	VerticalResponse,
@@ -31,32 +29,24 @@ import {
 } from '../models/vertical.model';
 
 export interface IVerticalApiService {
-	enrollVertical(
-		request: VerticalEnrollmentRequest,
-	): Observable<VerticalSummaryResponse>;
+	enrollVertical(request: VerticalEnrollmentRequest): Observable<VerticalSummaryResponse>;
 	listVerticals(): Observable<VerticalSummaryResponse[]>;
 	getVertical(slug: string): Observable<VerticalResponse>;
-	updateVertical(
-		slug: string,
-		request: UpdateVerticalRequest,
-	): Observable<VerticalResponse>;
+	updateVertical(slug: string, request: UpdateVerticalRequest): Observable<VerticalResponse>;
+	unenrollVertical(slug: string): Observable<void>;
 	validateConnectivity(slug: string): Observable<ConnectivityValidationResponse>;
 }
 
-export const VERTICAL_API_SERVICE = new InjectionToken<IVerticalApiService>(
-	'VERTICAL_API_SERVICE',
-);
+export const VERTICAL_API_SERVICE = new InjectionToken<IVerticalApiService>('VERTICAL_API_SERVICE');
 
 @Injectable({
 	providedIn: 'root',
 })
 export class VerticalApiService implements IVerticalApiService {
-	private readonly baseUrl = '/api/v1/verticals';
+	private readonly baseUrl = `${environment.apiBaseUrl}/verticals`;
 	private readonly http = inject(HttpClient);
 
-	enrollVertical(
-		request: VerticalEnrollmentRequest,
-	): Observable<VerticalSummaryResponse> {
+	enrollVertical(request: VerticalEnrollmentRequest): Observable<VerticalSummaryResponse> {
 		return this.http.post<VerticalSummaryResponse>(this.baseUrl, request);
 	}
 
@@ -68,17 +58,15 @@ export class VerticalApiService implements IVerticalApiService {
 		return this.http.get<VerticalResponse>(`${this.baseUrl}/${slug}`);
 	}
 
-	updateVertical(
-		slug: string,
-		request: UpdateVerticalRequest,
-	): Observable<VerticalResponse> {
+	updateVertical(slug: string, request: UpdateVerticalRequest): Observable<VerticalResponse> {
 		return this.http.put<VerticalResponse>(`${this.baseUrl}/${slug}`, request);
 	}
 
+	unenrollVertical(slug: string): Observable<void> {
+		return this.http.delete<void>(`${this.baseUrl}/${slug}`);
+	}
+
 	validateConnectivity(slug: string): Observable<ConnectivityValidationResponse> {
-		return this.http.post<ConnectivityValidationResponse>(
-			`${this.baseUrl}/${slug}/validate`,
-			{},
-		);
+		return this.http.post<ConnectivityValidationResponse>(`${this.baseUrl}/${slug}/validate`, {});
 	}
 }

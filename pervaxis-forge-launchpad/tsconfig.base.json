@@ -1,24 +1,32 @@
 {
-  "compileOnSave": false,
-  "compilerOptions": {
-    "rootDir": ".",
-    "sourceMap": true,
-    "declaration": false,
-    "moduleResolution": "bundler",
-    "emitDecoratorMetadata": false,
-    "experimentalDecorators": true,
-    "importHelpers": true,
-    "target": "ES2022",
-    "module": "ES2022",
-    "lib": ["ES2022", "dom"],
-    "skipLibCheck": true,
-    "skipDefaultLibCheck": true,
-    "baseUrl": ".",
-    "strict": true,
-    "noImplicitOverride": true,
-    "noPropertyAccessFromIndexSignature": true,
-    "noImplicitReturns": true,
-    "noFallthroughCasesInSwitch": true
-  },
-  "exclude": ["node_modules", "tmp"]
+	"compileOnSave": false,
+	"compilerOptions": {
+		"rootDir": ".",
+		"sourceMap": true,
+		"declaration": false,
+		"moduleResolution": "bundler",
+		"emitDecoratorMetadata": false,
+		"experimentalDecorators": true,
+		"importHelpers": true,
+		"target": "ES2022",
+		"module": "ES2022",
+		"lib": ["ES2022", "dom"],
+		"skipLibCheck": true,
+		"skipDefaultLibCheck": true,
+		"baseUrl": ".",
+		"paths": {
+			"@core/*": ["apps/launchpad/src/app/core/*"],
+			"@features/*": ["apps/launchpad/src/app/features/*"],
+			"@shared/*": ["apps/launchpad/src/app/shared/*"],
+			"@models/*": ["apps/launchpad/src/app/core/models/*"],
+			"@layout/*": ["apps/launchpad/src/app/layout/*"],
+			"@env/*": ["apps/launchpad/src/environments/*"]
+		},
+		"strict": true,
+		"noImplicitOverride": true,
+		"noPropertyAccessFromIndexSignature": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true
+	},
+	"exclude": ["node_modules", "tmp"]
 }

@@ -29,6 +29,7 @@ export interface VerticalIdentityState {
 	description: string;
 	ownerTeam: string;
 	ownerEmail: string;
+	componentPrefix: string;
 }
 
 export interface EnrollmentConnectivityState {
@@ -63,6 +64,7 @@ export const initialEnrollmentState: EnrollmentState = {
 		description: '',
 		ownerTeam: '',
 		ownerEmail: '',
+		componentPrefix: '',
 	},
 	cloudProvider: {
 		provider: 'AWS',
@@ -98,15 +100,14 @@ export const initialEnrollmentState: EnrollmentState = {
 	},
 };
 
-export function toEnrollmentRequest(
-	state: EnrollmentState,
-): VerticalEnrollmentRequest {
+export function toEnrollmentRequest(state: EnrollmentState): VerticalEnrollmentRequest {
 	return {
 		slug: state.identity.slug,
 		displayName: state.identity.displayName,
 		description: state.identity.description,
 		ownerTeam: state.identity.ownerTeam,
 		ownerEmail: state.identity.ownerEmail,
+		componentPrefix: state.identity.componentPrefix,
 		cloudProvider: state.cloudProvider,
 		sourceControl: state.sourceControl,
 		techDefaults: state.techDefaults,

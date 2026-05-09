@@ -43,6 +43,7 @@ export interface VerticalEnrollmentRequest {
 	description: string;
 	ownerTeam: string;
 	ownerEmail: string;
+	componentPrefix: string;
 	cloudProvider: CloudProviderConfig;
 	sourceControl: SourceControlConfig;
 	techDefaults: VerticalTechDefaults;
@@ -53,7 +54,5 @@ export interface UpdateVerticalRequest {
 	description: string;
 	ownerTeam: string;
 	ownerEmail: string;
-	cloudProvider: CloudProviderConfig;
-	sourceControl: SourceControlConfig;
 	techDefaults: VerticalTechDefaults;
 }

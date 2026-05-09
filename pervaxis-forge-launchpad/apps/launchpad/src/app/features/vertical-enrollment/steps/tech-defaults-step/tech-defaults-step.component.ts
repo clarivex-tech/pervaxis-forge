@@ -29,7 +29,9 @@ import { MatStepperModule } from '@angular/material/stepper';
 					<mat-error>At least one environment is required.</mat-error>
 				}
 				@if (hasError('environmentsCsv', 'pattern')) {
-					<mat-error>Use lowercase names separated by commas, for example: test,accp,prod.</mat-error>
+					<mat-error
+						>Use lowercase names separated by commas, for example: test,accp,prod.</mat-error
+					>
 				}
 			</mat-form-field>
 			<mat-form-field appearance="outline">
@@ -50,7 +52,9 @@ import { MatStepperModule } from '@angular/material/stepper';
 			<mat-checkbox formControlName="generateCdk">Generate CDK</mat-checkbox>
 			<div class="actions full-width">
 				<button mat-button matStepperPrevious>Back</button>
-				<button mat-raised-button color="primary" matStepperNext [disabled]="formGroup().invalid">Next</button>
+				<button mat-raised-button color="primary" matStepperNext [disabled]="formGroup().invalid">
+					Next
+				</button>
 			</div>
 		</form>
 	`,

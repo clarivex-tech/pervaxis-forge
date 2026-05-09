@@ -16,171 +16,200 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
+import { MatListModule } from '@angular/material/list';
+import { RouterLink, RouterLinkActive } from '@angular/router';
+import { ChangeDetectionStrategy, Component, EventEmitter, Output } from '@angular/core';
+
+interface NavItem {
+	label: string;
+	path: string;
+	icon: string;
+	description?: string;
+}
 
 @Component({
 	selector: 'forge-app-sidenav',
 	standalone: true,
-	imports: [RouterLink, RouterLinkActive, MatIconModule],
+	imports: [RouterLink, RouterLinkActive, MatIconModule, MatListModule, MatDividerModule],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	template: `
-		<aside class="sidenav-shell">
+		<div class="sidenav-wrapper">
 			<div class="sidenav-header">
-				<h2 class="sidenav-title">Forge Engine</h2>
-				<p class="sidenav-subtitle">Management Console</p>
+				<h2 class="sidenav-title">Forge</h2>
+				<p class="sidenav-subtitle">Launchpad</p>
 			</div>
 
-			<nav class="sidenav-nav">
-				<a routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" class="nav-item">
-					<mat-icon class="nav-icon">cloud_queue</mat-icon>
-					<span class="nav-label">Infrastructure</span>
-				</a>
-				<a routerLink="/deployments" routerLinkActive="active" class="nav-item">
-					<mat-icon class="nav-icon">rocket_launch</mat-icon>
-					<span class="nav-label">Deployments</span>
-				</a>
-				<a routerLink="/monitoring" routerLinkActive="active" class="nav-item">
-					<mat-icon class="nav-icon">analytics</mat-icon>
-					<span class="nav-label">Monitoring</span>
-				</a>
-				<a routerLink="/security" routerLinkActive="active" class="nav-item">
-					<mat-icon class="nav-icon">security</mat-icon>
-					<span class="nav-label">Security</span>
-				</a>
-				<a routerLink="/clusters" routerLinkActive="active" class="nav-item">
-					<mat-icon class="nav-icon">hub</mat-icon>
-					<span class="nav-label">Clusters</span>
-				</a>
-				<a routerLink="/settings" routerLinkActive="active" class="nav-item">
-					<mat-icon class="nav-icon">settings</mat-icon>
-					<span class="nav-label">Settings</span>
-				</a>
-			</nav>
+			<mat-divider></mat-divider>
 
-			<div class="system-health">
-				<div class="health-header">
-					<span class="health-title">System Health</span>
-					<span class="health-dot"></span>
+			<mat-nav-list class="nav-list">
+				@for (item of navItems; track item.path) {
+					<a
+						mat-list-item
+						[routerLink]="item.path"
+						routerLinkActive="active"
+						[routerLinkActiveOptions]="{ exact: true }"
+						class="nav-item"
+						(click)="navigate.emit()"
+					>
+						<mat-icon matListItemIcon>{{ item.icon }}</mat-icon>
+						<div matListItemTitle>{{ item.label }}</div>
+						@if (item.description) {
+							<div matListItemLine class="nav-description">{{ item.description }}</div>
+						}
+					</a>
+				}
+			</mat-nav-list>
+
+			<div class="sidenav-footer">
+				<mat-divider></mat-divider>
+				<div class="footer-content">
+					<p class="footer-label">Documentation</p>
+					<a href="https://clarivex.tech/docs" target="_blank" rel="noreferrer" class="footer-link">
+						<mat-icon>help_outline</mat-icon>
+						<span>Help & Docs</span>
+					</a>
 				</div>
-				<p class="health-status">99.9% Uptime</p>
 			</div>
-		</aside>
+		</div>
 	`,
 	styles: [
 		`
-			.sidenav-shell {
-				position: fixed;
-				left: 0;
-				top: 64px;
-				width: 256px;
-				height: calc(100vh - 64px);
-				background-color: var(--color-surface-container-low);
-				border-right: 1px solid var(--color-outline-variant);
+			:host {
 				display: flex;
 				flex-direction: column;
-				padding: 1rem;
-				z-index: 40;
+				height: 100%;
+			}
+
+			.sidenav-wrapper {
+				display: flex;
+				flex-direction: column;
+				height: 100%;
 				overflow-y: auto;
 			}
 
 			.sidenav-header {
-				margin-bottom: 2rem;
-				padding: 0.5rem;
+				padding: 1.5rem 1rem;
+				text-align: center;
 			}
 
 			.sidenav-title {
 				margin: 0;
-				font-size: 16px;
+				font-size: 1.5rem;
 				font-weight: 700;
-				color: var(--color-primary);
-				letter-spacing: 0.15px;
+				background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+				-webkit-background-clip: text;
+				-webkit-text-fill-color: transparent;
+				background-clip: text;
 			}
 
 			.sidenav-subtitle {
-				margin: 0;
-				font-size: 12px;
+				margin: 0.25rem 0 0;
+				font-size: 0.875rem;
 				color: var(--color-on-surface-variant);
-				opacity: 0.7;
+				font-weight: 500;
 			}
 
-			.sidenav-nav {
+			.nav-list {
 				flex: 1;
-				display: flex;
-				flex-direction: column;
-				gap: 0.25rem;
+				padding: 1rem 0;
 			}
 
 			.nav-item {
+				margin: 0.25rem 0.5rem;
+				border-radius: 0.5rem;
+				text-decoration: none;
+				transition: background-color 200ms ease;
+			}
+
+			.nav-item:hover {
+				background-color: var(--color-surface-container-high);
+			}
+
+			.nav-item.active {
+				background-color: var(--color-primary-container);
+				color: var(--color-on-primary-container);
+			}
+
+			.nav-item.active mat-icon {
+				color: var(--color-on-primary-container);
+			}
+
+			.nav-description {
+				font-size: 0.75rem;
+				opacity: 0.7;
+				margin-top: 0.25rem;
+			}
+
+			.sidenav-footer {
+				padding: 1rem 0.5rem 0;
+				margin-top: auto;
+				border-top: 1px solid var(--color-outline-variant);
+			}
+
+			.footer-content {
+				padding: 1rem;
+			}
+
+			.footer-label {
+				margin: 0 0 0.5rem;
+				font-size: 0.75rem;
+				font-weight: 600;
+				color: var(--color-on-surface-variant);
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+			}
+
+			.footer-link {
 				display: flex;
 				align-items: center;
 				gap: 0.75rem;
-				padding: 0.75rem 1rem;
-				color: var(--color-on-surface-variant);
+				padding: 0.5rem 0.75rem;
+				color: var(--color-primary);
 				text-decoration: none;
-				border-radius: 0.75rem;
-				transition: all 200ms;
-				font-size: 14px;
-				font-weight: 500;
+				border-radius: 0.25rem;
+				font-size: 0.875rem;
+				transition: background-color 200ms ease;
+			}
 
-				&:hover {
-					background-color: var(--color-surface-container-highest);
+			.footer-link:hover {
+				background-color: var(--color-primary-container);
+			}
+
+			.footer-link mat-icon {
+				font-size: 1.25rem;
+				width: 1.25rem;
+				height: 1.25rem;
+			}
+
+			@media (max-width: 768px) {
+				.sidenav-header {
+					padding: 1rem;
 				}
 
-				&.active {
-					background-color: var(--color-secondary-container);
-					color: var(--color-on-secondary-container);
+				.nav-description {
+					display: none;
 				}
-			}
-
-			.nav-icon {
-				font-size: 20px;
-				width: 20px;
-				height: 20px;
-			}
-
-			.nav-label {
-				font-size: 14px;
-			}
-
-			.system-health {
-				margin-top: auto;
-				padding: 1rem;
-				background-color: rgba(103, 80, 164, 0.1);
-				border: 1px solid rgba(103, 80, 164, 0.2);
-				border-radius: 0.75rem;
-			}
-
-			.health-header {
-				display: flex;
-				align-items: center;
-				justify-content: space-between;
-				margin-bottom: 0.5rem;
-			}
-
-			.health-title {
-				font-size: 12px;
-				font-weight: 700;
-				color: var(--color-primary);
-			}
-
-			.health-dot {
-				display: inline-block;
-				width: 8px;
-				height: 8px;
-				border-radius: 9999px;
-				background-color: var(--color-success);
-			}
-
-			.health-status {
-				margin: 0;
-				font-size: 14px;
-				font-weight: 500;
-				color: var(--color-primary);
-				letter-spacing: 0.1px;
 			}
 		`,
 	],
 })
-export class AppSidenavComponent {}
+export class AppSidenavComponent {
+	@Output() navigate = new EventEmitter<void>();
+
+	readonly navItems: NavItem[] = [
+		{
+			label: 'Dashboard',
+			path: '/',
+			icon: 'dashboard',
+			description: 'View your verticals',
+		},
+		{
+			label: 'Enroll Vertical',
+			path: '/verticals/enroll',
+			icon: 'add_circle_outline',
+			description: 'New vertical',
+		},
+	];
+}
