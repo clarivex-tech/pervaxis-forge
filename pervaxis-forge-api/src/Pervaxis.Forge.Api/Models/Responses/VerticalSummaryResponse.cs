@@ -28,4 +28,5 @@ public record VerticalSummaryResponse
     public required string SourceControl { get; init; }
     public int ServiceCount { get; init; }
     public required DateTimeOffset EnrolledAt { get; init; }
+    public required string ComponentPrefix { get; init; }
 }

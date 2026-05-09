@@ -58,10 +58,14 @@ import { MatStepperModule } from '@angular/material/stepper';
 					<mat-option value="public">public</mat-option>
 				</mat-select>
 			</mat-form-field>
-			<mat-checkbox formControlName="defaultBranchProtection">Default branch protection</mat-checkbox>
+			<mat-checkbox formControlName="defaultBranchProtection"
+				>Default branch protection</mat-checkbox
+			>
 			<div class="actions full-width">
 				<button mat-button matStepperPrevious>Back</button>
-				<button mat-raised-button color="primary" matStepperNext [disabled]="formGroup().invalid">Next</button>
+				<button mat-raised-button color="primary" matStepperNext [disabled]="formGroup().invalid">
+					Next
+				</button>
 			</div>
 		</form>
 	`,

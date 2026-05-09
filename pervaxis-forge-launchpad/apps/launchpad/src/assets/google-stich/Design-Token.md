@@ -236,4 +236,3 @@ spacing:
   margin: 24px
   container-max-width: 1280px
 ---
-

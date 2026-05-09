@@ -173,7 +173,6 @@ spacing:
   button-height: 40px
 ---
 
-
 ## Prompt A — Design Token Specification (Run First)
 
 Generate a complete Material Design 3 design token specification for an internal web admin tool called **Pervaxis Forge Launchpad**. This is a desktop-only tool used by platform engineers at Clarivex Technologies.
@@ -181,33 +180,41 @@ Generate a complete Material Design 3 design token specification for an internal
 Output the following token groups in a structured format (JSON or design token table):
 
 ### Brand Identity
+
 - Product name: Pervaxis Forge Launchpad
 - Brand: Clarivex Technologies
 - Personality: Professional, technical, trustworthy — not consumer-facing
 - Primary accent: Clarivex purple (suggest closest Material purple 600 equivalent)
 
 ### Colour Tokens
+
 Provide hex values for the full Material Design 3 colour role set:
 
 **Primary palette:**
+
 - `primary`, `on-primary`, `primary-container`, `on-primary-container`
 
 **Secondary palette** (for chips, tags, secondary actions):
+
 - `secondary`, `on-secondary`, `secondary-container`, `on-secondary-container`
 
 **Tertiary palette** (for status indicators — success, warning):
+
 - `tertiary`, `on-tertiary`, `tertiary-container`, `on-tertiary-container`
 
 **Error palette:**
+
 - `error`, `on-error`, `error-container`, `on-error-container`
 
 **Surface & background:**
+
 - `background`, `on-background`
 - `surface`, `on-surface`, `surface-variant`, `on-surface-variant`
 - `outline`, `outline-variant`
 - `surface-container-lowest`, `surface-container-low`, `surface-container`, `surface-container-high`, `surface-container-highest`
 
 **Semantic colours** (for Forge-specific use):
+
 - AWS chip colour (orange family)
 - GitHub chip colour (dark/neutral)
 - Success status chip (green family)
@@ -215,43 +222,50 @@ Provide hex values for the full Material Design 3 colour role set:
 - "Coming Soon" disabled chip (neutral grey)
 
 ### Typography Tokens
+
 Font family: Google Sans (primary), Roboto (fallback)
 
 Provide the full Material Design 3 type scale:
 
-| Role | Font | Weight | Size | Line Height | Letter Spacing |
-|---|---|---|---|---|---|
-| Display Large | | | | | |
-| Display Medium | | | | | |
-| Display Small | | | | | |
-| Headline Large | | | | | |
-| Headline Medium | | | | | |
-| Headline Small | | | | | |
-| Title Large | | | | | |
-| Title Medium | | | | | |
-| Title Small | | | | | |
-| Body Large | | | | | |
-| Body Medium | | | | | |
-| Body Small | | | | | |
-| Label Large | | | | | |
-| Label Medium | | | | | |
-| Label Small | | | | | |
+| Role            | Font | Weight | Size | Line Height | Letter Spacing |
+| --------------- | ---- | ------ | ---- | ----------- | -------------- |
+| Display Large   |      |        |      |             |                |
+| Display Medium  |      |        |      |             |                |
+| Display Small   |      |        |      |             |                |
+| Headline Large  |      |        |      |             |                |
+| Headline Medium |      |        |      |             |                |
+| Headline Small  |      |        |      |             |                |
+| Title Large     |      |        |      |             |                |
+| Title Medium    |      |        |      |             |                |
+| Title Small     |      |        |      |             |                |
+| Body Large      |      |        |      |             |                |
+| Body Medium     |      |        |      |             |                |
+| Body Small      |      |        |      |             |                |
+| Label Large     |      |        |      |             |                |
+| Label Medium    |      |        |      |             |                |
+| Label Small     |      |        |      |             |                |
 
 ### Spacing Tokens
+
 Base grid: 8px. Provide named spacing values:
+
 - `spacing-1` through `spacing-12` (8px increments)
 - `spacing-half` (4px)
 - Component-specific: form field height, card padding, stepper height, table row height, chip height, button height
 
 ### Shape (Border Radius) Tokens
+
 Provide corner radius per Material shape scale:
+
 - `shape-none`, `shape-extra-small`, `shape-small`, `shape-medium`, `shape-large`, `shape-extra-large`, `shape-full`
 - And which shape applies to: cards, buttons, chips, input fields, dialogs, side panels
 
 ### Elevation Tokens
+
 Shadow definitions for Material elevation levels 0–5 (used for cards, dialogs, menus, app bar).
 
 ### Component-Specific Tokens
+
 For each component used in Forge Launchpad, specify the key tokens:
 
 - **MatCard**: background, border-radius, padding, elevation
@@ -264,6 +278,7 @@ For each component used in Forge Launchpad, specify the key tokens:
 - **MatSlideToggle**: track-colour-on, track-colour-off, thumb-colour
 
 ### Output Format
+
 Provide tokens in this structure so engineering can paste directly into SCSS variables and Angular Material theme configuration:
 
 ```json

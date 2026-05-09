@@ -57,5 +57,5 @@ export interface GitHubConnectivityStatus {
 
 export interface ConnectivityValidationResponse {
 	awsConnectivity: AwsConnectivityStatus;
-	githubConnectivity: GitHubConnectivityStatus;
+	gitHubConnectivity: GitHubConnectivityStatus;
 }

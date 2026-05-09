@@ -26,7 +26,9 @@ import { ActivatedRoute } from '@angular/router';
 	template: `
 		<section>
 			<h2>Service Generation Wizard</h2>
-			<p>Vertical context: <strong>{{ slug }}</strong></p>
+			<p>
+				Vertical context: <strong>{{ slug }}</strong>
+			</p>
 			<p>Phase 2 implementation is queued after dashboard/workspace completion.</p>
 		</section>
 	`,

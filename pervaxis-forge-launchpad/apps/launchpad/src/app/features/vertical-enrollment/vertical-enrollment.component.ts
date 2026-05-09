@@ -16,33 +16,20 @@
  ************************************************************************
  */
 
-import {
-	ChangeDetectionStrategy,
-	Component,
-	effect,
-	inject,
-	signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, effect, inject, signal } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Router } from '@angular/router';
 import { MatCardModule } from '@angular/material/card';
 import { MatStepperModule } from '@angular/material/stepper';
 
+import { IVerticalApiService, VERTICAL_API_SERVICE } from '../../core/api/vertical-api.service';
+import { EnrollmentState, initialEnrollmentState, toEnrollmentRequest } from './enrollment.state';
 import {
-	IVerticalApiService,
-	VERTICAL_API_SERVICE,
-} from '../../core/api/vertical-api.service';
-import {
-	EnrollmentState,
-	initialEnrollmentState,
-	toEnrollmentRequest,
-} from './enrollment.state';
-import { ConnectivityValidationResponse, VerticalSummaryResponse } from '../../core/models/vertical.model';
+	ConnectivityValidationResponse,
+	VerticalSummaryResponse,
+} from '../../core/models/vertical.model';
 import { CloudProvider } from '../../core/models/cloud-provider.model';
-import {
-	RepoVisibility,
-	SourceControlPlatform,
-} from '../../core/models/enrollment.model';
+import { RepoVisibility, SourceControlPlatform } from '../../core/models/enrollment.model';
 import { VerticalIdentityStepComponent } from './steps/vertical-identity-step/vertical-identity-step.component';
 import { CloudProviderStepComponent } from './steps/cloud-provider-step/cloud-provider-step.component';
 import { SourceControlStepComponent } from './steps/source-control-step/source-control-step.component';
@@ -66,7 +53,11 @@ import { ReviewEnrollStepComponent } from './steps/review-enroll-step/review-enr
 	template: `
 		<mat-card>
 			<h2>Vertical Enrollment Wizard</h2>
-			<mat-stepper [linear]="true" [selectedIndex]="currentStep()" (selectionChange)="onStepSelection($event.selectedIndex)">
+			<mat-stepper
+				[linear]="true"
+				[selectedIndex]="currentStep()"
+				(selectionChange)="onStepSelection($event.selectedIndex)"
+			>
 				<mat-step [stepControl]="identityForm" label="Vertical Identity">
 					<forge-vertical-identity-step [formGroup]="identityForm" />
 				</mat-step>
@@ -107,9 +98,7 @@ import { ReviewEnrollStepComponent } from './steps/review-enroll-step/review-enr
 export class VerticalEnrollmentComponent {
 	private readonly fb = inject(FormBuilder);
 	private readonly router = inject(Router);
-	private readonly verticalApiService = inject(
-		VERTICAL_API_SERVICE,
-	) as IVerticalApiService;
+	private readonly verticalApiService = inject(VERTICAL_API_SERVICE) as IVerticalApiService;
 
 	readonly state = signal<EnrollmentState>(initialEnrollmentState);
 	private readonly storageKey = 'forge.verticalEnrollment.state';
@@ -118,17 +107,12 @@ export class VerticalEnrollmentComponent {
 	});
 
 	readonly identityForm = this.fb.nonNullable.group({
-		slug: [
-			'',
-			[
-				Validators.required,
-				Validators.pattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
-			],
-		],
+		slug: ['', [Validators.required, Validators.pattern(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)]],
 		displayName: ['', Validators.required],
 		description: ['', [Validators.required, Validators.minLength(10)]],
 		ownerTeam: ['', Validators.required],
 		ownerEmail: ['', [Validators.required, Validators.email]],
+		componentPrefix: ['', [Validators.required, Validators.pattern(/^[A-Z]{2,5}$/)]],
 	});
 
 	readonly cloudForm = this.fb.nonNullable.group({
@@ -136,10 +120,7 @@ export class VerticalEnrollmentComponent {
 		awsAccountId: ['', [Validators.required, Validators.pattern(/^\d{12}$/)]],
 		iamRoleArn: [
 			'',
-			[
-				Validators.required,
-				Validators.pattern(/^arn:aws:iam::\d{12}:role\/[\w+=,.@\-_/]+$/),
-			],
+			[Validators.required, Validators.pattern(/^arn:aws:iam::\d{12}:role\/[\w+=,.@\-_/]+$/)],
 		],
 		defaultRegion: ['ap-south-1', Validators.required],
 	});
@@ -148,10 +129,7 @@ export class VerticalEnrollmentComponent {
 		platform: ['GitHub'],
 		gitHubOrg: [
 			'',
-			[
-				Validators.required,
-				Validators.pattern(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/),
-			],
+			[Validators.required, Validators.pattern(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/)],
 		],
 		accessToken: ['', [Validators.required, Validators.minLength(8)]],
 		defaultVisibility: ['private'],
@@ -161,15 +139,9 @@ export class VerticalEnrollmentComponent {
 	readonly techDefaultsForm = this.fb.nonNullable.group({
 		environmentsCsv: [
 			'test,accp,prod',
-			[
-				Validators.required,
-				Validators.pattern(/^[a-z0-9-]+(?:\s*,\s*[a-z0-9-]+)*$/),
-			],
+			[Validators.required, Validators.pattern(/^[a-z0-9-]+(?:\s*,\s*[a-z0-9-]+)*$/)],
 		],
-		defaultEnvironment: [
-			'test',
-			[Validators.required, Validators.pattern(/^[a-z0-9-]+$/)],
-		],
+		defaultEnvironment: ['test', [Validators.required, Validators.pattern(/^[a-z0-9-]+$/)]],
 		generateTerraform: [true],
 		generateCdk: [true],
 		defaultDbEngine: [''],
@@ -200,42 +172,13 @@ export class VerticalEnrollmentComponent {
 	}
 
 	validateConnectivity(): void {
-		this.syncStateFromForms();
-		const slug = this.state().identity.slug;
-
 		this.state.update((current: EnrollmentState) => ({
 			...current,
 			connectivity: {
 				...current.connectivity,
-				isChecking: true,
-				errorMessage: null,
+				errorMessage: 'Connectivity validation is available after enrollment in this phase.',
 			},
 		}));
-
-		this.verticalApiService.validateConnectivity(slug).subscribe({
-			next: (response: ConnectivityValidationResponse) => {
-				this.state.update((current: EnrollmentState) => ({
-					...current,
-					connectivity: {
-						isChecking: false,
-						cloudValid: response.awsConnectivity.success,
-						sourceControlValid: response.githubConnectivity.success,
-						lastCheckedAt: new Date().toISOString(),
-						errorMessage: null,
-					},
-				}));
-			},
-			error: () => {
-				this.state.update((current: EnrollmentState) => ({
-					...current,
-					connectivity: {
-						...current.connectivity,
-						isChecking: false,
-						errorMessage: 'Connectivity validation failed.',
-					},
-				}));
-			},
-		});
 	}
 
 	enrollVertical(): void {
@@ -281,10 +224,8 @@ export class VerticalEnrollmentComponent {
 		const sourceControlFormValue = this.sourceControlForm.getRawValue();
 		const techDefaultsValue = this.techDefaultsForm.getRawValue();
 
-		const environments = this.techDefaultsForm
-			.controls
-			.environmentsCsv
-			.value.split(',')
+		const environments = this.techDefaultsForm.controls.environmentsCsv.value
+			.split(',')
 			.map((value: string) => value.trim())
 			.filter((value: string) => value.length > 0);
 

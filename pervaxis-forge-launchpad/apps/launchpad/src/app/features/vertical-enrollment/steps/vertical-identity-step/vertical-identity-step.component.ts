@@ -10,7 +10,13 @@ import { MatStepperModule } from '@angular/material/stepper';
 @Component({
 	selector: 'forge-vertical-identity-step',
 	standalone: true,
-	imports: [ReactiveFormsModule, MatFormFieldModule, MatInputModule, MatButtonModule, MatStepperModule],
+	imports: [
+		ReactiveFormsModule,
+		MatFormFieldModule,
+		MatInputModule,
+		MatButtonModule,
+		MatStepperModule,
+	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	template: `
 		<form [formGroup]="formGroup()" class="form-grid">
@@ -58,8 +64,20 @@ import { MatStepperModule } from '@angular/material/stepper';
 					<mat-error>Enter a valid email address.</mat-error>
 				}
 			</mat-form-field>
+			<mat-form-field appearance="outline">
+				<mat-label>Component Prefix</mat-label>
+				<input matInput type="text" formControlName="componentPrefix" placeholder="e.g. CLV" />
+				@if (hasError('componentPrefix', 'required')) {
+					<mat-error>Component prefix is required.</mat-error>
+				}
+				@if (hasError('componentPrefix', 'pattern')) {
+					<mat-error>Use 2 to 5 uppercase letters.</mat-error>
+				}
+			</mat-form-field>
 			<div class="actions full-width">
-				<button mat-raised-button color="primary" matStepperNext [disabled]="formGroup().invalid">Next</button>
+				<button mat-raised-button color="primary" matStepperNext [disabled]="formGroup().invalid">
+					Next
+				</button>
 			</div>
 		</form>
 	`,

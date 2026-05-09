@@ -16,29 +16,49 @@
  ************************************************************************
  */
 
-using Microsoft.AspNetCore.DataProtection;
+using Amazon.Extensions.NETCore.Setup;
+using Amazon.SecurityToken;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
+using Octokit;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
+using Pervaxis.Forge.Api.Models.Requests;
+using Pervaxis.Forge.Api.Services;
+using Amazon.Lambda.AspNetCoreServer;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Database ─────────────────────────────────────────────────────────────────
+builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
+
 builder.Services.AddDbContext<ForgeDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ForgeDb")));
 
-// ── Data Protection ──────────────────────────────────────────────────────────
-// Dev: keys on local disk. Prod key store (S3/Secrets Manager) is a Phase 3 task.
-var keysPath = Path.Combine(
-    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-    "Pervaxis.Forge", "keys");
+builder.Services.AddScoped<IVerticalService, VerticalService>();
 
-builder.Services.AddDataProtection()
-    .SetApplicationName("Pervaxis.Forge.Api")
-    .PersistKeysToFileSystem(new DirectoryInfo(keysPath));
+builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
+builder.Services.AddAWSService<IAmazonSecurityTokenService>();
+builder.Services.AddSingleton<Func<string, IGitHubClient>>(
+    _ => token => new GitHubClient(new ProductHeaderValue("pervaxis-forge"))
+    {
+        Credentials = new Credentials(token)
+    });
+builder.Services.AddScoped<IVerticalConnectivityValidator, VerticalConnectivityValidator>();
 
-// ── OpenAPI / Swagger ─────────────────────────────────────────────────────────
+const string ForgeUiCorsPolicy = "ForgeUi";
+builder.Services.AddCors(options =>
+{
+    var allowedOrigins = builder.Configuration
+        .GetSection("Forge:AllowedOrigins")
+        .Get<string[]>() ?? ["http://localhost:4200"];
+
+    options.AddPolicy(ForgeUiCorsPolicy, policy => policy
+        .WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
+
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -56,10 +76,39 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
-// ── App pipeline ──────────────────────────────────────────────────────────────
 var app = builder.Build();
 
-// Swagger UI: always in dev; opt-in via Forge:EnableSwagger in other environments.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogError(ex, "Unhandled exception while processing {Method} {Path}", context.Request.Method, context.Request.Path);
+
+        if (context.Response.HasStarted)
+        {
+            throw;
+        }
+
+        context.Response.Clear();
+        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+        context.Response.ContentType = "application/problem+json";
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            type = "about:blank",
+            title = "Internal Server Error",
+            status = StatusCodes.Status500InternalServerError,
+            detail = "The request pipeline failed unexpectedly.",
+        });
+
+        await context.Response.WriteAsync(payload);
+    }
+});
+
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:EnableSwagger"))
 {
     app.UseSwagger();
@@ -68,9 +117,131 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 }
 
 app.UseHttpsRedirection();
+app.UseCors(ForgeUiCorsPolicy);
 
 app.MapVerticalEndpoints();
 app.MapGenerationEndpoints();
 app.MapModuleEndpoints();
 
+if (app.Environment.IsDevelopment())
+{
+    await SeedSampleVerticalsAsync(app.Services);
+}
+
 app.Run();
+
+static async Task SeedSampleVerticalsAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var verticalService = scope.ServiceProvider.GetRequiredService<IVerticalService>();
+
+    if (await verticalService.ListAsync() is { Count: > 0 })
+    {
+        return;
+    }
+
+    var sampleVerticals = new[]
+    {
+        new VerticalEnrollmentRequest
+        {
+            Slug = "clarivex-ops",
+            DisplayName = "Clarivex Operations",
+            Description = "Operations and internal platform vertical.",
+            OwnerTeam = "Platform Ops",
+            OwnerEmail = "ops@clarivex.tech",
+            ComponentPrefix = "CLV",
+            CloudProvider = new CloudProviderConfig
+            {
+                Provider = "AWS",
+                AwsAccountId = "111111111111",
+                IamRoleArn = "arn:aws:iam::111111111111:role/forge-dev-ops",
+                DefaultRegion = "us-east-1",
+            },
+            SourceControl = new SourceControlConfig
+            {
+                Platform = "GitHub",
+                GitHubOrg = "clarivex-tech",
+                AccessToken = "ghp_sampletoken_ops",
+                DefaultVisibility = "Private",
+                DefaultBranchProtection = true,
+            },
+            TechDefaults = new VerticalTechDefaults
+            {
+                Environments = ["dev", "test", "prod"],
+                DefaultEnvironment = "dev",
+                GenerateTerraform = true,
+                GenerateCdk = true,
+                DefaultDbEngine = "postgresql",
+            },
+        },
+        new VerticalEnrollmentRequest
+        {
+            Slug = "clarivex-analytics",
+            DisplayName = "Clarivex Analytics",
+            Description = "Analytics and reporting vertical.",
+            OwnerTeam = "Data Platform",
+            OwnerEmail = "data@clarivex.tech",
+            ComponentPrefix = "CNA",
+            CloudProvider = new CloudProviderConfig
+            {
+                Provider = "AWS",
+                AwsAccountId = "222222222222",
+                IamRoleArn = "arn:aws:iam::222222222222:role/forge-dev-analytics",
+                DefaultRegion = "us-east-1",
+            },
+            SourceControl = new SourceControlConfig
+            {
+                Platform = "GitHub",
+                GitHubOrg = "clarivex-tech",
+                AccessToken = "ghp_sampletoken_analytics",
+                DefaultVisibility = "Private",
+                DefaultBranchProtection = true,
+            },
+            TechDefaults = new VerticalTechDefaults
+            {
+                Environments = ["dev", "stage", "prod"],
+                DefaultEnvironment = "dev",
+                GenerateTerraform = true,
+                GenerateCdk = true,
+                DefaultDbEngine = "postgresql",
+            },
+        },
+        new VerticalEnrollmentRequest
+        {
+            Slug = "clarivex-customer-portal",
+            DisplayName = "Clarivex Customer Portal",
+            Description = "Customer-facing portal vertical.",
+            OwnerTeam = "Customer Experience",
+            OwnerEmail = "cx@clarivex.tech",
+            ComponentPrefix = "CCP",
+            CloudProvider = new CloudProviderConfig
+            {
+                Provider = "AWS",
+                AwsAccountId = "333333333333",
+                IamRoleArn = "arn:aws:iam::333333333333:role/forge-dev-customer-portal",
+                DefaultRegion = "us-east-1",
+            },
+            SourceControl = new SourceControlConfig
+            {
+                Platform = "GitHub",
+                GitHubOrg = "clarivex-tech",
+                AccessToken = "ghp_sampletoken_portal",
+                DefaultVisibility = "Private",
+                DefaultBranchProtection = true,
+            },
+            TechDefaults = new VerticalTechDefaults
+            {
+                Environments = ["dev", "qa", "prod"],
+                DefaultEnvironment = "dev",
+                GenerateTerraform = true,
+                GenerateCdk = true,
+                DefaultDbEngine = "postgresql",
+            },
+        },
+    };
+
+    foreach (var request in sampleVerticals)
+    {
+        await verticalService.EnrollAsync(request);
+    }
+}

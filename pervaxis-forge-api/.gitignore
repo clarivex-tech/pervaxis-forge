@@ -4,3 +4,8 @@ obj/
 .vs/
 *.slnx.user
 .env
+appsettings.Development.json
+appsettings.*.local.json
+**/Properties/launchSettings.json
+docs/.claude/
+.claude/settings.local.json.bak

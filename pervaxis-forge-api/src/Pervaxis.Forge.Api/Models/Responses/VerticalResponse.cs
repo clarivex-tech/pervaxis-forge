@@ -28,4 +28,5 @@ public record VerticalResponse
     public required string GitHubOrg { get; init; }
     public required IReadOnlyList<string> Environments { get; init; }
     public required DateTimeOffset EnrolledAt { get; init; }
+    public required string ComponentPrefix { get; init; }
 }

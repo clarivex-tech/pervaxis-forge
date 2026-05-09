@@ -25,6 +25,7 @@ public record VerticalEnrollmentRequest
     public required string Description { get; init; }
     public required string OwnerTeam { get; init; }
     public required string OwnerEmail { get; init; }
+    public required string ComponentPrefix { get; init; }
     public required CloudProviderConfig CloudProvider { get; init; }
     public required SourceControlConfig SourceControl { get; init; }
     public required VerticalTechDefaults TechDefaults { get; init; }

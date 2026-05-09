@@ -59,7 +59,9 @@ import { MatStepperModule } from '@angular/material/stepper';
 			</mat-form-field>
 			<div class="actions full-width">
 				<button mat-button matStepperPrevious>Back</button>
-				<button mat-raised-button color="primary" matStepperNext [disabled]="formGroup().invalid">Next</button>
+				<button mat-raised-button color="primary" matStepperNext [disabled]="formGroup().invalid">
+					Next
+				</button>
 			</div>
 		</form>
 	`,
