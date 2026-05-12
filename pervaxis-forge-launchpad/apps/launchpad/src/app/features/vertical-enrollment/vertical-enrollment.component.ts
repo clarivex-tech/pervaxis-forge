@@ -29,7 +29,11 @@ import {
 	VerticalSummaryResponse,
 } from '../../core/models/vertical.model';
 import { CloudProvider } from '../../core/models/cloud-provider.model';
-import { RepoVisibility, SourceControlPlatform } from '../../core/models/enrollment.model';
+import {
+	DefaultDbEngine,
+	RepoVisibility,
+	SourceControlPlatform,
+} from '../../core/models/enrollment.model';
 import { VerticalIdentityStepComponent } from './steps/vertical-identity-step/vertical-identity-step.component';
 import { CloudProviderStepComponent } from './steps/cloud-provider-step/cloud-provider-step.component';
 import { SourceControlStepComponent } from './steps/source-control-step/source-control-step.component';
@@ -132,7 +136,7 @@ export class VerticalEnrollmentComponent {
 			[Validators.required, Validators.pattern(/^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$/)],
 		],
 		accessToken: ['', [Validators.required, Validators.minLength(8)]],
-		defaultVisibility: ['private'],
+		defaultVisibility: ['Private'],
 		defaultBranchProtection: [true],
 	});
 
@@ -203,6 +207,7 @@ export class VerticalEnrollmentComponent {
 						submitSuccess: true,
 					},
 				}));
+				this.resetEnrollmentDraft();
 
 				void this.router.navigate(['/verticals', response.slug]);
 			},
@@ -223,6 +228,7 @@ export class VerticalEnrollmentComponent {
 		const cloudFormValue = this.cloudForm.getRawValue();
 		const sourceControlFormValue = this.sourceControlForm.getRawValue();
 		const techDefaultsValue = this.techDefaultsForm.getRawValue();
+		const selectedDefaultDbEngine = techDefaultsValue.defaultDbEngine.trim();
 
 		const environments = this.techDefaultsForm.controls.environmentsCsv.value
 			.split(',')
@@ -247,8 +253,8 @@ export class VerticalEnrollmentComponent {
 				generateTerraform: techDefaultsValue.generateTerraform,
 				generateCdk: techDefaultsValue.generateCdk,
 				defaultDbEngine:
-					techDefaultsValue.defaultDbEngine.trim().length > 0
-						? techDefaultsValue.defaultDbEngine.trim()
+					selectedDefaultDbEngine === 'postgresql' || selectedDefaultDbEngine === 'mysql'
+						? (selectedDefaultDbEngine as DefaultDbEngine)
 						: null,
 			},
 		}));
@@ -276,6 +282,39 @@ export class VerticalEnrollmentComponent {
 		} catch {
 			sessionStorage.removeItem(this.storageKey);
 		}
+	}
+
+	private resetEnrollmentDraft(): void {
+		this.state.set(initialEnrollmentState);
+		this.identityForm.reset({
+			slug: '',
+			displayName: '',
+			description: '',
+			ownerTeam: '',
+			ownerEmail: '',
+			componentPrefix: '',
+		});
+		this.cloudForm.reset({
+			provider: 'AWS',
+			awsAccountId: '',
+			iamRoleArn: '',
+			defaultRegion: 'ap-south-1',
+		});
+		this.sourceControlForm.reset({
+			platform: 'GitHub',
+			gitHubOrg: '',
+			accessToken: '',
+			defaultVisibility: 'Private',
+			defaultBranchProtection: true,
+		});
+		this.techDefaultsForm.reset({
+			environmentsCsv: 'test,accp,prod',
+			defaultEnvironment: 'test',
+			generateTerraform: true,
+			generateCdk: true,
+			defaultDbEngine: '',
+		});
+		sessionStorage.removeItem(this.storageKey);
 	}
 
 	private maskSecret(value: string): string {

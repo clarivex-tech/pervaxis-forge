@@ -56,7 +56,7 @@ export class MockVerticalApiService implements IVerticalApiService {
 				platform: 'GitHub',
 				gitHubOrg: 'clarivex-tech',
 				accessToken: '***',
-				defaultVisibility: 'private',
+				defaultVisibility: 'Private',
 				defaultBranchProtection: true,
 			},
 			techDefaults: {
@@ -91,7 +91,7 @@ export class MockVerticalApiService implements IVerticalApiService {
 				platform: 'GitHub',
 				gitHubOrg: 'clarivex-tech',
 				accessToken: '***',
-				defaultVisibility: 'private',
+				defaultVisibility: 'Private',
 				defaultBranchProtection: true,
 			},
 			techDefaults: {
@@ -126,7 +126,7 @@ export class MockVerticalApiService implements IVerticalApiService {
 				platform: 'GitHub',
 				gitHubOrg: 'clarivex-tech',
 				accessToken: '***',
-				defaultVisibility: 'private',
+				defaultVisibility: 'Private',
 				defaultBranchProtection: true,
 			},
 			techDefaults: {
