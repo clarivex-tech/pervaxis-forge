@@ -19,7 +19,8 @@
 import { CloudProviderConfig } from './cloud-provider.model';
 
 export type SourceControlPlatform = 'GitHub' | 'GitLab' | 'Bitbucket';
-export type RepoVisibility = 'private' | 'internal' | 'public';
+export type RepoVisibility = 'Private' | 'Public';
+export type DefaultDbEngine = 'postgresql' | 'mysql';
 
 export interface SourceControlConfig {
 	platform: SourceControlPlatform;
@@ -34,7 +35,7 @@ export interface VerticalTechDefaults {
 	defaultEnvironment: string;
 	generateTerraform: boolean;
 	generateCdk: boolean;
-	defaultDbEngine: string | null;
+	defaultDbEngine: DefaultDbEngine | null;
 }
 
 export interface VerticalEnrollmentRequest {

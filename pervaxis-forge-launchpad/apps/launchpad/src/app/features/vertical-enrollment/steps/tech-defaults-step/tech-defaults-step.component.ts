@@ -6,6 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
+import { MatSelectModule } from '@angular/material/select';
 import { MatStepperModule } from '@angular/material/stepper';
 
 @Component({
@@ -15,6 +16,7 @@ import { MatStepperModule } from '@angular/material/stepper';
 		ReactiveFormsModule,
 		MatFormFieldModule,
 		MatInputModule,
+		MatSelectModule,
 		MatCheckboxModule,
 		MatButtonModule,
 		MatStepperModule,
@@ -46,7 +48,11 @@ import { MatStepperModule } from '@angular/material/stepper';
 			</mat-form-field>
 			<mat-form-field appearance="outline">
 				<mat-label>Default DB Engine</mat-label>
-				<input matInput type="text" formControlName="defaultDbEngine" />
+				<mat-select formControlName="defaultDbEngine">
+					<mat-option value="">None</mat-option>
+					<mat-option value="postgresql">PostgreSQL</mat-option>
+					<mat-option value="mysql">MySQL</mat-option>
+				</mat-select>
 			</mat-form-field>
 			<mat-checkbox formControlName="generateTerraform">Generate Terraform</mat-checkbox>
 			<mat-checkbox formControlName="generateCdk">Generate CDK</mat-checkbox>
