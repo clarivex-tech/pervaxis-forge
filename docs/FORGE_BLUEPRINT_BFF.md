@@ -270,13 +270,13 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 > Target window: First week
 
 **Tasks:**
-- [ ] `3.4.1` Add Scriban NuGet package
-- [ ] `3.4.2` Create `ITemplateEngine` interface
-- [ ] `3.4.3` Implement `ScribanTemplateEngine` with strict mode
-- [ ] `3.4.4` Create `TemplateModel` class (manifest + derived names)
-- [ ] `3.4.5` Implement `TemplateModelBuilder.Build(manifest)`
-- [ ] `3.4.6` Write sample `test-template.sbn` and render test
-- [ ] `3.4.7` Write 20+ template engine tests
+- [x] `3.4.1` Add Scriban NuGet package
+- [x] `3.4.2` Create `ITemplateEngine` interface
+- [x] `3.4.3` Implement `ScribanTemplateEngine` with strict mode
+- [x] `3.4.4` Create `TemplateModel` class (manifest + derived names)
+- [x] `3.4.5` Implement `TemplateModelBuilder.Build(manifest)`
+- [x] `3.4.6` Write sample `test-template.sbn` and render test
+- [x] `3.4.7` Write 20+ template engine tests
 
 **Owner:** Engineer B  
 **Effort:** 12 hours
@@ -288,11 +288,13 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 > Target window: Week 2 (May 13-17)
 
 **Tasks:**
-- [ ] Create folder structure: `Templates/rest-api/`, `Templates/angular-shell/`, etc.
-- [ ] Add placeholder `.sbn` files
-- [ ] Configure `.csproj` to embed all templates as resources
-- [ ] Implement `TemplateLoader.LoadAsync(path)` via `GetManifestResourceStream`
-- [ ] Write tests, handle missing template errors gracefully
+- [x] Create folder structure: `Templates/rest-api/`, `Templates/angular-shell/`, etc.
+- [x] Add placeholder `.sbn` files
+- [x] Configure `.csproj` to embed all templates as resources
+- [x] Implement `TemplateLoader.LoadAsync(path)` via `GetManifestResourceStream`
+- [x] Write tests, handle missing template errors gracefully
+
+**Note:** ZIP entry paths are good enough for the current repo-push flow, but if we later extract directly into a repo root without staging, we may need to refine path mapping.
 
 **Owner:** Engineer B  
 **Effort:** 8 hours

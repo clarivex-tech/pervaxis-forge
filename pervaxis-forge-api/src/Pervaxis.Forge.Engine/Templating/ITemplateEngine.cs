@@ -1,3 +1,6 @@
 namespace Pervaxis.Forge.Engine.Templating;
 
-// TODO: implement ITemplateEngine interface
+public interface ITemplateEngine
+{
+    string Render(string templateText, TemplateModel model);
+}
