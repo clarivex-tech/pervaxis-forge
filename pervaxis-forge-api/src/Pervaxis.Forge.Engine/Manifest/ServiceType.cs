@@ -1,3 +1,9 @@
 namespace Pervaxis.Forge.Engine.Manifest;
 
-// TODO: implement ServiceType
+public enum ServiceType
+{
+    RestApi = 1,
+    Worker = 2,
+    ScheduledJob = 3,
+    Library = 4,
+}
