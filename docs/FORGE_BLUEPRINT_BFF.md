@@ -232,15 +232,15 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 > Target window: First week
 
 **Tasks:**
-- [ ] `3.2.1` Create `NamingConvention` static class
-- [ ] `3.2.2` Implement `ToPascalCase(string kebab)`
-- [ ] `3.2.3` Implement `StripServiceSuffix(string name)`
-- [ ] `3.2.4` Implement `GetFirstSegment(string name)`
-- [ ] `3.2.5` Implement `GetComponentPrefix(string product)`
-- [ ] `3.2.6` Implement `DeriveDotNetNames(product, name)`
-- [ ] `3.2.7` Implement `DeriveAngularShellNames(product, name)`
-- [ ] `3.2.8` Implement `DeriveAngularMfeNames(product, name)`
-- [ ] Write 50+ unit tests — edge cases: single-word, multi-hyphen, names with numbers (e.g. `v2-service`), Unicode
+- [x] `3.2.1` Create `NamingConvention` static class
+- [x] `3.2.2` Implement `ToPascalCase(string kebab)`
+- [x] `3.2.3` Implement `StripServiceSuffix(string name)`
+- [x] `3.2.4` Implement `GetFirstSegment(string name)`
+- [x] `3.2.5` Implement `GetComponentPrefix(string product)`
+- [x] `3.2.6` Implement `DeriveDotNetNames(product, name)`
+- [x] `3.2.7` Implement `DeriveAngularShellNames(product, name)`
+- [x] `3.2.8` Implement `DeriveAngularMfeNames(product, name)`
+- [x] Write 50+ unit tests — edge cases: single-word, multi-hyphen, names with numbers (e.g. `v2-service`), Unicode
 
 **Owner:** Engineer B  
 **Effort:** 16 hours
@@ -252,13 +252,13 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 > Target window: Week 1 (May 6-10)
 
 **Tasks:**
-- [ ] `3.3.1` Create `ManifestValidator` class
-- [ ] `3.3.2` Kebab-case regex validation
-- [ ] `3.3.3` Type-specific name rules (`.NET` must end `-service`, MFE must not)
-- [ ] `3.3.4` Genesis + Canvas module validation against known lists
-- [ ] `3.3.5` Required field checks
-- [ ] `3.3.6` `ValidationResult` with specific error messages
-- [ ] `3.3.7` Write 30+ tests
+- [x] `3.3.1` Create `ManifestValidator` class
+- [x] `3.3.2` Kebab-case regex validation
+- [x] `3.3.3` Type-specific name rules (`.NET` must end `-service`, MFE must not)
+- [x] `3.3.4` Genesis + Canvas module validation against known lists
+- [x] `3.3.5` Required field checks
+- [x] `3.3.6` `ValidationResult` with specific error messages
+- [x] `3.3.7` Write 30+ tests
 
 **Owner:** Engineer B  
 **Effort:** 10 hours
