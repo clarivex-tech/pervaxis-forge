@@ -77,4 +77,62 @@ public static class NamingConvention
 
         return lowercased;
     }
+
+    public static DerivedNames DeriveDotNetNames(string product, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(product);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var strippedName = StripServiceSuffix(name);
+        var pascalName = ToPascalCase(strippedName);
+        var namespaceSuffix = ToPascalCase(product);
+
+        return new DerivedNames
+        {
+            DotNetNamespace = $"Pervaxis.Forge.{namespaceSuffix}",
+            DotNetClassName = $"{pascalName}Service",
+            AngularShellComponentName = string.Empty,
+            AngularMfeComponentName = string.Empty,
+            AngularShellRoutePath = string.Empty,
+            AngularMfeRoutePath = string.Empty,
+        };
+    }
+
+    public static DerivedNames DeriveAngularShellNames(string product, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(product);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var route = GetFirstSegment(name).ToLowerInvariant();
+        var pascalName = ToPascalCase(name);
+
+        return new DerivedNames
+        {
+            DotNetNamespace = string.Empty,
+            DotNetClassName = string.Empty,
+            AngularShellComponentName = $"{ToPascalCase(product)}{pascalName}ShellComponent",
+            AngularMfeComponentName = string.Empty,
+            AngularShellRoutePath = route,
+            AngularMfeRoutePath = string.Empty,
+        };
+    }
+
+    public static DerivedNames DeriveAngularMfeNames(string product, string name)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(product);
+        ArgumentException.ThrowIfNullOrWhiteSpace(name);
+
+        var route = GetFirstSegment(name).ToLowerInvariant();
+        var pascalName = ToPascalCase(name);
+
+        return new DerivedNames
+        {
+            DotNetNamespace = string.Empty,
+            DotNetClassName = string.Empty,
+            AngularShellComponentName = string.Empty,
+            AngularMfeComponentName = $"{ToPascalCase(product)}{pascalName}Component",
+            AngularShellRoutePath = string.Empty,
+            AngularMfeRoutePath = route,
+        };
+    }
 }

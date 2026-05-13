@@ -99,4 +99,31 @@ public class NamingConventionTests
         action.Should().Throw<ArgumentException>()
             .WithParameterName("registeredAbbreviation");
     }
+
+    [Fact]
+    public void DeriveDotNetNames_ReturnsExpectedValues()
+    {
+        var result = NamingConvention.DeriveDotNetNames("intake-service", "billing-service");
+
+        result.DotNetNamespace.Should().Be("Pervaxis.Forge.IntakeService");
+        result.DotNetClassName.Should().Be("BillingService");
+    }
+
+    [Fact]
+    public void DeriveAngularShellNames_ReturnsExpectedValues()
+    {
+        var result = NamingConvention.DeriveAngularShellNames("intake-service", "billing-service");
+
+        result.AngularShellComponentName.Should().Be("IntakeServiceBillingServiceShellComponent");
+        result.AngularShellRoutePath.Should().Be("billing");
+    }
+
+    [Fact]
+    public void DeriveAngularMfeNames_ReturnsExpectedValues()
+    {
+        var result = NamingConvention.DeriveAngularMfeNames("intake-service", "billing-service");
+
+        result.AngularMfeComponentName.Should().Be("IntakeServiceBillingServiceComponent");
+        result.AngularMfeRoutePath.Should().Be("billing");
+    }
 }

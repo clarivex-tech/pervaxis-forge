@@ -6,14 +6,14 @@
 **Project Start:** May 6, 2026  
 **Projected Completion:** May 31, 2026 (4 weeks)  
 **Team:** Pervaxis Platform Team — Backend  
-**Status:** Phase 0 Complete — Phase 1 In Progress
+**Status:** Phase 0 Complete — Phase 1 Complete
 
-> **Parallel Execution:** BFF and UI teams run independently from Day 1.  
+> **Parallel Execution:** BFF and UI teams run independently from the start.  
 > Week 1: BFF builds Vertical Enrollment API while UI builds the Enrollment Wizard against a mock.  
 > End of Week 1: teams integrate — UI swaps mock for real API.  
 > From Week 2 onwards: fully independent until final integration test.
 >
-> **Solution Structure:** See [FORGE_SOLUTION_STRUCTURE.md](FORGE_SOLUTION_STRUCTURE.md) for the full repo layout, project structure, folder conventions, and `.csproj` contents. Read this before writing a single file on Day 1.
+> **Solution Structure:** See [FORGE_SOLUTION_STRUCTURE.md](FORGE_SOLUTION_STRUCTURE.md) for the full repo layout, project structure, folder conventions, and `.csproj` contents. Read this before writing a single file.
 
 ---
 
@@ -87,7 +87,7 @@ Week 4 (May 27-31):  Phase 2 (wrap) + Phase 3 — Infrastructure + GitHub
 | Milestone | Target Date | Status | Deliverable |
 |---|---|---|---|
 | **M0: Vertical Enrollment API Live** | May 10, 2026 | ✅ Complete — Deployed to Lambda (ACCP) May 8 | Enroll endpoint, DB schema, AWS + GitHub validation, Lambda deploy pipeline |
-| **M1: Engine Core Complete** | May 17, 2026 | 🔴 Not Started | Manifest parsing, naming derivation, template engine, ZIP |
+| **M1: Engine Core Complete** | May 17, 2026 | ✅ Complete — Engine core implemented and verified May 13 | Manifest parsing, naming derivation, template engine, ZIP |
 | **M2: REST API Templates Complete** | May 24, 2026 | 🔴 Not Started | 18 templates, generated service compiles + tests pass |
 | **M3: Infrastructure + GitHub Complete** | May 31, 2026 | 🔴 Not Started | AWS resources deployed, GitHub repos created |
 
@@ -114,17 +114,17 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 > This is the team's first shared deliverable. The UI team will be building the enrollment wizard against a mock API this week. By end of week 1, they swap the mock for these real endpoints.
 
-### 2.1 Day 1: Project Setup & Database
+### 2.1 Project Setup & Database
 
 **Tasks:**
-- [ ] Create `Pervaxis.Forge.Api` ASP.NET Core Minimal API project (.NET 10)
-- [ ] Create `Pervaxis.Forge.Api.Tests` xUnit project
-- [ ] Add EF Core + Npgsql, ASP.NET Core Data Protection
-- [ ] Define all entity models: `Vertical`, `VerticalCloudConfig`, `VerticalSourceControlConfig`, `VerticalTechDefaults`, `GenerationLog`, `DeploymentOutput`
-- [ ] Create `ForgeDbContext` with all DbSets and relationships
-- [ ] Write and apply initial migration
-- [ ] Seed one test vertical: `clarivolt`
-- [ ] Configure `Directory.Build.props` and `nuget.config`
+- [x] `2.1.1` Create `Pervaxis.Forge.Api` ASP.NET Core Minimal API project (.NET 10)
+- [x] `2.1.2` Create `Pervaxis.Forge.Api.Tests` xUnit project
+- [x] `2.1.3` Add EF Core + Npgsql, ASP.NET Core Data Protection
+- [x] `2.1.4` Define all entity models: `Vertical`, `VerticalCloudConfig`, `VerticalSourceControlConfig`, `VerticalTechDefaults`, `GenerationLog`, `DeploymentOutput`
+- [x] `2.1.5` Create `ForgeDbContext` with all DbSets and relationships
+- [x] `2.1.6` Write and apply initial migration
+- [x] `2.1.7` Seed one test vertical: `clarivolt`
+- [x] `2.1.8` Configure `Directory.Build.props` and `nuget.config`
 
 **Acceptance Criteria:**
 - Migration applies cleanly to a local PostgreSQL instance
@@ -135,55 +135,55 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 2.2 Day 1-2: Vertical Enrollment Service
+### 2.2 Vertical Enrollment Service
 
 **Tasks:**
-- [ ] Implement `VerticalService` with Data Protection encryption:
+- [x] `2.2.1` Implement `VerticalService` with Data Protection encryption:
   - `EnrollAsync(VerticalEnrollmentRequest)` — validate, encrypt credentials, persist all sub-configs
   - `GetAsync(slug)` — return vertical with masked credentials
   - `ListAsync()` — return all active verticals (no credentials)
   - `UpdateAsync(slug, request)` — update mutable fields
   - `DeactivateAsync(slug)` — soft delete
-- [ ] Implement `VerticalConnectivityValidator`:
+- [x] `2.2.2` Implement `VerticalConnectivityValidator`:
   - `ValidateAwsAsync(iamRoleArn, accountId, region)` — STS AssumeRole dry-run
   - `ValidateGitHubAsync(githubOrg, accessToken)` — Octokit org membership check
-- [ ] Write unit tests for `VerticalService` (mock DB, verify encryption called)
-- [ ] Write unit tests for connectivity validation (mock STS + Octokit)
+- [x] `2.2.3` Write unit tests for `VerticalService` (mock DB, verify encryption called)
+- [x] `2.2.4` Write unit tests for connectivity validation (mock STS + Octokit)
 
 **Owner:** Engineer A  
 **Effort:** 12 hours
 
 ---
 
-### 2.3 Day 2-3: Enrollment API Endpoints
+### 2.3 Enrollment API Endpoints
 
 **Tasks:**
-- [ ] `POST /api/v1/verticals` — validate request, validate connectivity, enroll
-- [ ] `GET /api/v1/verticals` — list all active verticals
-- [ ] `GET /api/v1/verticals/{slug}` — get single vertical (credentials masked)
-- [ ] `PUT /api/v1/verticals/{slug}` — update mutable fields
-- [ ] `DELETE /api/v1/verticals/{slug}` — soft delete
-- [ ] `POST /api/v1/verticals/{slug}/validate` — connectivity check only, no persist
-- [ ] Add request validation (FluentValidation or DataAnnotations)
-- [ ] Add consistent error response shape `{ errors: string[] }`
-- [ ] Write integration tests for all endpoints against real PostgreSQL (test DB)
-- [ ] Write OpenAPI/Swagger docs for all endpoints
+- [x] `2.3.1` `POST /api/v1/verticals` - validate request, validate connectivity, enroll
+- [x] `2.3.2` `GET /api/v1/verticals` - list all active verticals
+- [x] `2.3.3` `GET /api/v1/verticals/{slug}` - get single vertical (credentials masked)
+- [x] `2.3.4` `PUT /api/v1/verticals/{slug}` - update mutable fields
+- [x] `2.3.5` `DELETE /api/v1/verticals/{slug}` - soft delete
+- [x] `2.3.6` `POST /api/v1/verticals/{slug}/validate` - connectivity check only, no persist
+- [x] `2.3.7` Add request validation (FluentValidation or DataAnnotations)
+- [x] `2.3.8` Add consistent error response shape `{ errors: string[] }`
+- [x] `2.3.9` Write integration tests for all endpoints against real PostgreSQL (test DB)
+- [x] `2.3.10` Write OpenAPI/Swagger docs for all endpoints
 
 **Owner:** Engineer A  
 **Effort:** 14 hours
 
 ---
 
-### 2.4 Day 4-5: API Contract Document for UI Team
+### 2.4 API Contract Document for UI Team
 
-> The UI team needs this to build accurate mocks. Produce it by end of Day 3 at latest.
+> The UI team needs this to build accurate mocks. Produce it by the end of the first week at latest.
 
 **Tasks:**
-- [ ] Confirm all request/response shapes are final
-- [ ] Export Swagger JSON from running API
-- [ ] Share with UI team lead (used to build `HttpClientTestingModule` mocks)
-- [ ] Smoke test all 6 endpoints manually via Swagger UI or Postman
-- [ ] Deploy API to shared dev environment so UI team can integrate on Day 5 of Week 1
+- [x] `2.4.1` Confirm all request/response shapes are final
+- [x] `2.4.2` Export Swagger JSON from running API
+- [x] `2.4.3` Share with UI team lead (used to build `HttpClientTestingModule` mocks)
+- [x] `2.4.4` Smoke test all 6 endpoints manually via Swagger UI or Postman
+- [x] `2.4.5` Deploy API to shared dev environment so UI team can integrate immediately after contract freeze
 
 **Owner:** Engineer A  
 **Effort:** 4 hours
@@ -192,12 +192,12 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 2.5 Phase 0 Deliverables
 
-- 6 enrollment endpoints functional and documented
-- PostgreSQL migration applied to dev environment
-- Credentials encrypted at rest (Data Protection)
-- AWS + GitHub connectivity validation working
-- API deployed to dev environment by May 10
-- Swagger JSON shared with UI team by May 8
+- `2.5.1` 6 enrollment endpoints functional and documented
+- `2.5.2` PostgreSQL migration applied to dev environment
+- `2.5.3` Credentials encrypted at rest (Data Protection)
+- `2.5.4` AWS + GitHub connectivity validation working
+- `2.5.5` API deployed to dev environment by May 10
+- `2.5.6` Swagger JSON shared with UI team by May 8
 
 ---
 
@@ -207,93 +207,103 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 **Goal:** Bulletproof deterministic generation engine  
 **Team:** 1-2 engineers (can start in parallel with Phase 0)
 
-> One engineer starts on Engine from Day 1 (pure .NET, no API/DB dependencies). The other focuses on Phase 0 API. They converge when Engine integrates with the API in Phase 3.
+> One engineer starts on Engine from the start of the first week (pure .NET, no API/DB dependencies). The other focuses on Phase 0 API. They converge when Engine integrates with the API in Phase 3.
 
-### 3.1 Week 1 Tasks (May 6-10)
+### 3.1 Solution + Manifest Model
 
-#### Day 1-2: Solution + Manifest Model
+> Target window: First week
 
 **Tasks:**
-- [ ] Create `Pervaxis.Forge.slnx` solution
-- [ ] Create `Pervaxis.Forge.Engine` class library (.NET 10)
-- [ ] Create `Pervaxis.Forge.Engine.Tests` xUnit project
-- [ ] Configure `Directory.Build.props` (nullable, warnings as errors, no Pervaxis.Core dependency)
-- [ ] Define `ForgeManifest` record with all properties
-- [ ] Define `ServiceType`, `DatabaseConfig`, `QueueConfig`, `ApiConfig`, `AngularConfig` models
-- [ ] Write JSON serialization tests
+- [x] `3.1.1` Create `Pervaxis.Forge.slnx` solution
+- [x] `3.1.2` Create `Pervaxis.Forge.Engine` class library (.NET 10)
+- [x] `3.1.3` Create `Pervaxis.Forge.Engine.Tests` xUnit project
+- [x] `3.1.4` Configure `Directory.Build.props` (nullable, warnings as errors, no Pervaxis.Core dependency)
+- [x] `3.1.5` Define `ForgeManifest` record with all properties
+- [x] `3.1.6` Define `ServiceType`, `DatabaseConfig`, `QueueConfig`, `ApiConfig`, `AngularConfig` models
+- [x] `3.1.7` Write JSON serialization tests
 
 **Owner:** Engineer B  
 **Effort:** 10 hours
 
 ---
 
-#### Day 2-3: Naming Convention Engine
+### 3.2 Naming Convention Engine
+
+> Target window: First week
 
 **Tasks:**
-- [ ] Create `NamingConvention` static class
-- [ ] Implement `ToPascalCase(string kebab)`
-- [ ] Implement `StripServiceSuffix(string name)`
-- [ ] Implement `GetFirstSegment(string name)`
-- [ ] Implement `GetComponentPrefix(string product)`
-- [ ] Implement `DeriveDotNetNames(product, name)`
-- [ ] Implement `DeriveAngularShellNames(product, name)`
-- [ ] Implement `DeriveAngularMfeNames(product, name)`
-- [ ] Write 50+ unit tests — edge cases: single-word, multi-hyphen, names with numbers (e.g. `v2-service`), Unicode
+- [x] `3.2.1` Create `NamingConvention` static class
+- [x] `3.2.2` Implement `ToPascalCase(string kebab)`
+- [x] `3.2.3` Implement `StripServiceSuffix(string name)`
+- [x] `3.2.4` Implement `GetFirstSegment(string name)`
+- [x] `3.2.5` Implement `GetComponentPrefix(string product)`
+- [x] `3.2.6` Implement `DeriveDotNetNames(product, name)`
+- [x] `3.2.7` Implement `DeriveAngularShellNames(product, name)`
+- [x] `3.2.8` Implement `DeriveAngularMfeNames(product, name)`
+- [x] Write 50+ unit tests — edge cases: single-word, multi-hyphen, names with numbers (e.g. `v2-service`), Unicode
 
 **Owner:** Engineer B  
 **Effort:** 16 hours
 
 ---
 
-#### Day 3-4: Manifest Validation
+### 3.3 Manifest Validation
+
+> Target window: Week 1 (May 6-10)
 
 **Tasks:**
-- [ ] Create `ManifestValidator` class
-- [ ] Kebab-case regex validation
-- [ ] Type-specific name rules (`.NET` must end `-service`, MFE must not)
-- [ ] Genesis + Canvas module validation against known lists
-- [ ] Required field checks
-- [ ] `ValidationResult` with specific error messages
-- [ ] Write 30+ tests
+- [x] `3.3.1` Create `ManifestValidator` class
+- [x] `3.3.2` Kebab-case regex validation
+- [x] `3.3.3` Type-specific name rules (`.NET` must end `-service`, MFE must not)
+- [x] `3.3.4` Genesis + Canvas module validation against known lists
+- [x] `3.3.5` Required field checks
+- [x] `3.3.6` `ValidationResult` with specific error messages
+- [x] `3.3.7` Write 30+ tests
 
 **Owner:** Engineer B  
 **Effort:** 10 hours
 
 ---
 
-#### Day 4-5: Scriban Template Engine
+### 3.4 Scriban Template Engine
+
+> Target window: First week
 
 **Tasks:**
-- [ ] Add Scriban NuGet package
-- [ ] Create `ITemplateEngine` interface
-- [ ] Implement `ScribanTemplateEngine` with strict mode
-- [ ] Create `TemplateModel` class (manifest + derived names)
-- [ ] Implement `TemplateModelBuilder.Build(manifest)`
-- [ ] Write sample `test-template.sbn` and render test
-- [ ] Write 20+ template engine tests
+- [x] `3.4.1` Add Scriban NuGet package
+- [x] `3.4.2` Create `ITemplateEngine` interface
+- [x] `3.4.3` Implement `ScribanTemplateEngine` with strict mode
+- [x] `3.4.4` Create `TemplateModel` class (manifest + derived names)
+- [x] `3.4.5` Implement `TemplateModelBuilder.Build(manifest)`
+- [x] `3.4.6` Write sample `test-template.sbn` and render test
+- [x] `3.4.7` Write 20+ template engine tests
 
 **Owner:** Engineer B  
 **Effort:** 12 hours
 
 ---
 
-### 3.2 Week 2 Tasks (May 13-17)
+### 3.5 Embedded Template Loading
 
-#### Day 1-2: Embedded Template Loading
+> Target window: Week 2 (May 13-17)
 
 **Tasks:**
-- [ ] Create folder structure: `Templates/rest-api/`, `Templates/angular-shell/`, etc.
-- [ ] Add placeholder `.sbn` files
-- [ ] Configure `.csproj` to embed all templates as resources
-- [ ] Implement `TemplateLoader.LoadAsync(path)` via `GetManifestResourceStream`
-- [ ] Write tests, handle missing template errors gracefully
+- [x] Create folder structure: `Templates/rest-api/`, `Templates/angular-shell/`, etc.
+- [x] Add placeholder `.sbn` files
+- [x] Configure `.csproj` to embed all templates as resources
+- [x] Implement `TemplateLoader.LoadAsync(path)` via `GetManifestResourceStream`
+- [x] Write tests, handle missing template errors gracefully
+
+**Note:** ZIP entry paths are good enough for the current repo-push flow, but if we later extract directly into a repo root without staging, we may need to refine path mapping.
 
 **Owner:** Engineer B  
 **Effort:** 8 hours
 
 ---
 
-#### Day 2-4: Print Generator Core
+### 3.6 Print Generator Core
+
+> Target window: Week 2 (May 13-17)
 
 **Tasks:**
 - [ ] Create `PrintGenerator` class
@@ -308,7 +318,9 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-#### Day 4-5: Module Metadata
+### 3.7 Module Metadata
+
+> Target window: Week 2 (May 13-17)
 
 **Tasks:**
 - [ ] `GenesisModules` static class — 8 modules with Id, DisplayName, IAM Permissions
@@ -324,12 +336,12 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 3.3 Phase 1 Deliverables
+### 3.8 Phase 1 Deliverables
 
-- `Pervaxis.Forge.Engine` — 90%+ test coverage
-- 150+ unit tests passing
-- Integration test: manifest → ZIP end-to-end
-- XML documentation on all public APIs
+- [x] `3.8.1` `Pervaxis.Forge.Engine` — 90%+ test coverage
+- [x] `3.8.2` 150+ unit tests passing
+- [x] `3.8.3` Integration test: manifest → ZIP end-to-end
+- [x] `3.8.4` XML documentation on all public APIs
 
 ---
 
@@ -362,7 +374,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 | `ServiceCollectionExtensions.cs.sbn` | **High** |
 | `.claude/CLAUDE.md.sbn` | **High** |
 
-### 4.2 Day 1: Simple Templates + DTOs
+### 4.2 Simple Templates + DTOs
 
 - [ ] `manifest.json.sbn`, `SPEC.md.sbn`, `README.md.sbn`
 - [ ] `Request.cs.sbn`, `Response.cs.sbn`, `IService.cs.sbn`
@@ -371,7 +383,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 4.3 Day 1-2: Docker Templates
+### 4.3 Docker Templates
 
 - [ ] `Dockerfile.sbn` — .NET 10 multi-stage
 - [ ] `docker-compose.localstack.yml.sbn` — conditional services per Genesis modules (SQS/SNS, Redis, S3, PostgreSQL)
@@ -381,7 +393,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 4.4 Day 2-3: .csproj + Configuration
+### 4.4 .csproj + Configuration
 
 - [ ] `csproj.sbn` — .NET 10, nullable, dynamic `<PackageReference>` loop — package name resolved as `Pervaxis.Genesis.{{ module.name }}.{{ model.cloud_provider }}` so an AWS vertical generates `Pervaxis.Genesis.Caching.AWS` and a future Azure vertical generates `Pervaxis.Genesis.Caching.Azure` with zero template change
 - [ ] `tests.csproj.sbn` — xUnit + FluentAssertions
@@ -392,7 +404,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 4.5 Day 3-4: Program.cs + DI Wiring (CRITICAL)
+### 4.5 Program.cs + DI Wiring (CRITICAL)
 
 - [ ] `Program.cs.sbn` — Minimal API host, Genesis module loop, Swagger — `using` directives rendered as `Pervaxis.Genesis.{{ module.name }}.{{ model.cloud_provider }}`
 - [ ] `ServiceCollectionExtensions.cs.sbn` — Genesis DI calls rendered as `services.AddGenesis{{ module.name }}{{ model.cloud_provider }}(...)` — cloud provider from vertical, module name from manifest
@@ -402,7 +414,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 4.6 Day 4: Controller + Test Infrastructure
+### 4.6 Controller + Test Infrastructure
 
 - [ ] `Controller.cs.sbn` — route from naming convention, stub GET/POST
 - [ ] `TestBase.cs.sbn` — mock factory helpers, DI test host, fixture base
@@ -411,7 +423,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 4.7 Day 5: CLAUDE.md + CI/CD Templates (CRITICAL)
+### 4.7 CLAUDE.md + CI/CD Templates (CRITICAL)
 
 - [ ] `.claude/CLAUDE.md.sbn` — service identity, Genesis modules wired, queue contracts, DB info, coding standards, what Claude Code should build
 - [ ] `.github/workflows/build-test.yml.sbn` — triggers, checkout, .NET setup, restore, build, test, coverage
@@ -438,7 +450,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 **Goal:** AWS resource creation, IaC generation, GitHub repo creation  
 **Team:** 2 engineers
 
-### 5.1 Day 1-2: Terraform + CDK Template Generation
+### 5.1 Terraform + CDK Template Generation
 
 - [ ] Create `Templates/terraform/` — `main.tf.sbn` (conditional resources: ElastiCache, RDS, S3, SQS, SNS), `variables.tf.sbn`, `outputs.tf.sbn`
 - [ ] Create `Templates/cdk/` — `Program.cs.sbn`, `InfrastructureStack.cs.sbn` (same conditionals)
@@ -448,7 +460,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 5.2 Day 2-4: Direct AWS Deployment (Deploy Now)
+### 5.2 Direct AWS Deployment (Deploy Now)
 
 - [ ] Add AWS SDK packages: ElastiCache, RDS, S3, SQS, SNS, SecretsManager
 - [ ] Implement `AwsDeploymentService`:
@@ -462,7 +474,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 5.3 Day 4-5: GitHub Integration
+### 5.3 GitHub Integration
 
 - [ ] Add Octokit + LibGit2Sharp packages
 - [ ] Implement `GitHubService`:
@@ -477,7 +489,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 5.4 Day 5: Generation Endpoints Polish
+### 5.4 Generation Endpoints Polish
 
 - [ ] `POST /api/v1/generate` — resolve vertical, call PrintGenerator, optionally deploy AWS + GitHub
 - [ ] `POST /api/v1/generate/batch` — loop services, collect per-service results
@@ -673,7 +685,7 @@ The `cloudProvider` already flows through `TemplateModel` from V1 — Forge temp
 |---|---|
 | PostgreSQL not ready week 1 | Run local Docker PostgreSQL for development |
 | STS AssumeRole permissions not ready | Mock STS in unit tests; unblock with real creds in week 2 |
-| API contract changes break UI mocks | Freeze API contract by May 8 (end of Day 3), communicate any changes immediately |
+| API contract changes break UI mocks | Freeze API contract by May 8 (end of Week 1), communicate any changes immediately |
 | Scriban template complexity | Keep templates under 200 lines, extract helper functions |
 | GitHub API rate limiting | Retry with exponential backoff, use OAuth app token over PAT |
 
