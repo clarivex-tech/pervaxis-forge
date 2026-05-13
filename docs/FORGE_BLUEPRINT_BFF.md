@@ -6,7 +6,7 @@
 **Project Start:** May 6, 2026  
 **Projected Completion:** May 31, 2026 (4 weeks)  
 **Team:** Pervaxis Platform Team — Backend  
-**Status:** Phase 0 Complete — Phase 1 In Progress
+**Status:** Phase 0 Complete — Phase 1 Complete
 
 > **Parallel Execution:** BFF and UI teams run independently from the start.  
 > Week 1: BFF builds Vertical Enrollment API while UI builds the Enrollment Wizard against a mock.  
@@ -87,7 +87,7 @@ Week 4 (May 27-31):  Phase 2 (wrap) + Phase 3 — Infrastructure + GitHub
 | Milestone | Target Date | Status | Deliverable |
 |---|---|---|---|
 | **M0: Vertical Enrollment API Live** | May 10, 2026 | ✅ Complete — Deployed to Lambda (ACCP) May 8 | Enroll endpoint, DB schema, AWS + GitHub validation, Lambda deploy pipeline |
-| **M1: Engine Core Complete** | May 17, 2026 | 🔴 Not Started | Manifest parsing, naming derivation, template engine, ZIP |
+| **M1: Engine Core Complete** | May 17, 2026 | ✅ Complete — Engine core implemented and verified May 13 | Manifest parsing, naming derivation, template engine, ZIP |
 | **M2: REST API Templates Complete** | May 24, 2026 | 🔴 Not Started | 18 templates, generated service compiles + tests pass |
 | **M3: Infrastructure + GitHub Complete** | May 31, 2026 | 🔴 Not Started | AWS resources deployed, GitHub repos created |
 
@@ -338,10 +338,10 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 3.8 Phase 1 Deliverables
 
-- `Pervaxis.Forge.Engine` — 90%+ test coverage
-- 150+ unit tests passing
-- Integration test: manifest → ZIP end-to-end
-- XML documentation on all public APIs
+- [x] `3.8.1` `Pervaxis.Forge.Engine` — 90%+ test coverage
+- [x] `3.8.2` 150+ unit tests passing
+- [x] `3.8.3` Integration test: manifest → ZIP end-to-end
+- [x] `3.8.4` XML documentation on all public APIs
 
 ---
 

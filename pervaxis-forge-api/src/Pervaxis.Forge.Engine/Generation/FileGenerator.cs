@@ -25,7 +25,7 @@ public sealed class FileGenerator
         {
             var template = await templateLoader.LoadAsync(suffix, cancellationToken);
             var rendered = templateEngine.Render(template, model);
-            files.Add(new GeneratedFile(suffix[..^4], rendered));
+            files.Add(new GeneratedFile(suffix[..^4].Replace('\\', '/'), rendered));
         }
 
         return files;

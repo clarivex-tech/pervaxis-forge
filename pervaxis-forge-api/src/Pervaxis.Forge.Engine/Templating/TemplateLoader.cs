@@ -35,12 +35,22 @@ public sealed class TemplateLoader
         if (string.IsNullOrWhiteSpace(templateRoot))
             throw new ArgumentException("Template root must be provided.", nameof(templateRoot));
 
-        var prefix = $"{templateRoot.Trim().Replace('\\', '.')}.";
+        var root = templateRoot.Trim().Replace('\\', '.').Replace('/', '.');
+        var prefixes = new[]
+        {
+            $"{root}.",
+            $"{root.Replace('-', '_')}.",
+        };
+        var resourceNames = assembly.GetManifestResourceNames();
 
-        return assembly
-            .GetManifestResourceNames()
-            .Where(name => name.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            .Select(name => name[prefix.Length..])
+        return resourceNames
+            .Select(name => new
+            {
+                Name = name,
+                Prefix = prefixes.FirstOrDefault(prefix => name.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0),
+            })
+            .Where(item => item.Prefix is not null)
+            .Select(item => item.Name[(item.Name.IndexOf(item.Prefix!, StringComparison.OrdinalIgnoreCase) + item.Prefix!.Length)..])
             .Where(suffix => suffix.EndsWith(".sbn", StringComparison.OrdinalIgnoreCase))
             .OrderBy(suffix => suffix, StringComparer.OrdinalIgnoreCase)
             .ToArray();

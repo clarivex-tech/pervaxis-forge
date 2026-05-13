@@ -24,7 +24,8 @@ public static class CanvasModules
 
     public static IReadOnlyList<CanvasModule> GetAll() => Modules;
 
-    public static CanvasModule? GetById(string id) => Modules.FirstOrDefault(module => module.Id == id);
+    public static CanvasModule? GetById(string id)
+        => Modules.FirstOrDefault(module => string.Equals(module.Id, id, StringComparison.OrdinalIgnoreCase));
 
     public static IReadOnlyList<string> GetAllNames() => Modules.Select(module => module.DisplayName).ToArray();
 }

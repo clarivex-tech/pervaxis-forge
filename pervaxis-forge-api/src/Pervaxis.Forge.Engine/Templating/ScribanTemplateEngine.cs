@@ -25,6 +25,24 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
             ["AngularMfeComponentName"] = model.DerivedNames.AngularMfeComponentName,
             ["AngularShellRoutePath"] = model.DerivedNames.AngularShellRoutePath,
             ["AngularMfeRoutePath"] = model.DerivedNames.AngularMfeRoutePath,
+            ["model"] = new Scriban.Runtime.ScriptObject
+            {
+                ["manifest"] = model.Manifest,
+                ["names"] = new Scriban.Runtime.ScriptObject
+                {
+                    ["dotNetNamespace"] = model.DerivedNames.DotNetNamespace,
+                    ["dotNetClassName"] = model.DerivedNames.DotNetClassName,
+                    ["angularShellComponentName"] = model.DerivedNames.AngularShellComponentName,
+                    ["angularMfeComponentName"] = model.DerivedNames.AngularMfeComponentName,
+                    ["angularShellRoutePath"] = model.DerivedNames.AngularShellRoutePath,
+                    ["angularMfeRoutePath"] = model.DerivedNames.AngularMfeRoutePath,
+                },
+            },
+            ["secrets"] = new Scriban.Runtime.ScriptObject
+            {
+                ["SONAR_TOKEN"] = string.Empty,
+                ["NUGET_API_KEY"] = string.Empty,
+            },
         };
 
         string result;

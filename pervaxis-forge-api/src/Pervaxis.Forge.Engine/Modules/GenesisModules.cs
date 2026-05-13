@@ -18,11 +18,36 @@ public static class GenesisModules
 
     public static IReadOnlyList<GenesisModule> GetAll() => Modules;
 
-    public static GenesisModule? GetById(string id) => Modules.FirstOrDefault(module => module.Id == id);
+    public static GenesisModule? GetById(string id)
+        => Modules.FirstOrDefault(module => string.Equals(module.Id, id, StringComparison.OrdinalIgnoreCase));
 
     public static IReadOnlyList<string> GetAllNames() => Modules.Select(module => module.DisplayName).ToArray();
 
-    public static string GetPackageName(string moduleName, string cloudProvider) => $"Pervaxis.Genesis.{moduleName}.{cloudProvider}";
+    public static string GetPackageName(string moduleName, string cloudProvider)
+        => $"Pervaxis.Genesis.{NormalizeModuleName(moduleName)}.{NormalizeCloudProvider(cloudProvider)}";
 
-    public static string GetDiExtensionName(string moduleName, string cloudProvider) => $"AddGenesis{moduleName}{cloudProvider}";
+    public static string GetDiExtensionName(string moduleName, string cloudProvider)
+        => $"AddGenesis{NormalizeModuleName(moduleName)}{NormalizeCloudProvider(cloudProvider)}";
+
+    private static string NormalizeSegment(string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(value);
+        return value.Trim();
+    }
+
+    private static string NormalizeModuleName(string value)
+    {
+        var segment = NormalizeSegment(value);
+        if (!segment.Any(char.IsWhiteSpace) && !segment.Contains('-') && !segment.Contains('_'))
+            return segment;
+
+        return string.Concat(
+            segment.Split(new[] { '-', ' ', '_' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(part => char.ToUpperInvariant(part[0]) + part[1..].ToLowerInvariant()));
+    }
+
+    private static string NormalizeCloudProvider(string value)
+    {
+        return NormalizeSegment(value);
+    }
 }
