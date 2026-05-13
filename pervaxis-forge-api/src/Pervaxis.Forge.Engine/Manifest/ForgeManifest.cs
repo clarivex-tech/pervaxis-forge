@@ -14,6 +14,8 @@ public sealed record ForgeManifest
 
     public required string CloudProvider { get; init; }
 
+    public IReadOnlyList<string> GenesisModules { get; init; } = [];
+
     public DatabaseConfig? Database { get; init; }
 
     public QueueConfig? Queue { get; init; }

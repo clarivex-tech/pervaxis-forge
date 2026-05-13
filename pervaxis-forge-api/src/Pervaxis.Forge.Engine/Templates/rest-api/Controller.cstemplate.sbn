@@ -1,0 +1,44 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.AspNetCore.Mvc;
+using {{ model.names.namespace }}.Models;
+using {{ model.names.namespace }}.Services;
+
+namespace {{ model.names.namespace }}.Controllers;
+
+[ApiController]
+[Route("{{ model.names.api_base_route }}")]
+public sealed class {{ model.names.dot_net_class_name }}Controller : ControllerBase
+{
+    private readonly I{{ model.names.dot_net_class_name }} service;
+
+    public {{ model.names.dot_net_class_name }}Controller(I{{ model.names.dot_net_class_name }} service)
+    {
+        this.service = service;
+    }
+
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof({{ model.names.dot_net_class_name }}Response), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAsync(string id, CancellationToken cancellationToken)
+    {
+        var result = await service.GetAsync(id, cancellationToken);
+        return Ok(result);
+    }
+}

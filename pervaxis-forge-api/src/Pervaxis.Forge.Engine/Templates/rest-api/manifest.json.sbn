@@ -1,1 +1,19 @@
-{{# TODO: implement manifest.json template #}}
+{
+  "product": "{{ model.manifest.product }}",
+  "verticalSlug": "{{ model.manifest.vertical_slug }}",
+  "serviceName": "{{ model.manifest.service_name }}",
+  "serviceType": "RestApi",
+  "componentPrefix": "{{ model.manifest.component_prefix }}",
+  "cloudProvider": "{{ model.cloud_provider }}"{{ if model.selected_modules.size > 0 }},
+  "genesisModules": [{{ for module in model.selected_modules }}
+    "{{ module.name }}"{{ if !for.last }},{{ end }}{{ end }}
+  ]{{ end }}{{ if model.manifest.database != null }},
+  "database": {
+    "engine": "{{ model.manifest.database.engine }}"
+  }{{ end }}{{ if model.manifest.queue != null }},
+  "queue": {
+    "name": "{{ model.manifest.queue.name }}",
+    "provider": "{{ model.manifest.queue.provider }}",
+    "enabled": {{ model.manifest.queue.enabled }}
+  }{{ end }}
+}

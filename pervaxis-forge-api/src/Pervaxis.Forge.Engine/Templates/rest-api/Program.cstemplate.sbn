@@ -1,0 +1,49 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using {{ model.names.namespace }}.Extensions;
+{{ for module in model.selected_modules }}
+using {{ module.package_name }};
+{{ end }}
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
+{{ for module in model.selected_modules }}
+builder.Services.{{ module.di_extension_name }}(
+    builder.Configuration.GetSection("{{ module.name }}"));
+{{ end }}
+
+builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
+
+var app = builder.Build();
+
+if (app.Environment.IsDevelopment() ||
+    builder.Configuration.GetValue<bool>("Forge:EnableSwagger"))
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+app.UseAuthorization();
+app.MapControllers();
+
+app.Run();

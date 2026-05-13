@@ -1,1 +1,14 @@
-{{# TODO: implement appsettings.Development.json template #}}
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Debug",
+      "Microsoft.AspNetCore": "Information"
+    }
+  },
+  "Forge": {
+    "EnableSwagger": true
+  }{{ if model.manifest.database != null }},
+  "ConnectionStrings": {
+    "Default": "Host=localhost;Database={{ model.names.database_schema }}_dev;Username=postgres;Password=postgres"
+  }{{ end }}
+}
