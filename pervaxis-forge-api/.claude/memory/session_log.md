@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-05-13 — Phase 1 gap: thread cloudProvider through Engine
+
+**Branch:** `feature/engine-cloud-provider-gap` → PR targeting `develop`
+**Build:** 4/4, 0 errors, 0 warnings. Tests: 138 (60 Engine + 78 API), all passing.
+
+### What was done
+
+Closed the last Phase 1 gap before Phase 2 can start. `PrintGenerator` previously took an external `templateRoot` string; the blueprint spec requires `GenerateAsync(manifest, cloudProvider)` with the template root resolved internally from `manifest.ServiceType`.
+
+**Files changed (Engine only — no API changes):**
+
+- `TemplateModel` — added `required string CloudProvider`
+- `TemplateModelBuilder.Build()` — added `string cloudProvider` parameter; validates non-whitespace; populates `TemplateModel.CloudProvider`
+- `PrintGenerator.GenerateAsync()` — signature changed from `(manifest, templateRoot)` to `(manifest, cloudProvider)`. Template root now derived via `ResolveTemplateRoot(serviceType)` switch — `RestApi → "Templates/rest-api"`, all others throw `InvalidOperationException`
+- `ScribanTemplateEngine` — added `model.cloud_provider` to Scriban context; added `${{ }}` → placeholder → restore round-trip so GitHub Actions expression syntax in `.sbn` guide files isn't misread as Scriban template syntax; removed erroneous agent-added `github`/`runner` null context objects and silent exception swallow
+- `PrintGeneratorTests` — updated to pass `"AWS"` as cloudProvider; removed templateRoot param
+- `ScribanTemplateEngineTests` — added `CloudProvider = "AWS"` to both `TemplateModel` constructions; first test now also verifies `model.cloud_provider` renders correctly
+
+### Key decisions
+
+- `ResolveTemplateRoot` lives in `PrintGenerator` (not `TemplateLoader`) — it's a generation concern, not a loading concern
+- GitHub Actions `${{ }}` fix is in the renderer, not in individual templates — one fix covers all current and future `.sbn` files that embed CI snippets
+- `manifest.CloudProvider` and `cloudProvider` parameter to `GenerateAsync` are kept separate by design — the manifest's field is what was declared at generation time; the parameter is the vertical's enrolled cloud resolved at call time (they should match; enforcement is the API's responsibility)
+
+### Next
+
+- Phase 2 starts: 17 stub templates to implement in `Templates/rest-api/`
+- Cut branch `feature/phase2-rest-api-templates` from `develop` after this PR merges
+
+---
+
 ## 2026-05-08 — Lambda deploy wiring
 
 **Branch:** `feature/api-lambda-deploy` → PR #15 → `develop` (open)

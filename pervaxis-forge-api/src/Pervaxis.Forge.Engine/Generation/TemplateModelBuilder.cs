@@ -6,14 +6,16 @@ namespace Pervaxis.Forge.Engine.Generation;
 
 public static class TemplateModelBuilder
 {
-    public static TemplateModel Build(ForgeManifest manifest)
+    public static TemplateModel Build(ForgeManifest manifest, string cloudProvider)
     {
         ArgumentNullException.ThrowIfNull(manifest);
+        ArgumentException.ThrowIfNullOrWhiteSpace(cloudProvider);
 
         return new TemplateModel
         {
             Manifest = manifest,
             DerivedNames = BuildDerivedNames(manifest),
+            CloudProvider = cloudProvider,
         };
     }
 
