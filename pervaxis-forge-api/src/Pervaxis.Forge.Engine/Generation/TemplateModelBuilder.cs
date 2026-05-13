@@ -1,4 +1,6 @@
+using System;
 using Pervaxis.Forge.Engine.Manifest;
+using Pervaxis.Forge.Engine.Modules;
 using Pervaxis.Forge.Engine.Naming;
 using Pervaxis.Forge.Engine.Templating;
 
@@ -11,11 +13,22 @@ public static class TemplateModelBuilder
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentException.ThrowIfNullOrWhiteSpace(cloudProvider);
 
+        var selectedModules = manifest.GenesisModules
+            .Select(moduleName => new SelectedModule
+            {
+                Name = moduleName,
+                PackageName = GenesisModules.GetPackageName(moduleName, cloudProvider),
+                DiExtensionName = GenesisModules.GetDiExtensionName(moduleName, cloudProvider),
+            })
+            .ToList();
+
         return new TemplateModel
         {
             Manifest = manifest,
             DerivedNames = BuildDerivedNames(manifest),
             CloudProvider = cloudProvider,
+            SelectedModules = selectedModules,
+            CurrentYear = DateTime.UtcNow.Year.ToString(),
         };
     }
 
@@ -33,6 +46,17 @@ public static class TemplateModelBuilder
             AngularMfeComponentName = mfeNames.AngularMfeComponentName,
             AngularShellRoutePath = shellNames.AngularShellRoutePath,
             AngularMfeRoutePath = mfeNames.AngularMfeRoutePath,
+            ProjectFile = dotNetNames.ProjectFile,
+            TestProjectName = dotNetNames.TestProjectName,
+            SolutionFile = dotNetNames.SolutionFile,
+            ApiBaseRoute = dotNetNames.ApiBaseRoute,
+            DatabaseSchema = dotNetNames.DatabaseSchema,
+            SqsPrefix = dotNetNames.SqsPrefix,
+            CachePrefix = dotNetNames.CachePrefix,
+            DockerImage = dotNetNames.DockerImage,
+            EcsTaskName = dotNetNames.EcsTaskName,
+            FolderName = dotNetNames.FolderName,
+            GitHubRepoPath = dotNetNames.GitHubRepoPath,
         };
     }
 }

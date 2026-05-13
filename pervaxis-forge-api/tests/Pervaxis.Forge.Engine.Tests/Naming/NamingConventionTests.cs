@@ -103,10 +103,17 @@ public class NamingConventionTests
     [Fact]
     public void DeriveDotNetNames_ReturnsExpectedValues()
     {
-        var result = NamingConvention.DeriveDotNetNames("intake-service", "billing-service");
+        var result = NamingConvention.DeriveDotNetNames("clarivolt", "intake-service");
 
-        result.DotNetNamespace.Should().Be("Pervaxis.Forge.IntakeService");
-        result.DotNetClassName.Should().Be("BillingService");
+        result.DotNetNamespace.Should().Be("Pervaxis.Clarivolt.Intake");
+        result.DotNetClassName.Should().Be("IntakeService");
+        result.ApiBaseRoute.Should().Be("/api/v1/intake");
+        result.DatabaseSchema.Should().Be("intake");
+        result.ProjectFile.Should().Be("Pervaxis.Clarivolt.Intake.csproj");
+        result.TestProjectName.Should().Be("Pervaxis.Clarivolt.Intake.Tests");
+        result.DockerImage.Should().Be("clarivolt/intake-service");
+        result.EcsTaskName.Should().Be("clarivolt-intake-service");
+        result.GitHubRepoPath.Should().Be("services/intake-service/");
     }
 
     [Fact]

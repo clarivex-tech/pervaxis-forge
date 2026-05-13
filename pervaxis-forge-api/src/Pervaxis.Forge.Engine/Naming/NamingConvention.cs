@@ -84,17 +84,42 @@ public static class NamingConvention
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
         var strippedName = StripServiceSuffix(name);
-        var pascalName = ToPascalCase(strippedName);
-        var namespaceSuffix = ToPascalCase(product);
+        var firstSegment = GetFirstSegment(name);
+        var productPascal = ToPascalCase(product);
+        var strippedPascal = ToPascalCase(strippedName);
+        var namespaceName = $"Pervaxis.{productPascal}.{strippedPascal}";
+        var className = $"{strippedPascal}Service";
+        var projectFile = $"{namespaceName}.csproj";
+        var testProjectName = $"{namespaceName}.Tests";
+        var solutionFile = $"{namespaceName}.slnx";
+        var apiBaseRoute = $"/api/v1/{firstSegment}";
+        var databaseSchema = firstSegment;
+        var sqsPrefix = $"{product}.{firstSegment}";
+        var cachePrefix = $"{product}:{firstSegment}:";
+        var dockerImage = $"{product}/{name}";
+        var ecsTaskName = $"{product}-{name}";
+        var folderName = name;
+        var gitHubRepoPath = $"services/{name}/";
 
         return new DerivedNames
         {
-            DotNetNamespace = $"Pervaxis.Forge.{namespaceSuffix}",
-            DotNetClassName = $"{pascalName}Service",
+            DotNetNamespace = namespaceName,
+            DotNetClassName = className,
             AngularShellComponentName = string.Empty,
             AngularMfeComponentName = string.Empty,
             AngularShellRoutePath = string.Empty,
             AngularMfeRoutePath = string.Empty,
+            ProjectFile = projectFile,
+            TestProjectName = testProjectName,
+            SolutionFile = solutionFile,
+            ApiBaseRoute = apiBaseRoute,
+            DatabaseSchema = databaseSchema,
+            SqsPrefix = sqsPrefix,
+            CachePrefix = cachePrefix,
+            DockerImage = dockerImage,
+            EcsTaskName = ecsTaskName,
+            FolderName = folderName,
+            GitHubRepoPath = gitHubRepoPath,
         };
     }
 
@@ -114,6 +139,17 @@ public static class NamingConvention
             AngularMfeComponentName = string.Empty,
             AngularShellRoutePath = route,
             AngularMfeRoutePath = string.Empty,
+            ProjectFile = string.Empty,
+            TestProjectName = string.Empty,
+            SolutionFile = string.Empty,
+            ApiBaseRoute = string.Empty,
+            DatabaseSchema = string.Empty,
+            SqsPrefix = string.Empty,
+            CachePrefix = string.Empty,
+            DockerImage = string.Empty,
+            EcsTaskName = string.Empty,
+            FolderName = string.Empty,
+            GitHubRepoPath = string.Empty,
         };
     }
 
@@ -133,6 +169,17 @@ public static class NamingConvention
             AngularMfeComponentName = $"{ToPascalCase(product)}{pascalName}Component",
             AngularShellRoutePath = string.Empty,
             AngularMfeRoutePath = route,
+            ProjectFile = string.Empty,
+            TestProjectName = string.Empty,
+            SolutionFile = string.Empty,
+            ApiBaseRoute = string.Empty,
+            DatabaseSchema = string.Empty,
+            SqsPrefix = string.Empty,
+            CachePrefix = string.Empty,
+            DockerImage = string.Empty,
+            EcsTaskName = string.Empty,
+            FolderName = string.Empty,
+            GitHubRepoPath = string.Empty,
         };
     }
 }

@@ -18,14 +18,16 @@ public sealed class FileGenerator
         TemplateModel model,
         CancellationToken cancellationToken = default)
     {
-        var suffixes = templateLoader.GetTemplateSuffixes(templateRoot);
-        var files = new List<GeneratedFile>(suffixes.Count);
+        var resourceNames = templateLoader.GetTemplateSuffixes(templateRoot);
+        var files = new List<GeneratedFile>(resourceNames.Count);
 
-        foreach (var suffix in suffixes)
+        foreach (var resourceName in resourceNames)
         {
-            var template = await templateLoader.LoadAsync(suffix, cancellationToken);
+            var template = await templateLoader.LoadAsync(resourceName, cancellationToken);
             var rendered = templateEngine.Render(template, model);
-            files.Add(new GeneratedFile(suffix[..^4].Replace('\\', '/'), rendered));
+            var relativeSuffix = TemplateLoader.GetRelativeSuffix(resourceName, templateRoot);
+            var outputPath = relativeSuffix[..^4].Replace('\\', '/').Replace(".cstemplate", ".cs");
+            files.Add(new GeneratedFile(outputPath, rendered));
         }
 
         return files;

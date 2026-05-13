@@ -7,6 +7,10 @@
     <PackageReference Include="Scriban" Version="7.*" />
   </ItemGroup>
   <ItemGroup>
+    <!-- C# template files use .cstemplate.sbn (not .cs.sbn) so the SDK's
+         EmbeddedResourceUseDependentUponConvention doesn't drop them for
+         a missing sibling .cs file. FileGenerator maps .cstemplate → .cs
+         in the ZIP output path. -->
     <EmbeddedResource Include="Templates\**\*.sbn" />
   </ItemGroup>
 </Project>

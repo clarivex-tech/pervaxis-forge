@@ -30,6 +30,11 @@ public sealed class TemplateLoader
         return await reader.ReadToEndAsync(cancellationToken);
     }
 
+    /// <summary>Returns the full embedded-resource name for every template under <paramref name="templateRoot"/>.</summary>
+    /// <remarks>
+    /// Returning the full resource name (not just the suffix) ensures that <see cref="LoadAsync"/> never
+    /// accidentally matches a same-named template in a different root (e.g. cdk/Program vs rest-api/Program).
+    /// </remarks>
     public IReadOnlyCollection<string> GetTemplateSuffixes(string templateRoot)
     {
         if (string.IsNullOrWhiteSpace(templateRoot))
@@ -44,15 +49,27 @@ public sealed class TemplateLoader
         var resourceNames = assembly.GetManifestResourceNames();
 
         return resourceNames
-            .Select(name => new
-            {
-                Name = name,
-                Prefix = prefixes.FirstOrDefault(prefix => name.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0),
-            })
-            .Where(item => item.Prefix is not null)
-            .Select(item => item.Name[(item.Name.IndexOf(item.Prefix!, StringComparison.OrdinalIgnoreCase) + item.Prefix!.Length)..])
-            .Where(suffix => suffix.EndsWith(".sbn", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(suffix => suffix, StringComparer.OrdinalIgnoreCase)
+            .Where(name => name.EndsWith(".sbn", StringComparison.OrdinalIgnoreCase)
+                && prefixes.Any(prefix => name.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0))
+            .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
+    }
+
+    /// <summary>Returns the path-like suffix of a full resource name relative to the given root prefix.</summary>
+    internal static string GetRelativeSuffix(string fullResourceName, string templateRoot)
+    {
+        var root = templateRoot.Trim().Replace('\\', '.').Replace('/', '.');
+        var prefixes = new[]
+        {
+            $"{root}.",
+            $"{root.Replace('-', '_')}.",
+        };
+        foreach (var prefix in prefixes)
+        {
+            var idx = fullResourceName.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
+                return fullResourceName[(idx + prefix.Length)..];
+        }
+        return fullResourceName;
     }
 }
