@@ -33,12 +33,14 @@ public class ScribanTemplateEngineTests
                 AngularShellRoutePath = "intake",
                 AngularMfeRoutePath = "intake",
             },
+            CloudProvider = "AWS",
         };
 
-        var result = engine.Render("Product: {{ Product }}\nService: {{ DotNetClassName }}", model);
+        var result = engine.Render("Product: {{ Product }}\nService: {{ DotNetClassName }}\nCloud: {{ model.cloud_provider }}", model);
 
         result.Should().Contain("Product: Pervaxis Forge");
         result.Should().Contain("Service: IntakeService");
+        result.Should().Contain("Cloud: AWS");
     }
 
     [Fact]
@@ -64,6 +66,7 @@ public class ScribanTemplateEngineTests
                 AngularShellRoutePath = "intake",
                 AngularMfeRoutePath = "intake",
             },
+            CloudProvider = "AWS",
         };
 
         Action action = () => engine.Render("{{ 1 + }}", model);

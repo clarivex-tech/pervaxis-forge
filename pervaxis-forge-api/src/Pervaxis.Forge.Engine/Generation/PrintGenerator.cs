@@ -15,17 +15,25 @@ public sealed class PrintGenerator
         this.zipPackager = zipPackager ?? new ZipPackager();
     }
 
-    public async Task<byte[]> GenerateAsync(ForgeManifest manifest, string templateRoot, CancellationToken cancellationToken = default)
+    public async Task<byte[]> GenerateAsync(ForgeManifest manifest, string cloudProvider, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(manifest);
+        ArgumentException.ThrowIfNullOrWhiteSpace(cloudProvider);
 
         var validator = new ManifestValidator();
         var validationResult = validator.Validate(manifest);
         if (!validationResult.IsValid)
             throw new InvalidOperationException(string.Join("; ", validationResult.Errors));
 
-        var model = TemplateModelBuilder.Build(manifest);
+        var templateRoot = ResolveTemplateRoot(manifest.ServiceType);
+        var model = TemplateModelBuilder.Build(manifest, cloudProvider);
         var files = await fileGenerator.GenerateAsync(templateRoot, model, cancellationToken);
         return zipPackager.Package(files);
     }
+
+    private static string ResolveTemplateRoot(ServiceType serviceType) => serviceType switch
+    {
+        ServiceType.RestApi => "Templates/rest-api",
+        _ => throw new InvalidOperationException($"Unsupported service type: {serviceType}"),
+    };
 }

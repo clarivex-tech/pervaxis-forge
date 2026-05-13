@@ -11,18 +11,15 @@ public class PrintGeneratorTests
     private readonly PrintGenerator generator = new();
 
     [Fact]
-    public async Task GenerateAsync_ReturnsZipArchiveForTemplateRoot()
+    public async Task GenerateAsync_ReturnsNonEmptyZipForRestApiManifest()
     {
         var manifest = CreateManifest();
 
-        var zipBytes = await generator.GenerateAsync(manifest, "Templates/minimal");
+        var zipBytes = await generator.GenerateAsync(manifest, "AWS");
 
         using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
-        archive.Entries.Should().ContainSingle();
-        archive.GetEntry("hello")!.Should().NotBeNull();
-        using var reader = new StreamReader(archive.GetEntry("hello")!.Open());
-        var content = await reader.ReadToEndAsync();
-        content.Should().Contain("Pervaxis Forge");
+        archive.Entries.Should().NotBeEmpty();
+        archive.Entries.Should().Contain(e => e.FullName == "manifest.json");
     }
 
     [Fact]
@@ -30,7 +27,7 @@ public class PrintGeneratorTests
     {
         var manifest = CreateManifest() with { ServiceName = "billing-api" };
 
-        Func<Task> action = () => generator.GenerateAsync(manifest, "Templates/rest-api");
+        Func<Task> action = () => generator.GenerateAsync(manifest, "AWS");
 
         await action.Should().ThrowAsync<InvalidOperationException>();
     }
