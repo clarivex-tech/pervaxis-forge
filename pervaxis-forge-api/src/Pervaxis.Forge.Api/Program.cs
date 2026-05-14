@@ -16,8 +16,10 @@
  ************************************************************************
  */
 
+using Amazon.AspNetCore.DataProtection.SSM;
 using Amazon.Extensions.NETCore.Setup;
 using Amazon.SecurityToken;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Octokit;
@@ -36,7 +38,13 @@ builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 builder.Services.AddDbContext<ForgeDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ForgeDb")));
 
-builder.Services.AddDataProtection();
+var dataProtection = builder.Services.AddDataProtection()
+    .SetApplicationName("pervaxis-forge-api");
+
+if (!builder.Environment.IsDevelopment())
+{
+    dataProtection.PersistKeysToAWSSystemsManager("/pervaxis-forge/data-protection");
+}
 
 builder.Services.AddScoped<IVerticalService, VerticalService>();
 
