@@ -52,6 +52,12 @@ internal static class GenerationEndpoints
             .Produces<ValidationPreviewResult>(StatusCodes.Status422UnprocessableEntity)
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        group.MapGet("/audit/{slug}", GetAuditLog)
+            .WithName("GetGenerationAuditLog")
+            .WithSummary("Get generation history for an enrolled vertical")
+            .Produces<IReadOnlyList<GenerationAuditEntry>>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -110,5 +116,11 @@ internal static class GenerationEndpoints
         {
             return Results.NotFound(new { errors = new[] { ex.Message } });
         }
+    }
+
+    private static async Task<IResult> GetAuditLog(string slug, IGenerationService generationService, CancellationToken ct = default)
+    {
+        var entries = await generationService.GetAuditLogAsync(slug, ct);
+        return Results.Ok(entries);
     }
 }

@@ -16,15 +16,17 @@
  ************************************************************************
  */
 
-using Pervaxis.Forge.Api.Models.Requests;
-using Pervaxis.Forge.Api.Models.Responses;
+using System.Text.Json;
 
-namespace Pervaxis.Forge.Api.Services;
+namespace Pervaxis.Forge.Api.Models.Responses;
 
-public interface IGenerationService
+public record GenerationAuditEntry
 {
-    Task<(byte[] Zip, GenerationResult Result)> GenerateAsync(GenerationRequest request, CancellationToken ct = default);
-    Task<(byte[] Zip, BatchGenerationResult Result)> GenerateBatchAsync(BatchGenerationRequest request, CancellationToken ct = default);
-    Task<ValidationPreviewResult> ValidateAsync(GenerationRequest request, CancellationToken ct = default);
-    Task<IReadOnlyList<GenerationAuditEntry>> GetAuditLogAsync(string verticalSlug, CancellationToken ct = default);
+    public required Guid Id { get; init; }
+    public required int ServiceCount { get; init; }
+    public required bool GitHubReposCreated { get; init; }
+    public required bool InfrastructureDeployed { get; init; }
+    public required string CreatedBy { get; init; }
+    public required DateTimeOffset CreatedAt { get; init; }
+    public required JsonElement Manifest { get; init; }
 }
