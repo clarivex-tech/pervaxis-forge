@@ -89,7 +89,7 @@ Week 4 (May 27-31):  Phase 2 (wrap) + Phase 3 — Infrastructure + GitHub
 | **M0: Vertical Enrollment API Live** | May 10, 2026 | ✅ Complete — Deployed to Lambda (ACCP) May 8 | Enroll endpoint, DB schema, AWS + GitHub validation, Lambda deploy pipeline |
 | **M1: Engine Core Complete** | May 17, 2026 | ✅ Complete — Engine core implemented and verified May 13 | Manifest parsing, naming derivation, template engine, ZIP |
 | **M2: REST API Templates Complete** | May 24, 2026 | ✅ Complete — Templates implemented and verified May 13 | 18 templates, generated service compiles + tests pass |
-| **M3: Infrastructure + GitHub Complete** | May 31, 2026 | 🔴 Not Started | AWS resources deployed, GitHub repos created |
+| **M3: Infrastructure + GitHub Complete** | May 31, 2026 | 🟡 In Progress — GitHub + generation endpoints complete May 14; §5.1/§5.2 moved to Phase 4 | GitHub repos created, generation endpoints live |
 
 ### 1.3 Critical Path
 
@@ -476,14 +476,13 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 5.3 GitHub Integration
 
-- [ ] Add Octokit + LibGit2Sharp packages
-- [ ] Implement `GitHubService`:
+- [x] Add Octokit + LibGit2Sharp packages
+- [x] Implement `GitHubService`:
   - `CreateRepositoryAsync()` — uses vertical's enrolled GitHub token + org
   - `ConfigureBranchProtectionAsync()`
-  - `ConfigureSecretsAsync()` — AWS_ACCOUNT_ID, AWS_ROLE_ARN, etc.
   - `PushInitialCommitAsync()` — extract ZIP, init repo, commit, push
-- [ ] Wire GitHub service into `POST /api/v1/generate` and batch endpoint
-- [ ] Test: create repo → configure protection → push scaffold
+- [x] Wire GitHub service into `POST /api/v1/generate` (opt-in via `CreateGitHubRepo` flag)
+- [ ] Test: create repo → configure protection → push scaffold (smoke test against real org)
 
 **Owner:** Engineer B | **Effort:** 10 hours
 
@@ -491,10 +490,10 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 5.4 Generation Endpoints Polish
 
-- [ ] `POST /api/v1/generate` — resolve vertical, call PrintGenerator, optionally deploy AWS + GitHub
-- [ ] `POST /api/v1/generate/batch` — loop services, collect per-service results
-- [ ] `POST /api/v1/validate` — manifest validation + derived names preview
-- [ ] Audit log every generation to `generation_logs`
+- [x] `POST /api/v1/generate` — resolve vertical, call PrintGenerator, optionally create GitHub repo
+- [x] `POST /api/v1/generate/batch` — loop services, collect per-service results, combined ZIP
+- [x] `POST /api/v1/generate/validate` — manifest validation + derived names preview
+- [x] Audit log every generation to `generation_logs`
 
 **Owner:** Engineer A | **Effort:** 6 hours
 
