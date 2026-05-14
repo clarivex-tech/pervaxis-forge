@@ -42,12 +42,16 @@ public sealed class TemplateLoader
         if (string.IsNullOrWhiteSpace(templateRoot))
             throw new ArgumentException("Template root must be provided.", nameof(templateRoot));
 
-        var root = templateRoot.Trim().Replace('/', '\\');
+        var root = templateRoot.Trim().Replace('\\', '/');
         var resourceNames = assembly.GetManifestResourceNames();
 
         return resourceNames
-            .Where(name => name.EndsWith(".sbn", StringComparison.OrdinalIgnoreCase)
-                && name.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase))
+            .Where(name =>
+            {
+                var normalized = name.Replace('\\', '/');
+                return normalized.EndsWith(".sbn", StringComparison.OrdinalIgnoreCase)
+                    && normalized.StartsWith(root + "/", StringComparison.OrdinalIgnoreCase);
+            })
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
@@ -55,10 +59,11 @@ public sealed class TemplateLoader
     /// <summary>Returns the relative output path for a full resource name by stripping the template root prefix and the trailing <c>.sbn</c>.</summary>
     internal static string GetRelativeSuffix(string fullResourceName, string templateRoot)
     {
-        var root = templateRoot.Trim().Replace('/', '\\');
-        var prefix = root + "\\";
-        if (fullResourceName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            return fullResourceName[prefix.Length..];
+        var root = templateRoot.Trim().Replace('\\', '/');
+        var normalizedFull = fullResourceName.Replace('\\', '/');
+        var prefix = root + "/";
+        if (normalizedFull.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return normalizedFull[prefix.Length..];
         return fullResourceName;
     }
 }
