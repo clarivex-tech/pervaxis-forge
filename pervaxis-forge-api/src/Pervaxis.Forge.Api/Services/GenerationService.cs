@@ -216,6 +216,27 @@ public sealed class GenerationService : IGenerationService
         };
     }
 
+    public async Task<IReadOnlyList<GenerationAuditEntry>> GetAuditLogAsync(string verticalSlug, CancellationToken ct = default)
+    {
+        var logs = await db.GenerationLogs
+            .Where(log => log.Vertical.Slug == verticalSlug && log.Vertical.IsActive)
+            .OrderByDescending(log => log.CreatedAt)
+            .ToListAsync(ct);
+
+        var entries = logs.Select(log => new GenerationAuditEntry
+        {
+            Id = log.Id,
+            ServiceCount = log.ServiceCount,
+            GitHubReposCreated = log.GitHubReposCreated,
+            InfrastructureDeployed = log.InfrastructureDeployed,
+            CreatedBy = log.CreatedBy,
+            CreatedAt = new DateTimeOffset(log.CreatedAt, TimeSpan.Zero),
+            Manifest = log.Manifest.RootElement
+        }).ToList();
+
+        return entries.AsReadOnly();
+    }
+
     private static ForgeManifest BuildManifest(GenerationRequest request, VerticalResponse vertical)
     {
         var manifest = new ForgeManifest
