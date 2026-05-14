@@ -18,7 +18,6 @@
 
 using System.IO.Compression;
 using System.Text.Json;
-using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Data.Entities;
@@ -37,20 +36,17 @@ public sealed class GenerationService : IGenerationService
     private readonly IVerticalService verticalService;
     private readonly PrintGenerator printGenerator;
     private readonly IGitHubService gitHubService;
-    private readonly IDataProtectionProvider dataProtectionProvider;
 
     public GenerationService(
         ForgeDbContext db,
         IVerticalService verticalService,
         PrintGenerator printGenerator,
-        IGitHubService gitHubService,
-        IDataProtectionProvider dataProtectionProvider)
+        IGitHubService gitHubService)
     {
         this.db = db;
         this.verticalService = verticalService;
         this.printGenerator = printGenerator;
         this.gitHubService = gitHubService;
-        this.dataProtectionProvider = dataProtectionProvider;
     }
 
     public async Task<(byte[] Zip, GenerationResult Result)> GenerateAsync(GenerationRequest request, CancellationToken ct = default)
@@ -71,8 +67,7 @@ public sealed class GenerationService : IGenerationService
 
         if (request.CreateGitHubRepo && verticalEntity?.SourceControlConfig != null)
         {
-            var protector = dataProtectionProvider.CreateProtector("VerticalSourceControl");
-            var plainToken = protector.Unprotect(verticalEntity.SourceControlConfig.AccessToken!);
+            var plainToken = verticalEntity.SourceControlConfig.AccessToken!;
 
             gitHubRepoUrl = await gitHubService.CreateRepositoryAsync(
                 plainToken,
