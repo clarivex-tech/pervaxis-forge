@@ -266,7 +266,7 @@ export class VerticalDashboardComponent {
 	}
 
 	goToEnrollment(): void {
-		void this.router.navigate(['/enroll']);
+		void this.router.navigate(['/verticals', 'enroll']);
 	}
 
 	openVertical(slug: string): void {

@@ -53,9 +53,8 @@ import { MatStepperModule } from '@angular/material/stepper';
 			<mat-form-field appearance="outline">
 				<mat-label>Visibility</mat-label>
 				<mat-select formControlName="defaultVisibility">
-					<mat-option value="private">private</mat-option>
-					<mat-option value="internal">internal</mat-option>
-					<mat-option value="public">public</mat-option>
+					<mat-option value="Private">Private</mat-option>
+					<mat-option value="Public">Public</mat-option>
 				</mat-select>
 			</mat-form-field>
 			<mat-checkbox formControlName="defaultBranchProtection"

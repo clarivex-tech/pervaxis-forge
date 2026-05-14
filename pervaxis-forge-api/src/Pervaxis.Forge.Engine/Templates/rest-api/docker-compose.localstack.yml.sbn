@@ -1,1 +1,27 @@
-{{# TODO: implement docker-compose.localstack.yml template #}}
+version: "3.8"
+
+services:
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES={{ model.selected_modules | array.map "name" | array.join "," | string.downcase }}{{ if model.manifest.database != null }}
+      - DEFAULT_REGION=us-east-1{{ end }}
+    volumes:
+      - localstack_data:/var/lib/localstack
+{{ if model.manifest.database != null }}
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB={{ model.names.database_schema }}_dev
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+{{ end }}
+volumes:{{ if model.manifest.database != null }}
+  postgres_data:{{ end }}
+  localstack_data:

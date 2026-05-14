@@ -7,6 +7,13 @@
     <PackageReference Include="Scriban" Version="7.*" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="Templates\**\*.sbn" />
+    <!-- C# template files use .cstemplate.sbn (not .cs.sbn) so the SDK's
+         EmbeddedResourceUseDependentUponConvention doesn't drop them for
+         a missing sibling .cs file. FileGenerator maps .cstemplate → .cs
+         in the ZIP output path.
+         LogicalName="%(Identity)" preserves the relative path as the resource name
+         so TemplateLoader can reconstruct exact output paths (including nested
+         .claude/ and .github/ directories) without dot-ambiguity. -->
+    <EmbeddedResource Include="Templates\**\*.sbn" LogicalName="%(Identity)" />
   </ItemGroup>
 </Project>

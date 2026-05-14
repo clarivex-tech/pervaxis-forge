@@ -76,7 +76,7 @@ export const initialEnrollmentState: EnrollmentState = {
 		platform: 'GitHub',
 		gitHubOrg: '',
 		accessToken: '',
-		defaultVisibility: 'private',
+		defaultVisibility: 'Private',
 		defaultBranchProtection: true,
 	},
 	techDefaults: {

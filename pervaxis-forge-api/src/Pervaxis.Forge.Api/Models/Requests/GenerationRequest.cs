@@ -30,4 +30,5 @@ public record GenerationRequest
     public GenerationDatabaseConfig? Database { get; init; }
     public List<GenerationQueueConfig> Queues { get; init; } = [];
     public GenerationMetadata Metadata { get; init; } = new();
+    public bool CreateGitHubRepo { get; init; } = false;
 }

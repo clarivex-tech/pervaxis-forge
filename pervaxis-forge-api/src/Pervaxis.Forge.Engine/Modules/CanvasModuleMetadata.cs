@@ -1,3 +1,8 @@
 namespace Pervaxis.Forge.Engine.Modules;
 
-// TODO: implement CanvasModuleMetadata
+public sealed record CanvasModuleMetadata
+{
+    public required string Id { get; init; }
+
+    public required string DisplayName { get; init; }
+}

@@ -99,4 +99,38 @@ public class NamingConventionTests
         action.Should().Throw<ArgumentException>()
             .WithParameterName("registeredAbbreviation");
     }
+
+    [Fact]
+    public void DeriveDotNetNames_ReturnsExpectedValues()
+    {
+        var result = NamingConvention.DeriveDotNetNames("clarivolt", "intake-service");
+
+        result.DotNetNamespace.Should().Be("Pervaxis.Clarivolt.Intake");
+        result.DotNetClassName.Should().Be("IntakeService");
+        result.ApiBaseRoute.Should().Be("/api/v1/intake");
+        result.DatabaseSchema.Should().Be("intake");
+        result.ProjectFile.Should().Be("Pervaxis.Clarivolt.Intake.csproj");
+        result.TestProjectName.Should().Be("Pervaxis.Clarivolt.Intake.Tests");
+        result.DockerImage.Should().Be("clarivolt/intake-service");
+        result.EcsTaskName.Should().Be("clarivolt-intake-service");
+        result.GitHubRepoPath.Should().Be("services/intake-service/");
+    }
+
+    [Fact]
+    public void DeriveAngularShellNames_ReturnsExpectedValues()
+    {
+        var result = NamingConvention.DeriveAngularShellNames("intake-service", "billing-service");
+
+        result.AngularShellComponentName.Should().Be("IntakeServiceBillingServiceShellComponent");
+        result.AngularShellRoutePath.Should().Be("billing");
+    }
+
+    [Fact]
+    public void DeriveAngularMfeNames_ReturnsExpectedValues()
+    {
+        var result = NamingConvention.DeriveAngularMfeNames("intake-service", "billing-service");
+
+        result.AngularMfeComponentName.Should().Be("IntakeServiceBillingServiceComponent");
+        result.AngularMfeRoutePath.Should().Be("billing");
+    }
 }

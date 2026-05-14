@@ -1,3 +1,10 @@
 namespace Pervaxis.Forge.Engine.Manifest;
 
-// TODO: implement AngularConfig
+public sealed record AngularConfig
+{
+    public string? WorkspaceName { get; init; }
+
+    public string? ProjectName { get; init; }
+
+    public string? RoutePrefix { get; init; }
+}

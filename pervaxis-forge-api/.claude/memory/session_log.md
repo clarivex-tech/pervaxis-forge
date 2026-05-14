@@ -8,6 +8,80 @@
 
 ---
 
+## 2026-05-14 — Phase 3: generation endpoints + GitHub integration
+
+**Branch:** `feature/phase3-generation-github` → PR targeting `develop`
+**Build:** 4/4, 0 errors, 0 warnings. Commit: `5497508`.
+
+### What was done
+
+Implemented Phase 3 (§5.3 + §5.4) — the generation endpoints and GitHub integration. Phase 3 scope was deliberately trimmed: §5.1 (Terraform/CDK templates) and §5.2 (direct AWS SDK deployment) both moved to Phase 4 — they belong to the full infrastructure control plane story, not V1.
+
+**Files created/modified (Api only — Engine unchanged):**
+
+- `IGenerationService` + `GenerationService` — three methods: `GenerateAsync`, `GenerateBatchAsync`, `ValidateAsync`. Resolves vertical via `IVerticalService`, builds `ForgeManifest`, calls `PrintGenerator.GenerateAsync`, writes `GenerationLog` (JSONB manifest, service count, flags). Batch wraps each service ZIP as a named entry in a combined ZIP.
+- `IGitHubService` + `GitHubService` — `CreateRepositoryAsync` (Octokit), `ConfigureBranchProtectionAsync` (1 PR review required on `main`), `PushInitialCommitAsync` (LibGit2Sharp: extract ZIP → init → stage → commit → push with PAT auth).
+- `GenerationEndpoints` — `POST /api/v1/generate` (ZIP download + `X-Generation-*` headers), `POST /api/v1/generate/batch`, `POST /api/v1/generate/validate` (200 OK or 422). 404/422 handled inline.
+- `ValidationPreviewResult` — returns `IsValid`, `Errors`, `ServiceName`, `Namespace`, `ProjectName` (derived via `NamingConvention.DeriveDotNetNames`).
+- `GenerationRequest` — added `bool CreateGitHubRepo` (default `false`) to gate repo creation per call.
+- `Program.cs` — added `AddDataProtection()`, registered `PrintGenerator`, `IGenerationService`, `IGitHubService`.
+
+### Key decisions
+
+- GitHub repo creation is opt-in per request (`CreateGitHubRepo = true`) — not forced on every generate call. Keeps the endpoint useful for download-only workflows.
+- Token decryption happens in `GenerationService` via `IDataProtectionProvider` with purpose `"VerticalSourceControl"` — matches the encryption purpose used by `VerticalService`.
+- `GitHubService` takes plain `accessToken` on each method — the service itself is stateless; no token stored on the instance.
+- `PushInitialCommitAsync` uses a temp directory with `Guid` name, always cleaned in `finally`.
+- Batch generation silently skips services that fail manifest validation (`InvalidOperationException`); the failed count is reported in the response headers.
+
+### Phase 3 scope (revised)
+
+| Section | Status |
+|---|---|
+| §5.3 GitHub integration | ✅ Complete |
+| §5.4 Generation endpoints | ✅ Complete |
+| §5.1 Terraform/CDK templates | ➡ Moved to Phase 4 |
+| §5.2 Direct AWS SDK deployment | ➡ Moved to Phase 4 |
+
+### Next
+
+- Open PR: `feature/phase3-generation-github` → `develop`
+- After merge: update `FORGE_BLUEPRINT_BFF.md` M3 milestone status
+- Phase 3 quality gate items to verify before merge (see §8 of blueprint): GitHub repo creation smoke test against real org, audit log written on generation
+
+---
+
+## 2026-05-13 — Phase 1 gap: thread cloudProvider through Engine
+
+**Branch:** `feature/engine-cloud-provider-gap` → PR targeting `develop`
+**Build:** 4/4, 0 errors, 0 warnings. Tests: 138 (60 Engine + 78 API), all passing.
+
+### What was done
+
+Closed the last Phase 1 gap before Phase 2 can start. `PrintGenerator` previously took an external `templateRoot` string; the blueprint spec requires `GenerateAsync(manifest, cloudProvider)` with the template root resolved internally from `manifest.ServiceType`.
+
+**Files changed (Engine only — no API changes):**
+
+- `TemplateModel` — added `required string CloudProvider`
+- `TemplateModelBuilder.Build()` — added `string cloudProvider` parameter; validates non-whitespace; populates `TemplateModel.CloudProvider`
+- `PrintGenerator.GenerateAsync()` — signature changed from `(manifest, templateRoot)` to `(manifest, cloudProvider)`. Template root now derived via `ResolveTemplateRoot(serviceType)` switch — `RestApi → "Templates/rest-api"`, all others throw `InvalidOperationException`
+- `ScribanTemplateEngine` — added `model.cloud_provider` to Scriban context; added `${{ }}` → placeholder → restore round-trip so GitHub Actions expression syntax in `.sbn` guide files isn't misread as Scriban template syntax; removed erroneous agent-added `github`/`runner` null context objects and silent exception swallow
+- `PrintGeneratorTests` — updated to pass `"AWS"` as cloudProvider; removed templateRoot param
+- `ScribanTemplateEngineTests` — added `CloudProvider = "AWS"` to both `TemplateModel` constructions; first test now also verifies `model.cloud_provider` renders correctly
+
+### Key decisions
+
+- `ResolveTemplateRoot` lives in `PrintGenerator` (not `TemplateLoader`) — it's a generation concern, not a loading concern
+- GitHub Actions `${{ }}` fix is in the renderer, not in individual templates — one fix covers all current and future `.sbn` files that embed CI snippets
+- `manifest.CloudProvider` and `cloudProvider` parameter to `GenerateAsync` are kept separate by design — the manifest's field is what was declared at generation time; the parameter is the vertical's enrolled cloud resolved at call time (they should match; enforcement is the API's responsibility)
+
+### Next
+
+- Phase 2 starts: 17 stub templates to implement in `Templates/rest-api/`
+- Cut branch `feature/phase2-rest-api-templates` from `develop` after this PR merges
+
+---
+
 ## 2026-05-08 — Lambda deploy wiring
 
 **Branch:** `feature/api-lambda-deploy` → PR #15 → `develop` (open)
