@@ -61,9 +61,10 @@ Leverage maximum coding, analysis, and bug-fixing work to **Codex**. Claude CLI 
 3. [Phase 1: Core Engine](#3-phase-1-core-engine)
 4. [Phase 2: REST API Templates](#4-phase-2-rest-api-templates)
 5. [Phase 3: Infrastructure Provisioning & GitHub Integration](#5-phase-3-infrastructure-provisioning--github-integration)
-6. [Phase 3.5: GraphQL & gRPC Template Sets](#6-phase-35-graphql--grpc-template-sets-v15-roadmap)
-7. [Phase 4 (V2 Roadmap): Forge-Managed Infrastructure](#7-phase-4-v2-roadmap-forge-managed-infrastructure)
-7. [Dependencies & Blockers](#7-dependencies--blockers)
+6. [Phase 3.5: Angular Shell & MFE Wiring](#6-phase-35-angular-shell--mfe-wiring-next-up)
+7. [Phase 3.6: GraphQL & gRPC Template Sets](#7-phase-36-graphql--grpc-template-sets-v15-roadmap)
+8. [Phase 4 (V2 Roadmap): Forge-Managed Infrastructure](#8-phase-4-v2-roadmap-forge-managed-infrastructure)
+9. [Dependencies & Blockers](#9-dependencies--blockers)
 8. [Quality Gates](#8-quality-gates)
 9. [Testing Strategy](#9-testing-strategy)
 10. [Risk Mitigation](#10-risk-mitigation)
@@ -510,7 +511,61 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-## 6. Phase 3.5: GraphQL & gRPC Template Sets (V1.5 Roadmap)
+## 6. Phase 3.5: Angular Shell & MFE Wiring (Next Up)
+
+**Status:** Ready to implement — templates already built, Engine wiring missing  
+**Goal:** Enable `POST /api/v1/generate` to produce Angular Shell and Angular MFE scaffolds  
+**Estimated effort:** 4 hours (wiring only — templates exist)
+
+> Templates for both Angular Shell (`Templates/angular-shell/`) and Angular MFE (`Templates/angular-microfrontend/`) are already embedded in the Engine including full `.claude/` guides and skills. What's missing is the Engine wiring — `ServiceType` enum values and `ResolveTemplateRoot` mapping.
+
+---
+
+### 6.1 Engine Wiring
+
+- [ ] Add `AngularShell = 5` and `AngularMfe = 6` to `ServiceType` enum
+- [ ] Add to `PrintGenerator.ResolveTemplateRoot`:
+  - `ServiceType.AngularShell => "Templates/angular-shell"`
+  - `ServiceType.AngularMfe => "Templates/angular-microfrontend"`
+- [ ] Wire `DeriveAngularShellNames` and `DeriveAngularMfeNames` in `TemplateModelBuilder.Build` — set `model.derived_names` based on service type
+- [ ] Expose `AngularConfig` fields (`standalone`, `canvasModules`) in `TemplateModel` so templates can conditionally render Canvas module imports
+
+**Owner:** Engineer B | **Effort:** 2 hours
+
+---
+
+### 6.2 Manifest Validation
+
+- [ ] Add Angular-specific rules to `ManifestValidator`:
+  - `AngularShell` — name must end `-shell`
+  - `AngularMfe` — name must not end `-shell` or `-service`
+- [ ] Write 10+ tests covering valid/invalid names for both types
+
+**Owner:** Engineer B | **Effort:** 1 hour
+
+---
+
+### 6.3 API Layer
+
+- [ ] `GenerationRequest.Type` already accepts any string — no change needed
+- [ ] Update `GenerationService.BuildManifest` to map `ServiceType.AngularShell` / `ServiceType.AngularMfe` correctly (currently hardcodes `ServiceType.RestApi`)
+- [ ] Update `POST /api/v1/generate/validate` derived names preview — call `DeriveAngularShellNames` or `DeriveAngularMfeNames` based on type
+
+**Owner:** Engineer A | **Effort:** 1 hour
+
+---
+
+### 6.4 Phase 3.5 Deliverables
+
+- `type: "AngularShell"` and `type: "AngularMfe"` accepted by `POST /api/v1/generate`
+- Generated Angular Shell ZIP contains `angular.json`, `app.config.ts`, `app.routes.ts`, `package.json`, `tsconfig.json`, `.claude/CLAUDE.md`
+- Generated Angular MFE ZIP contains `component.ts`, `module.ts`, `routing.module.ts`, `api.service.ts`, `.claude/CLAUDE.md`
+- `POST /api/v1/generate/validate` returns correct derived names for Angular types
+- 10+ new Engine tests
+
+---
+
+## 7. Phase 3.6: GraphQL & gRPC Template Sets (V1.5 Roadmap)
 
 **Status:** Planned — after Phase 3 is fully validated  
 **Goal:** Extend the Engine with two new service types so Forge can generate GraphQL and gRPC scaffolds in addition to REST API
@@ -519,7 +574,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 6.1 GraphQL Template Set (HotChocolate)
+### 7.1 GraphQL Template Set (HotChocolate)
 
 **New `ServiceType`: `GraphQL`**
 
@@ -544,7 +599,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 6.2 gRPC Template Set
+### 7.2 gRPC Template Set
 
 **New `ServiceType`: `Grpc`**
 
@@ -568,7 +623,7 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-### 6.3 Phase 3.5 Deliverables
+### 7.3 Phase 3.6 Deliverables
 
 - `ServiceType.GraphQL` and `ServiceType.Grpc` accepted by `POST /api/v1/generate`
 - Generated GraphQL service: `dotnet build` ✓, HotChocolate endpoint responds
