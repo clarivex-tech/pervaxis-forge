@@ -63,6 +63,8 @@ internal static class GenerationEndpoints
             httpContext.Response.Headers["X-Generation-Service-Name"] = result.ServiceName;
             httpContext.Response.Headers["X-Generation-Vertical"] = result.VerticalSlug;
             httpContext.Response.Headers["X-Generation-Timestamp"] = result.GeneratedAt.ToString("O");
+            if (result.GitHubRepoUrl is not null)
+                httpContext.Response.Headers["X-Generation-GitHub-Url"] = result.GitHubRepoUrl;
             return Results.File(zip, "application/zip", $"{request.Name}-scaffold.zip");
         }
         catch (KeyNotFoundException ex)
