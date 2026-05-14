@@ -25,6 +25,7 @@ using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
 using Pervaxis.Forge.Api.Models.Requests;
 using Pervaxis.Forge.Api.Services;
+using Pervaxis.Forge.Engine.Generation;
 using Amazon.Lambda.AspNetCoreServer;
 using System.Text.Json;
 
@@ -35,7 +36,13 @@ builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 builder.Services.AddDbContext<ForgeDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("ForgeDb")));
 
+builder.Services.AddDataProtection();
+
 builder.Services.AddScoped<IVerticalService, VerticalService>();
+
+builder.Services.AddScoped<PrintGenerator>();
+builder.Services.AddScoped<IGitHubService, GitHubService>();
+builder.Services.AddScoped<IGenerationService, GenerationService>();
 
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonSecurityTokenService>();
