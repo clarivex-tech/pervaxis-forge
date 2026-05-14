@@ -47,12 +47,14 @@ export interface VerticalResponse extends VerticalSummaryResponse {
 
 export interface AwsConnectivityStatus {
 	success: boolean;
-	accountId: string;
+	accountId: string | null;
+	errorMessage?: string | null;
 }
 
 export interface GitHubConnectivityStatus {
 	success: boolean;
-	org: string;
+	org: string | null;
+	errorMessage?: string | null;
 }
 
 export interface ConnectivityValidationResponse {

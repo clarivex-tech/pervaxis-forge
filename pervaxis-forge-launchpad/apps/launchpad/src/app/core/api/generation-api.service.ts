@@ -18,16 +18,21 @@
 
 import { inject, Injectable, InjectionToken } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { map, Observable } from 'rxjs';
 
 import { environment } from '@env/environment';
 import {
 	BatchGenerationRequest,
+	GenerationExecutionResult,
+	GenerationRequest,
 	GenerationAuditEntry,
 	RecentGenerationsResponse,
+	ValidationPreviewResult,
 } from '../models/generation.model';
 
 export interface IGenerationApiService {
+	validateManifest(request: GenerationRequest): Observable<ValidationPreviewResult>;
+	generateService(request: GenerationRequest): Observable<GenerationExecutionResult>;
 	generateBatch(request: BatchGenerationRequest): Observable<GenerationAuditEntry>;
 	getRecentGenerations(verticalSlug: string, limit?: number): Observable<RecentGenerationsResponse>;
 	getGenerationAudit(verticalSlug: string, generationId: string): Observable<GenerationAuditEntry>;
@@ -43,6 +48,31 @@ export const GENERATION_API_SERVICE = new InjectionToken<IGenerationApiService>(
 export class GenerationApiService implements IGenerationApiService {
 	private readonly baseUrl = `${environment.apiBaseUrl}/generate`;
 	private readonly http = inject(HttpClient);
+
+	validateManifest(request: GenerationRequest): Observable<ValidationPreviewResult> {
+		return this.http.post<ValidationPreviewResult>(`${this.baseUrl}/validate`, request);
+	}
+
+	generateService(request: GenerationRequest): Observable<GenerationExecutionResult> {
+		return this.http
+			.post(`${this.baseUrl}`, request, {
+				observe: 'response',
+				responseType: 'blob',
+			})
+			.pipe(
+				map((response) => {
+					const contentDisposition = response.headers.get('content-disposition') ?? '';
+					const fileNameMatch = /filename="?([^\";]+)"?/i.exec(contentDisposition);
+					const fileName = fileNameMatch?.[1] ?? `${request.name}-scaffold.zip`;
+
+					return {
+						zipBlob: response.body ?? new Blob(),
+						fileName,
+						gitHubRepoUrl: response.headers.get('X-Generation-GitHub-Url'),
+					};
+				})
+			);
+	}
 
 	generateBatch(request: BatchGenerationRequest): Observable<GenerationAuditEntry> {
 		return this.http.post<GenerationAuditEntry>(`${this.baseUrl}/batch`, request);
