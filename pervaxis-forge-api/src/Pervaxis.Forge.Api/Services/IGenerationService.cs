@@ -16,19 +16,14 @@
  ************************************************************************
  */
 
-namespace Pervaxis.Forge.Api.Models.Requests;
+using Pervaxis.Forge.Api.Models.Requests;
+using Pervaxis.Forge.Api.Models.Responses;
 
-public record GenerationRequest
+namespace Pervaxis.Forge.Api.Services;
+
+public interface IGenerationService
 {
-    public required string VerticalSlug { get; init; }
-    public required string Name { get; init; }
-    public required string DisplayName { get; init; }
-    public required string Description { get; init; }
-    public required string Version { get; init; }
-    public required string Type { get; init; }
-    public List<string> GenesisModules { get; init; } = [];
-    public GenerationDatabaseConfig? Database { get; init; }
-    public List<GenerationQueueConfig> Queues { get; init; } = [];
-    public GenerationMetadata Metadata { get; init; } = new();
-    public bool CreateGitHubRepo { get; init; } = false;
+    Task<(byte[] Zip, GenerationResult Result)> GenerateAsync(GenerationRequest request, CancellationToken ct = default);
+    Task<(byte[] Zip, BatchGenerationResult Result)> GenerateBatchAsync(BatchGenerationRequest request, CancellationToken ct = default);
+    Task<ValidationPreviewResult> ValidateAsync(GenerationRequest request, CancellationToken ct = default);
 }

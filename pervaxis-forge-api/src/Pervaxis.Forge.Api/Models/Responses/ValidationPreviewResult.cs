@@ -16,19 +16,13 @@
  ************************************************************************
  */
 
-namespace Pervaxis.Forge.Api.Models.Requests;
+namespace Pervaxis.Forge.Api.Models.Responses;
 
-public record GenerationRequest
+public record ValidationPreviewResult
 {
-    public required string VerticalSlug { get; init; }
-    public required string Name { get; init; }
-    public required string DisplayName { get; init; }
-    public required string Description { get; init; }
-    public required string Version { get; init; }
-    public required string Type { get; init; }
-    public List<string> GenesisModules { get; init; } = [];
-    public GenerationDatabaseConfig? Database { get; init; }
-    public List<GenerationQueueConfig> Queues { get; init; } = [];
-    public GenerationMetadata Metadata { get; init; } = new();
-    public bool CreateGitHubRepo { get; init; } = false;
+    public required bool IsValid { get; init; }
+    public IReadOnlyList<string> Errors { get; init; } = [];
+    public string? ServiceName { get; init; }
+    public string? Namespace { get; init; }
+    public string? ProjectName { get; init; }
 }
