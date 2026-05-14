@@ -32,44 +32,33 @@ public sealed class TemplateLoader
 
     /// <summary>Returns the full embedded-resource name for every template under <paramref name="templateRoot"/>.</summary>
     /// <remarks>
-    /// Returning the full resource name (not just the suffix) ensures that <see cref="LoadAsync"/> never
-    /// accidentally matches a same-named template in a different root (e.g. cdk/Program vs rest-api/Program).
+    /// Resource names are path-based (e.g. <c>Templates\rest-api\.github\workflows\build-test.yml.sbn</c>)
+    /// because the csproj uses <c>LogicalName="%(Identity)"</c>. Returning the full resource name ensures
+    /// <see cref="LoadAsync"/> never matches a same-named template in a different root
+    /// (e.g. <c>cdk\Program</c> vs <c>rest-api\Program</c>).
     /// </remarks>
     public IReadOnlyCollection<string> GetTemplateSuffixes(string templateRoot)
     {
         if (string.IsNullOrWhiteSpace(templateRoot))
             throw new ArgumentException("Template root must be provided.", nameof(templateRoot));
 
-        var root = templateRoot.Trim().Replace('\\', '.').Replace('/', '.');
-        var prefixes = new[]
-        {
-            $"{root}.",
-            $"{root.Replace('-', '_')}.",
-        };
+        var root = templateRoot.Trim().Replace('/', '\\');
         var resourceNames = assembly.GetManifestResourceNames();
 
         return resourceNames
             .Where(name => name.EndsWith(".sbn", StringComparison.OrdinalIgnoreCase)
-                && prefixes.Any(prefix => name.IndexOf(prefix, StringComparison.OrdinalIgnoreCase) >= 0))
+                && name.StartsWith(root + "\\", StringComparison.OrdinalIgnoreCase))
             .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
             .ToArray();
     }
 
-    /// <summary>Returns the path-like suffix of a full resource name relative to the given root prefix.</summary>
+    /// <summary>Returns the relative output path for a full resource name by stripping the template root prefix and the trailing <c>.sbn</c>.</summary>
     internal static string GetRelativeSuffix(string fullResourceName, string templateRoot)
     {
-        var root = templateRoot.Trim().Replace('\\', '.').Replace('/', '.');
-        var prefixes = new[]
-        {
-            $"{root}.",
-            $"{root.Replace('-', '_')}.",
-        };
-        foreach (var prefix in prefixes)
-        {
-            var idx = fullResourceName.IndexOf(prefix, StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
-                return fullResourceName[(idx + prefix.Length)..];
-        }
+        var root = templateRoot.Trim().Replace('/', '\\');
+        var prefix = root + "\\";
+        if (fullResourceName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            return fullResourceName[prefix.Length..];
         return fullResourceName;
     }
 }

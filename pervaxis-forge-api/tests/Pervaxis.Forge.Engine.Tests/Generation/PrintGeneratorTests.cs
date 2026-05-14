@@ -70,11 +70,58 @@ public class PrintGeneratorTests
         programContent.Should().Contain("AddGenesisMessagingAWS");
         programContent.Should().Contain("Pervaxis.Genesis.FileStorage.AWS");
 
-        // Verify csproj has Genesis package references
-        using var csprojStream = new StreamReader(archive.GetEntry("csproj")!.Open());
+        // Verify csproj has Genesis package references and correct name
+        entries.Should().Contain("Pervaxis.Clarivolt.Intake.csproj");
+        using var csprojStream = new StreamReader(archive.GetEntry("Pervaxis.Clarivolt.Intake.csproj")!.Open());
         var csprojContent = await csprojStream.ReadToEndAsync();
         csprojContent.Should().Contain("Pervaxis.Genesis.FileStorage.AWS");
         csprojContent.Should().Contain("Npgsql.EntityFrameworkCore.PostgreSQL");
+    }
+
+    [Fact]
+    public async Task GenerateAsync_IntakeServiceZip_ExtractsAllFilesToDisk()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "clarivolt",
+            VerticalSlug = "clarivolt",
+            ServiceName = "intake-service",
+            ServiceType = ServiceType.RestApi,
+            ComponentPrefix = "clv",
+            CloudProvider = "AWS",
+            GenesisModules = ["FileStorage", "Messaging"],
+            Database = new DatabaseConfig { Engine = "postgresql", Name = "intake_db" },
+        };
+
+        var zipBytes = await generator.GenerateAsync(manifest, "AWS");
+
+        var outDir = Path.Combine(Path.GetTempPath(), "pervaxis-intake-service-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(outDir);
+        try
+        {
+            using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+            archive.ExtractToDirectory(outDir);
+
+            var files = Directory.GetFiles(outDir, "*", SearchOption.AllDirectories)
+                .Select(f => Path.GetRelativePath(outDir, f).Replace('\\', '/'))
+                .OrderBy(f => f)
+                .ToList();
+
+            // Print all extracted files so they show in test output
+            foreach (var file in files)
+                Console.WriteLine($"  {file}");
+
+            files.Should().Contain("Program.cs");
+            files.Should().Contain("Controller.cs");
+            files.Should().Contain("Pervaxis.Clarivolt.Intake.csproj");
+            files.Should().Contain("Dockerfile");
+            files.Should().Contain(".claude/CLAUDE.md");
+            files.Should().Contain(".github/workflows/build-test.yml");
+        }
+        finally
+        {
+            Directory.Delete(outDir, recursive: true);
+        }
     }
 
     private static ForgeManifest CreateManifest() => new()

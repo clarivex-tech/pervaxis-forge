@@ -26,7 +26,15 @@ public sealed class FileGenerator
             var template = await templateLoader.LoadAsync(resourceName, cancellationToken);
             var rendered = templateEngine.Render(template, model);
             var relativeSuffix = TemplateLoader.GetRelativeSuffix(resourceName, templateRoot);
+            // Strip .sbn, normalise path separators, then map .cstemplate → .cs
             var outputPath = relativeSuffix[..^4].Replace('\\', '/').Replace(".cstemplate", ".cs");
+            // csproj.sbn and tests.csproj.sbn use generic names; replace with derived project names
+            outputPath = outputPath switch
+            {
+                "csproj" => model.DerivedNames.ProjectFile,
+                "tests.csproj" => model.DerivedNames.TestProjectName + ".csproj",
+                _ => outputPath,
+            };
             files.Add(new GeneratedFile(outputPath, rendered));
         }
 
