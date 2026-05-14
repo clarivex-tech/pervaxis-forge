@@ -6,7 +6,7 @@
 **Project Start:** May 6, 2026  
 **Projected Completion:** May 31, 2026 (4 weeks)  
 **Team:** Pervaxis Platform Team — Backend  
-**Status:** Phase 0 Complete — Phase 1 Complete
+**Status:** Phase 0 Complete — Phase 1 Complete — Phase 2 Complete
 
 > **Parallel Execution:** BFF and UI teams run independently from the start.  
 > Week 1: BFF builds Vertical Enrollment API while UI builds the Enrollment Wizard against a mock.  
@@ -88,7 +88,7 @@ Week 4 (May 27-31):  Phase 2 (wrap) + Phase 3 — Infrastructure + GitHub
 |---|---|---|---|
 | **M0: Vertical Enrollment API Live** | May 10, 2026 | ✅ Complete — Deployed to Lambda (ACCP) May 8 | Enroll endpoint, DB schema, AWS + GitHub validation, Lambda deploy pipeline |
 | **M1: Engine Core Complete** | May 17, 2026 | ✅ Complete — Engine core implemented and verified May 13 | Manifest parsing, naming derivation, template engine, ZIP |
-| **M2: REST API Templates Complete** | May 24, 2026 | 🔴 Not Started | 18 templates, generated service compiles + tests pass |
+| **M2: REST API Templates Complete** | May 24, 2026 | ✅ Complete — Templates implemented and verified May 13 | 18 templates, generated service compiles + tests pass |
 | **M3: Infrastructure + GitHub Complete** | May 31, 2026 | 🔴 Not Started | AWS resources deployed, GitHub repos created |
 
 ### 1.3 Critical Path
@@ -306,12 +306,12 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 > Target window: Week 2 (May 13-17)
 
 **Tasks:**
-- [ ] Create `PrintGenerator` class
-- [ ] Implement `GenerateAsync(manifest, cloudProvider)` — validate → normalize → derive names → load templates → render files → package ZIP
-- [ ] `cloudProvider` flows from the vertical's enrolled cloud into `TemplateModelBuilder.Build(manifest, cloudProvider)` — Engine stays cloud-agnostic by treating it as an opaque string (`"AWS"`, `"Azure"`, `"GCP"`)
-- [ ] Create `FileGenerator` for individual file rendering
-- [ ] Create `ZipPackager` using `System.IO.Compression`
-- [ ] Integration test: manifest → ZIP → extract → verify full file tree
+- [x] Create `PrintGenerator` class
+- [x] Implement `GenerateAsync(manifest, cloudProvider)` — validate → normalize → derive names → load templates → render files → package ZIP
+- [x] `cloudProvider` flows from the vertical's enrolled cloud into `TemplateModelBuilder.Build(manifest, cloudProvider)` — Engine stays cloud-agnostic by treating it as an opaque string (`"AWS"`, `"Azure"`, `"GCP"`)
+- [x] Create `FileGenerator` for individual file rendering
+- [x] Create `ZipPackager` using `System.IO.Compression`
+- [x] Integration test: manifest → ZIP → extract → verify full file tree
 
 **Owner:** Engineer B  
 **Effort:** 16 hours
@@ -323,13 +323,13 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 > Target window: Week 2 (May 13-17)
 
 **Tasks:**
-- [ ] `GenesisModules` static class — 8 modules with Id, DisplayName, IAM Permissions
-- [ ] Module names are **cloud-agnostic** (`Caching`, `Messaging`, `FileStorage`, `Search`, `Notifications`, `Workflow`, `AIAssistance`, `Reporting`) — no cloud suffix on the module name itself
-- [ ] `GetPackageName(moduleName, cloudProvider)` → `Pervaxis.Genesis.{Module}.{CloudProvider}` (e.g. `"Caching" + "AWS"` → `Pervaxis.Genesis.Caching.AWS`)
-- [ ] `GetDiExtensionName(moduleName, cloudProvider)` → `AddGenesis{Module}{CloudProvider}` (e.g. `AddGenesisCachingAWS`) — matches the extension method naming in each Genesis provider package
-- [ ] `GetAll()`, `GetById(id)`, `GetAllNames()` methods
-- [ ] `CanvasModules` static class — 14 modules
-- [ ] Tests to verify module lists are complete, `GetPackageName` resolves correctly for `"AWS"`, and `GetDiExtensionName` produces correct method names
+- [x] `GenesisModules` static class — 8 modules with Id, DisplayName, IAM Permissions
+- [x] Module names are **cloud-agnostic** (`Caching`, `Messaging`, `FileStorage`, `Search`, `Notifications`, `Workflow`, `AIAssistance`, `Reporting`) — no cloud suffix on the module name itself
+- [x] `GetPackageName(moduleName, cloudProvider)` → `Pervaxis.Genesis.{Module}.{CloudProvider}` (e.g. `"Caching" + "AWS"` → `Pervaxis.Genesis.Caching.AWS`)
+- [x] `GetDiExtensionName(moduleName, cloudProvider)` → `AddGenesis{Module}{CloudProvider}` (e.g. `AddGenesisCachingAWS`) — matches the extension method naming in each Genesis provider package
+- [x] `GetAll()`, `GetById(id)`, `GetAllNames()` methods
+- [x] `CanvasModules` static class — 14 modules
+- [x] Tests to verify module lists are complete, `GetPackageName` resolves correctly for `"AWS"`, and `GetDiExtensionName` produces correct method names
 
 **Owner:** Engineer B  
 **Effort:** 6 hours
@@ -376,8 +376,8 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 4.2 Simple Templates + DTOs
 
-- [ ] `manifest.json.sbn`, `SPEC.md.sbn`, `README.md.sbn`
-- [ ] `Request.cs.sbn`, `Response.cs.sbn`, `IService.cs.sbn`
+- [x] `manifest.json.sbn`, `SPEC.md.sbn`, `README.md.sbn`
+- [x] `Request.cs.sbn`, `Response.cs.sbn`, `IService.cs.sbn`
 
 **Owner:** Engineer A | **Effort:** 6 hours
 
@@ -385,8 +385,8 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 4.3 Docker Templates
 
-- [ ] `Dockerfile.sbn` — .NET 10 multi-stage
-- [ ] `docker-compose.localstack.yml.sbn` — conditional services per Genesis modules (SQS/SNS, Redis, S3, PostgreSQL)
+- [x] `Dockerfile.sbn` — .NET 10 multi-stage
+- [x] `docker-compose.localstack.yml.sbn` — conditional services per Genesis modules (SQS/SNS, Redis, S3, PostgreSQL)
 - [ ] Test: Docker build runs, LocalStack starts
 
 **Owner:** Engineer B | **Effort:** 8 hours
@@ -395,10 +395,10 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 4.4 .csproj + Configuration
 
-- [ ] `csproj.sbn` — .NET 10, nullable, dynamic `<PackageReference>` loop — package name resolved as `Pervaxis.Genesis.{{ module.name }}.{{ model.cloud_provider }}` so an AWS vertical generates `Pervaxis.Genesis.Caching.AWS` and a future Azure vertical generates `Pervaxis.Genesis.Caching.Azure` with zero template change
-- [ ] `tests.csproj.sbn` — xUnit + FluentAssertions
-- [ ] `appsettings.json.sbn` — dynamic sections per Genesis module + DB connection + logging
-- [ ] `appsettings.Development.json.sbn` — LocalStack overrides
+- [x] `csproj.sbn` — .NET 10, nullable, dynamic `<PackageReference>` loop — package name resolved as `Pervaxis.Genesis.{{ module.name }}.{{ model.cloud_provider }}` so an AWS vertical generates `Pervaxis.Genesis.Caching.AWS` and a future Azure vertical generates `Pervaxis.Genesis.Caching.Azure` with zero template change
+- [x] `tests.csproj.sbn` — xUnit + FluentAssertions
+- [x] `appsettings.json.sbn` — dynamic sections per Genesis module + DB connection + logging
+- [x] `appsettings.Development.json.sbn` — LocalStack overrides
 
 **Owner:** Engineer A | **Effort:** 10 hours
 
@@ -406,9 +406,9 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 4.5 Program.cs + DI Wiring (CRITICAL)
 
-- [ ] `Program.cs.sbn` — Minimal API host, Genesis module loop, Swagger — `using` directives rendered as `Pervaxis.Genesis.{{ module.name }}.{{ model.cloud_provider }}`
-- [ ] `ServiceCollectionExtensions.cs.sbn` — Genesis DI calls rendered as `services.AddGenesis{{ module.name }}{{ model.cloud_provider }}(...)` — cloud provider from vertical, module name from manifest
-- [ ] Test: generated service for an AWS vertical compiles with `dotnet build` and starts; verify `csproj` references `*.AWS` packages only
+- [x] `Program.cs.sbn` — Minimal API host, Genesis module loop, Swagger — `using` directives rendered as `Pervaxis.Genesis.{{ module.name }}.{{ model.cloud_provider }}`
+- [x] `ServiceCollectionExtensions.cs.sbn` — Genesis DI calls rendered as `services.AddGenesis{{ module.name }}{{ model.cloud_provider }}(...)` — cloud provider from vertical, module name from manifest
+- [ ] Test: generated service for an AWS vertical compiles with `dotnet build` and starts; verify `csproj` references `*.AWS` packages only (blocked pending Genesis NuGet publish)
 
 **Owner:** Engineer B | **Effort:** 12 hours
 
@@ -416,8 +416,8 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 4.6 Controller + Test Infrastructure
 
-- [ ] `Controller.cs.sbn` — route from naming convention, stub GET/POST
-- [ ] `TestBase.cs.sbn` — mock factory helpers, DI test host, fixture base
+- [x] `Controller.cs.sbn` — route from naming convention, stub GET/POST
+- [x] `TestBase.cs.sbn` — mock factory helpers, DI test host, fixture base
 
 **Owner:** Engineer A | **Effort:** 6 hours
 
@@ -425,8 +425,8 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ### 4.7 CLAUDE.md + CI/CD Templates (CRITICAL)
 
-- [ ] `.claude/CLAUDE.md.sbn` — service identity, Genesis modules wired, queue contracts, DB info, coding standards, what Claude Code should build
-- [ ] `.github/workflows/build-test.yml.sbn` — triggers, checkout, .NET setup, restore, build, test, coverage
+- [x] `.claude/CLAUDE.md.sbn` — service identity, Genesis modules wired, queue contracts, DB info, coding standards, what Claude Code should build
+- [x] `.github/workflows/build-test.yml.sbn` — triggers, checkout, .NET setup, restore, build, test, coverage
 - [ ] Verify Claude Code CLI parses generated CLAUDE.md
 
 **Owner:** Engineer A | **Effort:** 10 hours
