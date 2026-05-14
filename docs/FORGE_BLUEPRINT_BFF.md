@@ -61,7 +61,8 @@ Leverage maximum coding, analysis, and bug-fixing work to **Codex**. Claude CLI 
 3. [Phase 1: Core Engine](#3-phase-1-core-engine)
 4. [Phase 2: REST API Templates](#4-phase-2-rest-api-templates)
 5. [Phase 3: Infrastructure Provisioning & GitHub Integration](#5-phase-3-infrastructure-provisioning--github-integration)
-6. [Phase 4 (V2 Roadmap): Forge-Managed Infrastructure](#6-phase-4-v2-roadmap-forge-managed-infrastructure)
+6. [Phase 3.5: GraphQL & gRPC Template Sets](#6-phase-35-graphql--grpc-template-sets-v15-roadmap)
+7. [Phase 4 (V2 Roadmap): Forge-Managed Infrastructure](#7-phase-4-v2-roadmap-forge-managed-infrastructure)
 7. [Dependencies & Blockers](#7-dependencies--blockers)
 8. [Quality Gates](#8-quality-gates)
 9. [Testing Strategy](#9-testing-strategy)
@@ -509,7 +510,74 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-## 6. Phase 4 (V2 Roadmap): Forge-Managed Infrastructure
+## 6. Phase 3.5: GraphQL & gRPC Template Sets (V1.5 Roadmap)
+
+**Status:** Planned — after Phase 3 is fully validated  
+**Goal:** Extend the Engine with two new service types so Forge can generate GraphQL and gRPC scaffolds in addition to REST API
+
+> **Why this matters:** Teams building internal APIs increasingly choose gRPC for performance-critical service-to-service communication, and GraphQL for flexible client-facing APIs. Without these template sets, those teams must scaffold manually and lose the Genesis module wiring, CI pipeline, and CLAUDE.md that Forge provides.
+
+---
+
+### 6.1 GraphQL Template Set (HotChocolate)
+
+**New `ServiceType`: `GraphQL`**
+
+| File | Notes |
+|---|---|
+| `Program.cs.sbn` | HotChocolate `AddGraphQLServer()`, Genesis module wiring |
+| `Schema.cs.sbn` | Root query/mutation type stubs |
+| `Query.cs.sbn` | Stub query resolver |
+| `Mutation.cs.sbn` | Stub mutation resolver |
+| `csproj.sbn` | `HotChocolate.AspNetCore` + Genesis packages |
+| `appsettings.json.sbn` | GraphQL endpoint config |
+| `Dockerfile.sbn` | Same as REST |
+| `.github/workflows/build-test.yml.sbn` | Same as REST |
+| `.claude/CLAUDE.md.sbn` | GraphQL-specific service identity |
+
+- [ ] Add `GraphQL` to `ServiceType` enum
+- [ ] Create `Templates/graphql/` folder with above `.sbn` files
+- [ ] Add `ServiceType.GraphQL => "Templates/graphql"` to `PrintGenerator.ResolveTemplateRoot`
+- [ ] Integration test: generate `clarivolt/search-service` (GraphQL + Search module)
+
+**Effort:** 12 hours
+
+---
+
+### 6.2 gRPC Template Set
+
+**New `ServiceType`: `Grpc`**
+
+| File | Notes |
+|---|---|
+| `Program.cs.sbn` | `Grpc.AspNetCore` host, Genesis module wiring |
+| `Service.proto.sbn` | `.proto` stub with one RPC method |
+| `ServiceImpl.cs.sbn` | gRPC service implementation stub |
+| `csproj.sbn` | `Grpc.AspNetCore` + `Google.Protobuf` + Genesis packages |
+| `appsettings.json.sbn` | gRPC endpoint config |
+| `Dockerfile.sbn` | HTTP/2 enabled multi-stage |
+| `.github/workflows/build-test.yml.sbn` | Same as REST |
+| `.claude/CLAUDE.md.sbn` | gRPC-specific service identity |
+
+- [ ] Add `Grpc` to `ServiceType` enum
+- [ ] Create `Templates/grpc/` folder with above `.sbn` files
+- [ ] Add `ServiceType.Grpc => "Templates/grpc"` to `PrintGenerator.ResolveTemplateRoot`
+- [ ] Integration test: generate `clarivolt/event-service` (gRPC + Messaging module)
+
+**Effort:** 12 hours
+
+---
+
+### 6.3 Phase 3.5 Deliverables
+
+- `ServiceType.GraphQL` and `ServiceType.Grpc` accepted by `POST /api/v1/generate`
+- Generated GraphQL service: `dotnet build` ✓, HotChocolate endpoint responds
+- Generated gRPC service: `dotnet build` ✓, proto compiles, service responds
+- All 3 service types covered in `POST /api/v1/generate/validate`
+
+---
+
+## 7. Phase 4 (V2 Roadmap): Forge-Managed Infrastructure
 
 **Status:** Planned — not in V1 scope  
 **Goal:** All cloud resources for every vertical and service are created, updated, and destroyed exclusively through Forge. No developer ever touches the AWS console or runs `terraform apply` manually. Forge becomes the single policy-enforcement point for infrastructure across all verticals.
