@@ -1,1 +1,13 @@
-{{# TODO: implement routing.module.ts template #}}
+import { NgModule } from '@angular/core';
+import { RouterModule, Routes } from '@angular/router';
+import { {{ model.names.angular_mfe_component_name }} } from './component';
+
+const routes: Routes = [
+  { path: '', component: {{ model.names.angular_mfe_component_name }} }
+];
+
+@NgModule({
+  imports: [RouterModule.forChild(routes)],
+  exports: [RouterModule]
+})
+export class {{ model.names.angular_mfe_component_name }}RoutingModule {}

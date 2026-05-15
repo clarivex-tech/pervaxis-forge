@@ -1,1 +1,19 @@
-{{# TODO: implement module.ts template #}}
+import { NgModule } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { {{ model.names.angular_mfe_component_name }} } from './component';
+import { {{ model.names.angular_mfe_component_name }}RoutingModule } from './routing.module';
+{{- for m in model.selected_canvas_modules }}
+import { {{ m.import_name }} } from '{{ m.package_name }}';
+{{- end }}
+
+@NgModule({
+  declarations: [{{ model.names.angular_mfe_component_name }}],
+  imports: [
+    CommonModule,
+    {{ model.names.angular_mfe_component_name }}RoutingModule,
+{{- for m in model.selected_canvas_modules }}
+    {{ m.import_name }},
+{{- end }}
+  ]
+})
+export class {{ model.names.angular_mfe_component_name }}Module {}

@@ -1,1 +1,18 @@
-{{# TODO: implement app.config.ts template #}}
+import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { provideRouter } from '@angular/router';
+import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import { routes } from './app.routes';
+{{- for m in model.selected_canvas_modules }}
+import { {{ m.import_name }} } from '{{ m.package_name }}';
+{{- end }}
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideZoneChangeDetection({ eventCoalescing: true }),
+    provideRouter(routes),
+    provideHttpClient(withInterceptorsFromDi()),
+{{- for m in model.selected_canvas_modules }}
+    ...{{ m.import_name }}.providers,
+{{- end }}
+  ]
+};

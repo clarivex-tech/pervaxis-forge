@@ -1,1 +1,34 @@
-{{# TODO: implement package.json template #}}
+{
+  "name": "@{{ model.manifest.product }}/{{ model.manifest.service_name }}",
+  "version": "{{ model.manifest.metadata.version }}",
+  "scripts": {
+    "start": "nx serve {{ model.manifest.service_name }}",
+    "build": "nx build {{ model.manifest.service_name }}",
+    "test": "nx test {{ model.manifest.service_name }}",
+    "lint": "nx lint {{ model.manifest.service_name }}"
+  },
+  "dependencies": {
+    "@angular/animations": "^18.0.0",
+    "@angular/common": "^18.0.0",
+    "@angular/compiler": "^18.0.0",
+    "@angular/core": "^18.0.0",
+    "@angular/forms": "^18.0.0",
+    "@angular/platform-browser": "^18.0.0",
+    "@angular/platform-browser-dynamic": "^18.0.0",
+    "@angular/router": "^18.0.0",
+    "@nx/angular": "^19.0.0",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.6.0",
+    "zone.js": "~0.14.0"{{- if model.selected_canvas_modules | array.size > 0 }},
+{{- for m in model.selected_canvas_modules }}
+    "{{ m.package_name }}": "*"{{ if !for.last }},{{ end }}
+{{- end }}
+{{- end }}
+  },
+  "devDependencies": {
+    "@angular/cli": "^18.0.0",
+    "@angular-devkit/build-angular": "^18.0.0",
+    "@types/node": "^20.0.0",
+    "typescript": "~5.4.0"
+  }
+}

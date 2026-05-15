@@ -1,1 +1,20 @@
-{{# TODO: implement app.component.ts template #}}
+import { Component } from '@angular/core';
+import { RouterOutlet } from '@angular/router';
+{{- for m in model.selected_canvas_modules }}
+import { {{ m.import_name }} } from '{{ m.package_name }}';
+{{- end }}
+
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-root',
+  standalone: true,
+  imports: [
+    RouterOutlet,
+{{- for m in model.selected_canvas_modules }}
+    {{ m.import_name }},
+{{- end }}
+  ],
+  template: `<router-outlet />`
+})
+export class AppComponent {
+  title = '{{ model.manifest.service_name }}';
+}
