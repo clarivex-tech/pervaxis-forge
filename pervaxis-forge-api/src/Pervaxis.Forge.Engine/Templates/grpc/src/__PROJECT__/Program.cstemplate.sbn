@@ -17,21 +17,21 @@
  */
 
 using {{ model.names.namespace }}.Services;
-{{ for module in model.selected_modules }}
+{{- for module in model.selected_modules }}
 using {{ module.package_name }};
-{{ end }}
+{{- end }}
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddGrpc();
-{{ for module in model.selected_modules }}
+{{- for module in model.selected_modules }}
 builder.Services.{{ module.di_extension_name }}(
     builder.Configuration.GetSection("{{ module.name }}"));
-{{ end }}
+{{- end }}
 
 var app = builder.Build();
 
-app.MapGrpcService<{{ model.names.dot_net_class_name }}ServiceImpl>();
+app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>();
 app.MapGet("/", () => "gRPC service — use a gRPC client to communicate.");
 
 app.Run();
