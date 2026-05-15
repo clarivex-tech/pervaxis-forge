@@ -42,7 +42,7 @@ public sealed class FileGenerator
             {
                 var p when p.EndsWith("/csproj") => p[..^6] + model.DerivedNames.ProjectFile,
                 var p when p.EndsWith("/tests.csproj") => p[..^12] + model.DerivedNames.TestProjectName + ".csproj",
-                "Protos/service.proto" => $"Protos/{model.Manifest.ServiceName}.proto",
+                var p when p.EndsWith("/Protos/service.proto") => p[..^"service.proto".Length] + model.Manifest.ServiceName + ".proto",
                 _ => outputPath,
             };
             files.Add(new GeneratedFile(outputPath, rendered));
