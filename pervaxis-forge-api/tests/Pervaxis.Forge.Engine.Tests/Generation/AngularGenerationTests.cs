@@ -50,10 +50,12 @@ public class AngularGenerationTests
         using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
         var entries = archive.Entries.Select(e => e.FullName).ToList();
         entries.Should().Contain("package.json");
-        entries.Should().Contain("app.config.ts");
         entries.Should().Contain("angular.json");
+        entries.Should().Contain("apps/matr-shell/src/app/app.config.ts");
+        entries.Should().Contain("apps/matr-shell/src/app/app.component.ts");
+        entries.Should().Contain("apps/matr-shell/src/app/app.routes.ts");
 
-        using var configStream = new StreamReader(archive.GetEntry("app.config.ts")!.Open());
+        using var configStream = new StreamReader(archive.GetEntry("apps/matr-shell/src/app/app.config.ts")!.Open());
         var configContent = await configStream.ReadToEndAsync();
         configContent.Should().Contain("CanvasNavigationModule");
         configContent.Should().Contain("@pervaxis/canvas-navigation");
@@ -78,10 +80,11 @@ public class AngularGenerationTests
 
         using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
         var entries = archive.Entries.Select(e => e.FullName).ToList();
-        entries.Should().Contain("module.ts");
-        entries.Should().Contain("component.ts");
+        entries.Should().Contain("libs/intake-profile/src/lib/module.ts");
+        entries.Should().Contain("libs/intake-profile/src/lib/component.ts");
+        entries.Should().Contain("libs/intake-profile/src/index.ts");
 
-        using var moduleStream = new StreamReader(archive.GetEntry("module.ts")!.Open());
+        using var moduleStream = new StreamReader(archive.GetEntry("libs/intake-profile/src/lib/module.ts")!.Open());
         var moduleContent = await moduleStream.ReadToEndAsync();
         moduleContent.Should().Contain("CanvasDashboardModule");
         moduleContent.Should().Contain("@pervaxis/canvas-dashboard");
