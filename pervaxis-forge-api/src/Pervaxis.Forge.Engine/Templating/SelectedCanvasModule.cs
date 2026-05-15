@@ -16,20 +16,11 @@
  ************************************************************************
  */
 
-namespace Pervaxis.Forge.Api.Models.Requests;
+namespace Pervaxis.Forge.Engine.Templating;
 
-public record GenerationRequest
+public sealed record SelectedCanvasModule
 {
-    public required string VerticalSlug { get; init; }
     public required string Name { get; init; }
-    public required string DisplayName { get; init; }
-    public required string Description { get; init; }
-    public required string Version { get; init; }
-    public required string Type { get; init; }
-    public List<string> GenesisModules { get; init; } = [];
-    public List<string> CanvasModules { get; init; } = [];
-    public GenerationDatabaseConfig? Database { get; init; }
-    public List<GenerationQueueConfig> Queues { get; init; } = [];
-    public GenerationMetadata Metadata { get; init; } = new();
-    public bool CreateGitHubRepo { get; init; } = false;
+    public required string PackageName { get; init; }
+    public required string ImportName { get; init; }
 }

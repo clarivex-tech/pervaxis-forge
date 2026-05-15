@@ -15,5 +15,7 @@ public sealed record TemplateModel
 
     public IReadOnlyList<SelectedModule> SelectedModules { get; init; } = [];
 
+    public IReadOnlyList<SelectedCanvasModule> SelectedCanvasModules { get; init; } = [];
+
     public string CurrentYear { get; init; } = DateTime.UtcNow.Year.ToString();
 }
