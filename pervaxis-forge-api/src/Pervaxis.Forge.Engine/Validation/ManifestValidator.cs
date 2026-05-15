@@ -25,6 +25,9 @@ public sealed class ManifestValidator
         if (manifest.ServiceType == ServiceType.RestApi && !manifest.ServiceName.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
             errors.Add(".NET services must end with -service.");
 
+        if (manifest.ServiceType == ServiceType.GraphQL && !manifest.ServiceName.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
+            errors.Add("GraphQL services must end with -service.");
+
         if (manifest.ServiceType == ServiceType.AngularShell && !manifest.ServiceName.EndsWith("-shell", StringComparison.OrdinalIgnoreCase))
             errors.Add("Angular Shell apps must end with -shell (e.g. claims-shell).");
 
