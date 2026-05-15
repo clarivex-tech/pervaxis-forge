@@ -24,7 +24,11 @@ public static class GenesisModules
     public static IReadOnlyList<string> GetAllNames() => Modules.Select(module => module.DisplayName).ToArray();
 
     public static string GetPackageName(string moduleName, string cloudProvider)
-        => $"Pervaxis.Genesis.{NormalizeModuleName(moduleName)}.{NormalizeCloudProvider(cloudProvider)}";
+    {
+        var module = GetById(moduleName);
+        var segment = module?.DisplayName ?? NormalizeModuleName(moduleName);
+        return $"Pervaxis.Genesis.{segment}.{NormalizeCloudProvider(cloudProvider)}";
+    }
 
     public static string GetDiExtensionName(string moduleName, string cloudProvider)
         => $"AddGenesis{NormalizeModuleName(moduleName)}{NormalizeCloudProvider(cloudProvider)}";
