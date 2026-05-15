@@ -1,1 +1,4 @@
-{{# TODO: implement index.ts template #}}
+export { {{ model.names.angular_mfe_component_name }}Module } from './module';
+export { {{ model.names.angular_mfe_component_name }} } from './component';
+export { {{ model.names.angular_mfe_component_name }}RoutingModule } from './routing.module';
+export { {{ model.names.angular_mfe_component_name }}ApiService } from './api.service';
