@@ -50,7 +50,7 @@ Query and Mutation types are in `GraphQL/Query.cs` and `GraphQL/Mutation.cs`. Ad
 
 ## Genesis Modules Wired
 
-{{ for module in model.selected_modules -}}
+{{- for module in model.selected_modules }}
 - **{{ module.name }}** → `{{ module.package_name }}` — register with `services.{{ module.di_extension_name }}(...)`
 {{- end }}
 
