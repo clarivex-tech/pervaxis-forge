@@ -31,7 +31,11 @@ public static class GenesisModules
     }
 
     public static string GetDiExtensionName(string moduleName, string cloudProvider)
-        => $"AddGenesis{NormalizeModuleName(moduleName)}{NormalizeCloudProvider(cloudProvider)}";
+    {
+        var module = GetById(moduleName);
+        var segment = module?.DisplayName ?? NormalizeModuleName(moduleName);
+        return $"AddGenesis{segment}{NormalizeCloudProvider(cloudProvider)}";
+    }
 
     private static string NormalizeSegment(string value)
     {
