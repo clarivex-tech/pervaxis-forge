@@ -50,9 +50,9 @@ Proto file is at `src/{{ model.names.namespace }}/Protos/{{ model.manifest.servi
 
 ## Genesis Modules Wired
 
-{{ for module in model.selected_modules }}
+{{ for module in model.selected_modules -}}
 - **{{ module.name }}** → `{{ module.package_name }}` — register with `services.{{ module.di_extension_name }}(...)`
-{{ end }}
+{{- end }}
 
 ---
 
