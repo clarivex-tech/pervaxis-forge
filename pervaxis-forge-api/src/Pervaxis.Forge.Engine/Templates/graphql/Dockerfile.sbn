@@ -5,10 +5,10 @@ EXPOSE 8080
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
-COPY ["src/{{ model.names.project_file }}", "src/"]
-RUN dotnet restore "src/{{ model.names.project_file }}"
+COPY ["src/{{ model.names.namespace }}/{{ model.names.project_file }}", "src/{{ model.names.namespace }}/"]
+RUN dotnet restore "src/{{ model.names.namespace }}/{{ model.names.project_file }}"
 COPY . .
-WORKDIR "/src/src"
+WORKDIR "/src/src/{{ model.names.namespace }}"
 RUN dotnet build "{{ model.names.project_file }}" -c $BUILD_CONFIGURATION -o /app/build
 
 FROM build AS publish
