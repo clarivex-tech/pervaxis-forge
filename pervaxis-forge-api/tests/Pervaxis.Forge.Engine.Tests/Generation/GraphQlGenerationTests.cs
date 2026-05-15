@@ -71,10 +71,10 @@ public class GraphQlGenerationTests
         var entries = archive.Entries.Select(e => e.FullName).ToList();
 
         entries.Should().Contain("manifest.json");
-        entries.Should().Contain("Program.cs");
-        entries.Should().Contain("Query.cs");
-        entries.Should().Contain("Mutation.cs");
-        entries.Should().Contain("ServiceCollectionExtensions.cs");
+        entries.Should().Contain("src/Pervaxis.Clarivolt.Search/Program.cs");
+        entries.Should().Contain("src/Pervaxis.Clarivolt.Search/Query.cs");
+        entries.Should().Contain("src/Pervaxis.Clarivolt.Search/Mutation.cs");
+        entries.Should().Contain("src/Pervaxis.Clarivolt.Search/ServiceCollectionExtensions.cs");
         entries.Should().Contain("Dockerfile");
     }
 

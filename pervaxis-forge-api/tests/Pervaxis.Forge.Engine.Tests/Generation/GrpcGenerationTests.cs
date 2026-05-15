@@ -71,9 +71,9 @@ public class GrpcGenerationTests
         var entries = archive.Entries.Select(e => e.FullName).ToList();
 
         entries.Should().Contain("manifest.json");
-        entries.Should().Contain("Program.cs");
-        entries.Should().Contain("ServiceImpl.cs");
-        entries.Should().Contain("Protos/events-service.proto");
+        entries.Should().Contain("src/Pervaxis.Clarivolt.Events/Program.cs");
+        entries.Should().Contain("src/Pervaxis.Clarivolt.Events/ServiceImpl.cs");
+        entries.Should().Contain("src/Pervaxis.Clarivolt.Events/Protos/events-service.proto");
         entries.Should().Contain("Dockerfile");
     }
 

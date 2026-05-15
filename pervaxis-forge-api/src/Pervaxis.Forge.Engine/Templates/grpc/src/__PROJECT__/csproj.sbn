@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.*" />
-    <Protobuf Include="Protos\{{ model.manifest.name }}.proto" GrpcServices="Server" />
+    <Protobuf Include="Protos\{{ model.manifest.service_name }}.proto" GrpcServices="Server" />
 {{ for module in model.selected_modules }}
     <PackageReference Include="{{ module.package_name }}" Version="*" />
 {{ end }}{{ if model.manifest.database != null }}{{ if model.manifest.database.engine == "postgresql" }}
