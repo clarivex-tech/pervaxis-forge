@@ -27,7 +27,7 @@ dotnet test
 ## Running Locally
 
 ```bash
-dotnet run --project src/{{ model.names.folder_name }}
+dotnet run --project src/{{ model.names.namespace }}
 ```
 
 ## Configuration
