@@ -13,12 +13,13 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.*" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="7.*" />
-{{ for module in model.selected_modules }}
+{{- for module in model.selected_modules }}
     <PackageReference Include="{{ module.package_name }}" Version="*" />
-{{ end }}{{ if model.manifest.database != null }}{{ if model.manifest.database.engine == "postgresql" }}
+{{- end }}
+{{- if model.manifest.database != null && model.manifest.database.engine == "postgresql" }}
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.*" />
-{{ end }}{{ end }}
+{{- end }}
   </ItemGroup>
 
 </Project>
