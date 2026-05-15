@@ -4,7 +4,7 @@ option csharp_namespace = "{{ model.names.namespace }}";
 
 package {{ model.manifest.product | string.downcase }}.{{ model.manifest.service_name | string.replace "-" "_" | string.replace "_service" "" }};
 
-service {{ model.names.dot_net_class_name }}Service {
+service {{ model.names.dot_net_class_name }} {
   rpc Hello (HelloRequest) returns (HelloReply);
 }
 

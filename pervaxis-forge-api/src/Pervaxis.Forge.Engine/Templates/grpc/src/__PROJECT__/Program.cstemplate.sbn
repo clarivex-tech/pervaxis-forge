@@ -31,7 +31,7 @@ builder.Services.{{ module.di_extension_name }}(
 
 var app = builder.Build();
 
-app.MapGrpcService<{{ model.names.dot_net_class_name }}ServiceImpl>();
+app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>();
 app.MapGet("/", () => "gRPC service — use a gRPC client to communicate.");
 
 app.Run();

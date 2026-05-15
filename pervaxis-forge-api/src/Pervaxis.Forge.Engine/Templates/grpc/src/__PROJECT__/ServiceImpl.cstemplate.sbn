@@ -20,7 +20,7 @@ using Grpc.Core;
 
 namespace {{ model.names.namespace }}.Services;
 
-public sealed class {{ model.names.dot_net_class_name }}ServiceImpl : {{ model.names.dot_net_class_name }}Service.{{ model.names.dot_net_class_name }}ServiceBase
+public sealed class {{ model.names.dot_net_class_name }}Impl : {{ model.names.dot_net_class_name }}.{{ model.names.dot_net_class_name }}Base
 {
     public override Task<HelloReply> Hello(HelloRequest request, ServerCallContext context)
         => Task.FromResult(new HelloReply
