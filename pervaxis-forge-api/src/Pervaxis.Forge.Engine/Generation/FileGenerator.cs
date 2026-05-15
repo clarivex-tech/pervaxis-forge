@@ -33,6 +33,7 @@ public sealed class FileGenerator
             {
                 "csproj" => model.DerivedNames.ProjectFile,
                 "tests.csproj" => model.DerivedNames.TestProjectName + ".csproj",
+                "Protos/service.proto" => $"Protos/{model.Manifest.ServiceName}.proto",
                 _ => outputPath,
             };
             files.Add(new GeneratedFile(outputPath, rendered));

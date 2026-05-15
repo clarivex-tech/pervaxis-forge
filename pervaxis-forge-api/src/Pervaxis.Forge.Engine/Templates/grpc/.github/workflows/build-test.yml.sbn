@@ -1,0 +1,33 @@
+name: Build and Test — {{ model.names.dot_net_class_name }}
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore {{ model.names.solution_file }}
+
+      - name: Build
+        run: dotnet build {{ model.names.solution_file }} --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test {{ model.names.solution_file }} --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --filter "Category!=Integration"
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        with:
+          fail_ci_if_error: false

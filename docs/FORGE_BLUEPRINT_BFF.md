@@ -6,7 +6,7 @@
 **Project Start:** May 6, 2026  
 **Projected Completion:** May 31, 2026 (4 weeks)  
 **Team:** Pervaxis Platform Team — Backend  
-**Status:** Phase 0 Complete — Phase 1 Complete — Phase 2 Complete
+**Status:** Phase 0 Complete — Phase 1 Complete — Phase 2 Complete — Phase 3 Complete — Phase 3.5 Complete — Phase 3.6 Complete
 
 > **Parallel Execution:** BFF and UI teams run independently from the start.  
 > Week 1: BFF builds Vertical Enrollment API while UI builds the Enrollment Wizard against a mock.  
@@ -61,8 +61,10 @@ Leverage maximum coding, analysis, and bug-fixing work to **Codex**. Claude CLI 
 3. [Phase 1: Core Engine](#3-phase-1-core-engine)
 4. [Phase 2: REST API Templates](#4-phase-2-rest-api-templates)
 5. [Phase 3: Infrastructure Provisioning & GitHub Integration](#5-phase-3-infrastructure-provisioning--github-integration)
-6. [Phase 4 (V2 Roadmap): Forge-Managed Infrastructure](#6-phase-4-v2-roadmap-forge-managed-infrastructure)
-7. [Dependencies & Blockers](#7-dependencies--blockers)
+6. [Phase 3.5: Angular Shell & MFE Wiring](#6-phase-35-angular-shell--mfe-wiring)
+7. [Phase 3.6: GraphQL & gRPC Template Sets](#7-phase-36-graphql--grpc-template-sets)
+8. [Phase 4 (V2 Roadmap): Forge-Managed Infrastructure](#8-phase-4-v2-roadmap-forge-managed-infrastructure)
+9. [Dependencies & Blockers](#9-dependencies--blockers)
 8. [Quality Gates](#8-quality-gates)
 9. [Testing Strategy](#9-testing-strategy)
 10. [Risk Mitigation](#10-risk-mitigation)
@@ -89,7 +91,7 @@ Week 4 (May 27-31):  Phase 2 (wrap) + Phase 3 — Infrastructure + GitHub
 | **M0: Vertical Enrollment API Live** | May 10, 2026 | ✅ Complete — Deployed to Lambda (ACCP) May 8 | Enroll endpoint, DB schema, AWS + GitHub validation, Lambda deploy pipeline |
 | **M1: Engine Core Complete** | May 17, 2026 | ✅ Complete — Engine core implemented and verified May 13 | Manifest parsing, naming derivation, template engine, ZIP |
 | **M2: REST API Templates Complete** | May 24, 2026 | ✅ Complete — Templates implemented and verified May 13 | 18 templates, generated service compiles + tests pass |
-| **M3: Infrastructure + GitHub Complete** | May 31, 2026 | 🟡 In Progress — GitHub + generation endpoints complete May 14; §5.1/§5.2 moved to Phase 4 | GitHub repos created, generation endpoints live |
+| **M3: Infrastructure + GitHub Complete** | May 31, 2026 | ✅ Complete — GitHub + generation endpoints May 14; §5.1/§5.2 moved to Phase 4; Angular Shell/MFE, GraphQL, gRPC templates complete May 15 | All 5 service types live — REST, Angular Shell, Angular MFE, GraphQL, gRPC |
 
 ### 1.3 Critical Path
 
@@ -509,7 +511,128 @@ Phase 3: Infrastructure + GitHub (Week 4)  ← CRITICAL PATH
 
 ---
 
-## 6. Phase 4 (V2 Roadmap): Forge-Managed Infrastructure
+## 6. Phase 3.5: Angular Shell & MFE Wiring
+
+**Status:** ✅ Complete  
+**Goal:** Enable `POST /api/v1/generate` to produce Angular Shell and Angular MFE scaffolds  
+**Estimated effort:** 4 hours (wiring only — templates exist)
+
+> Templates for both Angular Shell (`Templates/angular-shell/`) and Angular MFE (`Templates/angular-microfrontend/`) are already embedded in the Engine including full `.claude/` guides and skills. What's missing is the Engine wiring — `ServiceType` enum values and `ResolveTemplateRoot` mapping.
+
+---
+
+### 6.1 Engine Wiring
+
+- [x] Add `AngularShell = 5` and `AngularMfe = 6` to `ServiceType` enum
+- [x] Add to `PrintGenerator.ResolveTemplateRoot`:
+  - `ServiceType.AngularShell => "Templates/angular-shell"`
+  - `ServiceType.AngularMfe => "Templates/angular-microfrontend"`
+- [x] Wire `DeriveAngularShellNames` and `DeriveAngularMfeNames` in `TemplateModelBuilder.Build` — set `model.derived_names` based on service type
+- [x] Expose `AngularConfig` fields (`standalone`, `canvasModules`) in `TemplateModel` so templates can conditionally render Canvas module imports
+
+**Owner:** Engineer B | **Effort:** 2 hours
+
+---
+
+### 6.2 Manifest Validation
+
+- [x] Add Angular-specific rules to `ManifestValidator`:
+  - `AngularShell` — name must end `-shell`
+  - `AngularMfe` — name must not end `-shell` or `-service`
+- [x] Write 10+ tests covering valid/invalid names for both types
+
+**Owner:** Engineer B | **Effort:** 1 hour
+
+---
+
+### 6.3 API Layer
+
+- [x] `GenerationRequest.Type` already accepts any string — no change needed
+- [x] Update `GenerationService.BuildManifest` to map `ServiceType.AngularShell` / `ServiceType.AngularMfe` correctly (currently hardcodes `ServiceType.RestApi`)
+- [x] Update `POST /api/v1/generate/validate` derived names preview — call `DeriveAngularShellNames` or `DeriveAngularMfeNames` based on type
+
+**Owner:** Engineer A | **Effort:** 1 hour
+
+---
+
+### 6.4 Phase 3.5 Deliverables
+
+- `type: "AngularShell"` and `type: "AngularMfe"` accepted by `POST /api/v1/generate`
+- Generated Angular Shell ZIP contains `angular.json`, `app.config.ts`, `app.routes.ts`, `package.json`, `tsconfig.json`, `.claude/CLAUDE.md`
+- Generated Angular MFE ZIP contains `component.ts`, `module.ts`, `routing.module.ts`, `api.service.ts`, `.claude/CLAUDE.md`
+- `POST /api/v1/generate/validate` returns correct derived names for Angular types
+- 10+ new Engine tests
+
+---
+
+## 7. Phase 3.6: GraphQL & gRPC Template Sets
+
+**Status:** ✅ Complete  
+**Goal:** Extend the Engine with two new service types so Forge can generate GraphQL and gRPC scaffolds in addition to REST API
+
+> **Why this matters:** Teams building internal APIs increasingly choose gRPC for performance-critical service-to-service communication, and GraphQL for flexible client-facing APIs. Without these template sets, those teams must scaffold manually and lose the Genesis module wiring, CI pipeline, and CLAUDE.md that Forge provides.
+
+---
+
+### 7.1 GraphQL Template Set (HotChocolate)
+
+**New `ServiceType`: `GraphQL`**
+
+| File | Notes |
+|---|---|
+| `Program.cs.sbn` | HotChocolate `AddGraphQLServer()`, Genesis module wiring |
+| `Schema.cs.sbn` | Root query/mutation type stubs |
+| `Query.cs.sbn` | Stub query resolver |
+| `Mutation.cs.sbn` | Stub mutation resolver |
+| `csproj.sbn` | `HotChocolate.AspNetCore` + Genesis packages |
+| `appsettings.json.sbn` | GraphQL endpoint config |
+| `Dockerfile.sbn` | Same as REST |
+| `.github/workflows/build-test.yml.sbn` | Same as REST |
+| `.claude/CLAUDE.md.sbn` | GraphQL-specific service identity |
+
+- [x] Add `GraphQL` to `ServiceType` enum
+- [x] Create `Templates/graphql/` folder with above `.sbn` files
+- [x] Add `ServiceType.GraphQL => "Templates/graphql"` to `PrintGenerator.ResolveTemplateRoot`
+- [x] Integration test: generate `clarivolt/search-service` (GraphQL + Search module)
+
+**Effort:** 12 hours
+
+---
+
+### 7.2 gRPC Template Set
+
+**New `ServiceType`: `Grpc`**
+
+| File | Notes |
+|---|---|
+| `Program.cs.sbn` | `Grpc.AspNetCore` host, Genesis module wiring |
+| `Service.proto.sbn` | `.proto` stub with one RPC method |
+| `ServiceImpl.cs.sbn` | gRPC service implementation stub |
+| `csproj.sbn` | `Grpc.AspNetCore` + `Google.Protobuf` + Genesis packages |
+| `appsettings.json.sbn` | gRPC endpoint config |
+| `Dockerfile.sbn` | HTTP/2 enabled multi-stage |
+| `.github/workflows/build-test.yml.sbn` | Same as REST |
+| `.claude/CLAUDE.md.sbn` | gRPC-specific service identity |
+
+- [x] Add `Grpc` to `ServiceType` enum
+- [x] Create `Templates/grpc/` folder with above `.sbn` files
+- [x] Add `ServiceType.Grpc => "Templates/grpc"` to `PrintGenerator.ResolveTemplateRoot`
+- [x] Integration test: generate `clarivolt/event-service` (gRPC + Messaging module)
+
+**Effort:** 12 hours
+
+---
+
+### 7.3 Phase 3.6 Deliverables
+
+- `ServiceType.GraphQL` and `ServiceType.Grpc` accepted by `POST /api/v1/generate`
+- Generated GraphQL service: `dotnet build` ✓, HotChocolate endpoint responds
+- Generated gRPC service: `dotnet build` ✓, proto compiles, service responds
+- All 3 service types covered in `POST /api/v1/generate/validate`
+
+---
+
+## 7. Phase 4 (V2 Roadmap): Forge-Managed Infrastructure
 
 **Status:** Planned — not in V1 scope  
 **Goal:** All cloud resources for every vertical and service are created, updated, and destroyed exclusively through Forge. No developer ever touches the AWS console or runs `terraform apply` manually. Forge becomes the single policy-enforcement point for infrastructure across all verticals.

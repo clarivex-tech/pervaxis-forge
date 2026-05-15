@@ -16,6 +16,8 @@
  ************************************************************************
  */
 
+using Pervaxis.Forge.Engine.Modules;
+
 namespace Pervaxis.Forge.Api.Endpoints;
 
 internal static class ModuleEndpoints
@@ -28,19 +30,19 @@ internal static class ModuleEndpoints
         group.MapGet("/modules", ListGenesisModules)
             .WithName("ListGenesisModules")
             .WithSummary("List all available Genesis modules")
-            .Produces<IEnumerable<string>>();
+            .Produces<IReadOnlyList<GenesisModule>>();
 
         group.MapGet("/canvas-modules", ListCanvasModules)
             .WithName("ListCanvasModules")
             .WithSummary("List all available Canvas modules")
-            .Produces<IEnumerable<string>>();
+            .Produces<IReadOnlyList<CanvasModule>>();
 
         return app;
     }
 
     private static IResult ListGenesisModules()
-        => Results.Problem(statusCode: 501, title: "Not implemented");
+        => Results.Ok(GenesisModules.GetAll());
 
     private static IResult ListCanvasModules()
-        => Results.Problem(statusCode: 501, title: "Not implemented");
+        => Results.Ok(CanvasModules.GetAll());
 }

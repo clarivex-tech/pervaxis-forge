@@ -34,6 +34,10 @@ public sealed class PrintGenerator
     private static string ResolveTemplateRoot(ServiceType serviceType) => serviceType switch
     {
         ServiceType.RestApi => "Templates/rest-api",
+        ServiceType.AngularShell => "Templates/angular-shell",
+        ServiceType.AngularMfe => "Templates/angular-microfrontend",
+        ServiceType.GraphQL => "Templates/graphql",
+        ServiceType.Grpc => "Templates/grpc",
         _ => throw new InvalidOperationException($"Unsupported service type: {serviceType}"),
     };
 }
