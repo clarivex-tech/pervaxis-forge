@@ -273,6 +273,9 @@ export class MockGenerationApiService implements IGenerationApiService {
 			gitHubRepoUrl: request.createGitHubRepo
 				? `https://github.com/clarivex-tech/${request.name}`
 				: null,
+			generatedServiceName: request.name,
+			generatedVertical: request.verticalSlug,
+			generationTimestamp: new Date().toISOString(),
 		}).pipe(delay(600));
 	}
 

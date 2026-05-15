@@ -63,12 +63,16 @@ export class GenerationApiService implements IGenerationApiService {
 				map((response) => {
 					const contentDisposition = response.headers.get('content-disposition') ?? '';
 					const fileNameMatch = /filename="?([^\";]+)"?/i.exec(contentDisposition);
-					const fileName = fileNameMatch?.[1] ?? `${request.name}-scaffold.zip`;
+					const headerServiceName = response.headers.get('X-Generation-Service-Name');
+					const fileName = fileNameMatch?.[1] ?? `${headerServiceName ?? request.name}-scaffold.zip`;
 
 					return {
 						zipBlob: response.body ?? new Blob(),
 						fileName,
 						gitHubRepoUrl: response.headers.get('X-Generation-GitHub-Url'),
+						generatedServiceName: headerServiceName,
+						generatedVertical: response.headers.get('X-Generation-Vertical'),
+						generationTimestamp: response.headers.get('X-Generation-Timestamp'),
 					};
 				})
 			);

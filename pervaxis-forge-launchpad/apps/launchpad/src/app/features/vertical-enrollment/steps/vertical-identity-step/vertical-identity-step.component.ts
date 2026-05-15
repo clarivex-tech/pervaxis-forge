@@ -37,7 +37,7 @@ import { MatStepperModule } from '@angular/material/stepper';
 					<mat-error>Display name is required.</mat-error>
 				}
 			</mat-form-field>
-			<mat-form-field appearance="outline" class="full-width">
+			<mat-form-field appearance="outline" subscriptSizing="dynamic" class="full-width description-field">
 				<mat-label>Description</mat-label>
 				<textarea matInput rows="3" formControlName="description"></textarea>
 				@if (hasError('description', 'required')) {
@@ -47,14 +47,17 @@ import { MatStepperModule } from '@angular/material/stepper';
 					<mat-error>Description must be at least 10 characters.</mat-error>
 				}
 			</mat-form-field>
-			<mat-form-field appearance="outline">
+			@if (hasError('description', 'required') || hasError('description', 'minlength')) {
+				<div class="full-width description-error-spacer" aria-hidden="true"></div>
+			}
+			<mat-form-field appearance="outline" class="post-description-field">
 				<mat-label>Owner Team</mat-label>
 				<input matInput type="text" formControlName="ownerTeam" />
 				@if (hasError('ownerTeam', 'required')) {
 					<mat-error>Owner team is required.</mat-error>
 				}
 			</mat-form-field>
-			<mat-form-field appearance="outline">
+			<mat-form-field appearance="outline" class="post-description-field">
 				<mat-label>Owner Email</mat-label>
 				<input matInput type="email" formControlName="ownerEmail" />
 				@if (hasError('ownerEmail', 'required')) {
@@ -86,7 +89,23 @@ import { MatStepperModule } from '@angular/material/stepper';
 			.form-grid {
 				display: grid;
 				grid-template-columns: repeat(2, minmax(0, 1fr));
-				gap: 0.75rem;
+				gap: 1.15rem;
+			}
+
+			.form-grid mat-form-field {
+				margin-bottom: 0.5rem;
+			}
+
+			.description-field {
+				margin-bottom: 2rem;
+			}
+
+			.post-description-field {
+				margin-top: 1.6rem;
+			}
+
+			.description-error-spacer {
+				height: 2rem;
 			}
 
 			.full-width {
