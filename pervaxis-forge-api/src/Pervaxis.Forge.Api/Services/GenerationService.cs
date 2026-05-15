@@ -232,6 +232,16 @@ public sealed class GenerationService : IGenerationService
         return entries.AsReadOnly();
     }
 
+    private static ServiceType ParseServiceType(string type) => type.ToLowerInvariant() switch
+    {
+        "restapi" => ServiceType.RestApi,
+        "angularshell" => ServiceType.AngularShell,
+        "angularmfe" => ServiceType.AngularMfe,
+        "graphql" => ServiceType.GraphQL,
+        "grpc" => ServiceType.Grpc,
+        _ => throw new InvalidOperationException($"Unsupported service type: '{type}'. Valid values: RestApi, AngularShell, AngularMfe, GraphQL, Grpc.")
+    };
+
     private static ForgeManifest BuildManifest(GenerationRequest request, VerticalResponse vertical)
     {
         var manifest = new ForgeManifest
@@ -239,7 +249,7 @@ public sealed class GenerationService : IGenerationService
             Product = vertical.ComponentPrefix.ToLowerInvariant(),
             VerticalSlug = request.VerticalSlug,
             ServiceName = request.Name,
-            ServiceType = ServiceType.RestApi,
+            ServiceType = ParseServiceType(request.Type),
             ComponentPrefix = vertical.ComponentPrefix,
             CloudProvider = vertical.CloudProvider,
             GenesisModules = request.GenesisModules,
