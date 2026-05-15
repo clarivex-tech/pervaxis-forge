@@ -1,1 +1,8 @@
-{{# TODO: implement manifest.json template #}}
+{
+  "product": "{{ model.manifest.product }}",
+  "verticalSlug": "{{ model.manifest.vertical_slug }}",
+  "serviceName": "{{ model.manifest.service_name }}",
+  "serviceType": "AngularShell",
+  "componentPrefix": "{{ model.manifest.component_prefix }}",
+  "canvasModules": [{{ for m in model.selected_canvas_modules }}"{{ m.name }}"{{ if !for.last }}, {{ end }}{{ end }}]
+}
