@@ -1,1 +1,12 @@
-{{# TODO: implement component.ts template #}}
+import { Component, OnInit } from '@angular/core';
+import { {{ model.names.angular_mfe_component_name }}ApiService } from './api.service';
+
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-{{ model.manifest.service_name }}',
+  templateUrl: './component.html'
+})
+export class {{ model.names.angular_mfe_component_name }} implements OnInit {
+  constructor(private readonly apiService: {{ model.names.angular_mfe_component_name }}ApiService) {}
+
+  ngOnInit(): void {}
+}

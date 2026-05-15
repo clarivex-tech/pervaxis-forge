@@ -16,6 +16,8 @@ public sealed record ForgeManifest
 
     public IReadOnlyList<string> GenesisModules { get; init; } = [];
 
+    public IReadOnlyList<string> CanvasModules { get; init; } = [];
+
     public DatabaseConfig? Database { get; init; }
 
     public QueueConfig? Queue { get; init; }

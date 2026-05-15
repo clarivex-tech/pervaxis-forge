@@ -1,1 +1,3 @@
-{{# TODO: implement component.html template #}}
+<div class="{{ model.manifest.component_prefix }}-{{ model.manifest.service_name }}">
+  <p>{{ model.manifest.service_name }} works!</p>
+</div>
