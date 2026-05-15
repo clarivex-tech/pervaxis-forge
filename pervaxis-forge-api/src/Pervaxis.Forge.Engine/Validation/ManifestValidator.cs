@@ -25,8 +25,20 @@ public sealed class ManifestValidator
         if (manifest.ServiceType == ServiceType.RestApi && !manifest.ServiceName.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
             errors.Add(".NET services must end with -service.");
 
-        if (manifest.ServiceType != ServiceType.RestApi && manifest.ServiceName.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
-            errors.Add("Non-.NET services must not end with -service.");
+        if (manifest.ServiceType == ServiceType.GraphQL && !manifest.ServiceName.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
+            errors.Add("GraphQL services must end with -service.");
+
+        if (manifest.ServiceType == ServiceType.Grpc && !manifest.ServiceName.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
+            errors.Add("gRPC services must end with -service.");
+
+        if (manifest.ServiceType == ServiceType.AngularShell && !manifest.ServiceName.EndsWith("-shell", StringComparison.OrdinalIgnoreCase))
+            errors.Add("Angular Shell apps must end with -shell (e.g. claims-shell).");
+
+        if (manifest.ServiceType == ServiceType.AngularMfe && manifest.ServiceName.EndsWith("-shell", StringComparison.OrdinalIgnoreCase))
+            errors.Add("Angular MFE names must not end with -shell.");
+
+        if (manifest.ServiceType == ServiceType.AngularMfe && manifest.ServiceName.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
+            errors.Add("Angular MFE names must not end with -service.");
 
         if (string.IsNullOrWhiteSpace(manifest.Product))
             errors.Add("Product is required.");

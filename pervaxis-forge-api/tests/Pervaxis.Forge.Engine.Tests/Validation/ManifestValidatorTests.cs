@@ -46,13 +46,13 @@ public class ManifestValidatorTests
     }
 
     [Fact]
-    public void Validate_RejectsServiceSuffixForNonDotNetServices()
+    public void Validate_RejectsServiceSuffixForAngularMfe()
     {
-        var manifest = CreateValidManifest() with { ServiceType = ServiceType.Worker, ServiceName = "billing-service" };
+        var manifest = CreateValidManifest() with { ServiceType = ServiceType.AngularMfe, ServiceName = "billing-service" };
 
         var result = validator.Validate(manifest);
 
-        result.Errors.Should().Contain(error => error.Contains("Non-.NET services"));
+        result.Errors.Should().Contain(error => error.Contains("Angular MFE") && error.Contains("-service"));
     }
 
     [Fact]

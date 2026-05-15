@@ -1,0 +1,30 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Grpc.Core;
+
+namespace {{ model.names.namespace }}.Services;
+
+public sealed class {{ model.names.dot_net_class_name }}ServiceImpl : {{ model.names.dot_net_class_name }}Service.{{ model.names.dot_net_class_name }}ServiceBase
+{
+    public override Task<HelloReply> Hello(HelloRequest request, ServerCallContext context)
+        => Task.FromResult(new HelloReply
+        {
+            Message = $"Hello {request.Name} from {{ model.names.dot_net_class_name }}"
+        });
+}
