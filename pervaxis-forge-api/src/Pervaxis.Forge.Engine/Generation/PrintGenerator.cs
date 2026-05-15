@@ -37,6 +37,7 @@ public sealed class PrintGenerator
         ServiceType.AngularShell => "Templates/angular-shell",
         ServiceType.AngularMfe => "Templates/angular-microfrontend",
         ServiceType.GraphQL => "Templates/graphql",
+        ServiceType.Grpc => "Templates/grpc",
         _ => throw new InvalidOperationException($"Unsupported service type: {serviceType}"),
     };
 }
