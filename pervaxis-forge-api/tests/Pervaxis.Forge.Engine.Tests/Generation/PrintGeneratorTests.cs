@@ -52,27 +52,31 @@ public class PrintGeneratorTests
         using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
         var entries = archive.Entries.Select(e => e.FullName).ToList();
 
+        const string src = "src/Pervaxis.Clarivolt.Intake";
+        const string tests = "tests/Pervaxis.Clarivolt.Intake.Tests";
+
         entries.Should().Contain("manifest.json");
-        entries.Should().Contain("Program.cs");
-        entries.Should().Contain("ServiceCollectionExtensions.cs");
-        entries.Should().Contain("Controller.cs");
-        entries.Should().Contain("IService.cs");
-        entries.Should().Contain("Request.cs");
-        entries.Should().Contain("Response.cs");
+        entries.Should().Contain($"{src}/Program.cs");
+        entries.Should().Contain($"{src}/Extensions/ServiceCollectionExtensions.cs");
+        entries.Should().Contain($"{src}/Controllers/Controller.cs");
+        entries.Should().Contain($"{src}/Services/IService.cs");
+        entries.Should().Contain($"{src}/Models/Request.cs");
+        entries.Should().Contain($"{src}/Models/Response.cs");
         entries.Should().Contain("Dockerfile");
-        entries.Should().Contain("appsettings.json");
-        entries.Should().Contain("appsettings.Development.json");
+        entries.Should().Contain($"{src}/appsettings.json");
+        entries.Should().Contain($"{src}/appsettings.Development.json");
+        entries.Should().Contain($"{tests}/TestBase.cs");
 
         // Verify cloud provider flows into Program.cs content
-        using var programStream = new StreamReader(archive.GetEntry("Program.cs")!.Open());
+        using var programStream = new StreamReader(archive.GetEntry($"{src}/Program.cs")!.Open());
         var programContent = await programStream.ReadToEndAsync();
         programContent.Should().Contain("AddGenesisFileStorageAWS");
         programContent.Should().Contain("AddGenesisMessagingAWS");
         programContent.Should().Contain("Pervaxis.Genesis.FileStorage.AWS");
 
         // Verify csproj has Genesis package references and correct name
-        entries.Should().Contain("Pervaxis.Clarivolt.Intake.csproj");
-        using var csprojStream = new StreamReader(archive.GetEntry("Pervaxis.Clarivolt.Intake.csproj")!.Open());
+        entries.Should().Contain($"{src}/Pervaxis.Clarivolt.Intake.csproj");
+        using var csprojStream = new StreamReader(archive.GetEntry($"{src}/Pervaxis.Clarivolt.Intake.csproj")!.Open());
         var csprojContent = await csprojStream.ReadToEndAsync();
         csprojContent.Should().Contain("Pervaxis.Genesis.FileStorage.AWS");
         csprojContent.Should().Contain("Npgsql.EntityFrameworkCore.PostgreSQL");
@@ -111,9 +115,11 @@ public class PrintGeneratorTests
             foreach (var file in files)
                 Console.WriteLine($"  {file}");
 
-            files.Should().Contain("Program.cs");
-            files.Should().Contain("Controller.cs");
-            files.Should().Contain("Pervaxis.Clarivolt.Intake.csproj");
+            files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Program.cs");
+            files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Controllers/Controller.cs");
+            files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Pervaxis.Clarivolt.Intake.csproj");
+            files.Should().Contain("tests/Pervaxis.Clarivolt.Intake.Tests/TestBase.cs");
+            files.Should().Contain("tests/Pervaxis.Clarivolt.Intake.Tests/Pervaxis.Clarivolt.Intake.Tests.csproj");
             files.Should().Contain("Dockerfile");
             files.Should().Contain(".claude/CLAUDE.md");
             files.Should().Contain(".github/workflows/build-test.yml");
