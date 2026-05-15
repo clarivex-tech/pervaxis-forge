@@ -50,6 +50,26 @@ Every `.cs` file must start with this exact license header:
 
 ---
 
+## Migration Guide
+
+This scaffold is a one-time bootstrapper. Once you add domain code, the scaffold is "consumed" — it belongs to you.
+
+**Domain folders (yours — move these when upgrading to a new scaffold):**
+- `Controllers/` — API endpoints
+- `Services/` — business logic implementations
+- `Models/` — domain request/response models
+- `Data/` — EF entities, repositories, migrations (if present)
+
+**Scaffold infrastructure (do not copy — take from the new print):**
+- `Program.cs`, `csproj`, `Dockerfile`, `appsettings.json`, CI workflow
+
+**To migrate to a newer scaffold version:**
+1. Generate a new print from `manifest.json` via Pervaxis Forge
+2. Open both services in Claude Code and say: *"Migrate my domain code from the old service into this new scaffold"*
+3. Claude reads both `CLAUDE.md` files, copies the domain folders, and fixes any breaking API changes
+
+---
+
 ## guides/ and skills/
 
 Standards and patterns are in `.claude/guides/` and `.claude/skills/`. Read before implementing:

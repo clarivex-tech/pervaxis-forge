@@ -56,6 +56,25 @@ Proto file is at `src/{{ model.names.namespace }}/Protos/{{ model.manifest.servi
 
 ---
 
+## Migration Guide
+
+This scaffold is a one-time bootstrapper. Once you add domain code, the scaffold is "consumed" — it belongs to you.
+
+**Domain folders (yours — move these when upgrading to a new scaffold):**
+- `Services/` — gRPC service implementations
+- `Protos/` — proto definitions (update RPC contracts here)
+- `Models/` — domain models (if present alongside proto types)
+
+**Scaffold infrastructure (do not copy — take from the new print):**
+- `Program.cs`, `csproj`, `Dockerfile`, `appsettings.json`, CI workflow
+
+**To migrate to a newer scaffold version:**
+1. Generate a new print from `manifest.json` via Pervaxis Forge
+2. Open both services in Claude Code and say: *"Migrate my domain code from the old service into this new scaffold"*
+3. Claude reads both `CLAUDE.md` files, copies the domain folders, regenerates C# stubs from the proto, and fixes any breaking API changes
+
+---
+
 ## guides/ and skills/
 
 Standards and patterns are in `.claude/guides/` and `.claude/skills/`. Read before implementing:
