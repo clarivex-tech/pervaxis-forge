@@ -196,9 +196,24 @@ public sealed class GenerationService : IGenerationService
 
         if (validationResult.IsValid)
         {
-            var derivedNames = NamingConvention.DeriveDotNetNames(manifest.Product, manifest.ServiceName);
-            @namespace = derivedNames.DotNetNamespace;
-            projectName = derivedNames.ProjectFile;
+            if (manifest.ServiceType == ServiceType.RestApi || manifest.ServiceType == ServiceType.GraphQL || manifest.ServiceType == ServiceType.Grpc)
+            {
+                var derivedNames = NamingConvention.DeriveDotNetNames(manifest.Product, manifest.ServiceName);
+                @namespace = derivedNames.DotNetNamespace;
+                projectName = derivedNames.ProjectFile;
+            }
+            else if (manifest.ServiceType == ServiceType.AngularShell)
+            {
+                var derivedNames = NamingConvention.DeriveAngularShellNames(manifest.Product, manifest.ServiceName);
+                @namespace = derivedNames.AngularShellComponentName;
+                projectName = derivedNames.AngularShellRoutePath;
+            }
+            else if (manifest.ServiceType == ServiceType.AngularMfe)
+            {
+                var derivedNames = NamingConvention.DeriveAngularMfeNames(manifest.Product, manifest.ServiceName);
+                @namespace = derivedNames.AngularMfeComponentName;
+                projectName = derivedNames.AngularMfeRoutePath;
+            }
         }
 
         return new ValidationPreviewResult
@@ -244,15 +259,20 @@ public sealed class GenerationService : IGenerationService
 
     private static ForgeManifest BuildManifest(GenerationRequest request, VerticalResponse vertical)
     {
+        var serviceType = ParseServiceType(request.Type);
+        var isBackend = serviceType == ServiceType.RestApi
+            || serviceType == ServiceType.GraphQL
+            || serviceType == ServiceType.Grpc;
+
         var manifest = new ForgeManifest
         {
             Product = vertical.ComponentPrefix.ToLowerInvariant(),
             VerticalSlug = request.VerticalSlug,
             ServiceName = request.Name,
-            ServiceType = ParseServiceType(request.Type),
+            ServiceType = serviceType,
             ComponentPrefix = vertical.ComponentPrefix,
             CloudProvider = vertical.CloudProvider,
-            GenesisModules = request.GenesisModules,
+            GenesisModules = isBackend ? request.GenesisModules : [],
             Metadata = new ManifestMetadata
             {
                 Version = request.Version,
@@ -260,7 +280,7 @@ public sealed class GenerationService : IGenerationService
             }
         };
 
-        if (request.Database != null)
+        if (isBackend && request.Database != null)
         {
             manifest = manifest with
             {
