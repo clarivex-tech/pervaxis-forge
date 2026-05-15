@@ -16,7 +16,9 @@
  ************************************************************************
  */
 
+using System.IO.Compression;
 using FluentAssertions;
+using Pervaxis.Forge.Engine.Generation;
 using Pervaxis.Forge.Engine.Manifest;
 using Pervaxis.Forge.Engine.Validation;
 using Xunit;
@@ -26,6 +28,64 @@ namespace Pervaxis.Forge.Engine.Tests.Generation;
 public class AngularGenerationTests
 {
     private readonly ManifestValidator validator = new();
+    private readonly PrintGenerator generator = new();
+
+    [Fact]
+    public async Task GenerateAsync_AngularShell_WithCanvasModules_ReturnsZip()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "mat",
+            VerticalSlug = "matrimony",
+            ServiceName = "matr-shell",
+            ServiceType = ServiceType.AngularShell,
+            ComponentPrefix = "mat",
+            CloudProvider = "AWS",
+            GenesisModules = [],
+            CanvasModules = ["Workspace", "Shell", "Layout", "Navigation", "Auth"],
+        };
+
+        var zipBytes = await generator.GenerateAsync(manifest, "AWS");
+
+        using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        var entries = archive.Entries.Select(e => e.FullName).ToList();
+        entries.Should().Contain("package.json");
+        entries.Should().Contain("app.config.ts");
+        entries.Should().Contain("angular.json");
+
+        using var configStream = new StreamReader(archive.GetEntry("app.config.ts")!.Open());
+        var configContent = await configStream.ReadToEndAsync();
+        configContent.Should().Contain("CanvasNavigationModule");
+        configContent.Should().Contain("@pervaxis/canvas-navigation");
+    }
+
+    [Fact]
+    public async Task GenerateAsync_AngularMfe_WithCanvasModules_ReturnsZip()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "mat",
+            VerticalSlug = "matrimony",
+            ServiceName = "intake-profile",
+            ServiceType = ServiceType.AngularMfe,
+            ComponentPrefix = "mat",
+            CloudProvider = "AWS",
+            GenesisModules = [],
+            CanvasModules = ["Dashboard", "Notifications"],
+        };
+
+        var zipBytes = await generator.GenerateAsync(manifest, "AWS");
+
+        using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        var entries = archive.Entries.Select(e => e.FullName).ToList();
+        entries.Should().Contain("module.ts");
+        entries.Should().Contain("component.ts");
+
+        using var moduleStream = new StreamReader(archive.GetEntry("module.ts")!.Open());
+        var moduleContent = await moduleStream.ReadToEndAsync();
+        moduleContent.Should().Contain("CanvasDashboardModule");
+        moduleContent.Should().Contain("@pervaxis/canvas-dashboard");
+    }
 
     [Fact]
     public void Validate_RejectsAngularShellNotEndingWithShell()
