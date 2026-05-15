@@ -31,11 +31,12 @@ public sealed class FileGenerator
                 .Replace(".cstemplate", ".cs")
                 .Replace(".tstemplate", ".ts")
                 .Replace(".htmltemplate", ".html");
-            // Substitute folder name tokens with derived project names
+            // Substitute folder name tokens with derived project/app names
             var projectName = model.DerivedNames.ProjectFile[..^7]; // strip .csproj
             outputPath = outputPath
                 .Replace("__PROJECT__", projectName)
-                .Replace("__TEST_PROJECT__", model.DerivedNames.TestProjectName);
+                .Replace("__TEST_PROJECT__", model.DerivedNames.TestProjectName)
+                .Replace("__APP__", model.Manifest.ServiceName);
             // csproj.sbn and tests.csproj.sbn use generic names; replace with derived project names
             outputPath = outputPath switch
             {
