@@ -263,6 +263,8 @@ public sealed class GenerationService : IGenerationService
         var isBackend = serviceType == ServiceType.RestApi
             || serviceType == ServiceType.GraphQL
             || serviceType == ServiceType.Grpc;
+        var isAngular = serviceType == ServiceType.AngularShell
+            || serviceType == ServiceType.AngularMfe;
 
         var manifest = new ForgeManifest
         {
@@ -273,6 +275,7 @@ public sealed class GenerationService : IGenerationService
             ComponentPrefix = vertical.ComponentPrefix,
             CloudProvider = vertical.CloudProvider,
             GenesisModules = isBackend ? request.GenesisModules : [],
+            CanvasModules = isAngular ? request.CanvasModules : [],
             Metadata = new ManifestMetadata
             {
                 Version = request.Version,

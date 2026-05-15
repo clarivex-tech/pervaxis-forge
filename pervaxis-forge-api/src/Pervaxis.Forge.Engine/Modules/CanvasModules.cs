@@ -28,4 +28,18 @@ public static class CanvasModules
         => Modules.FirstOrDefault(module => string.Equals(module.Id, id, StringComparison.OrdinalIgnoreCase));
 
     public static IReadOnlyList<string> GetAllNames() => Modules.Select(module => module.DisplayName).ToArray();
+
+    public static string GetPackageName(string moduleName)
+    {
+        var module = GetById(moduleName);
+        var segment = module?.DisplayName ?? moduleName;
+        return $"@pervaxis/canvas-{segment.ToLowerInvariant()}";
+    }
+
+    public static string GetImportName(string moduleName)
+    {
+        var module = GetById(moduleName);
+        var segment = module?.DisplayName ?? moduleName;
+        return $"Canvas{segment}Module";
+    }
 }

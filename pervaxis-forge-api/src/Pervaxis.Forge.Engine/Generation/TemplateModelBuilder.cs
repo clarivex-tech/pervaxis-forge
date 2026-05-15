@@ -22,12 +22,22 @@ public static class TemplateModelBuilder
             })
             .ToList();
 
+        var selectedCanvasModules = manifest.CanvasModules
+            .Select(moduleName => new SelectedCanvasModule
+            {
+                Name = moduleName,
+                PackageName = CanvasModules.GetPackageName(moduleName),
+                ImportName = CanvasModules.GetImportName(moduleName),
+            })
+            .ToList();
+
         return new TemplateModel
         {
             Manifest = manifest,
             DerivedNames = BuildDerivedNames(manifest),
             CloudProvider = cloudProvider,
             SelectedModules = selectedModules,
+            SelectedCanvasModules = selectedCanvasModules,
             CurrentYear = DateTime.UtcNow.Year.ToString(),
         };
     }
