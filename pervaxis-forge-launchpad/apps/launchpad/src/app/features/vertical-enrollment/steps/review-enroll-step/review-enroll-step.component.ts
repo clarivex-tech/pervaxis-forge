@@ -1,6 +1,7 @@
 // Copyright © Clarivex Technologies. All rights reserved.
 
 import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { CommonModule } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatStepperModule } from '@angular/material/stepper';
 import { EnrollmentState } from '../../enrollment.state';
@@ -8,7 +9,7 @@ import { EnrollmentState } from '../../enrollment.state';
 @Component({
 	selector: 'forge-review-enroll-step',
 	standalone: true,
-	imports: [MatButtonModule, MatStepperModule],
+	imports: [CommonModule, MatButtonModule, MatStepperModule],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	template: `
 		<section class="summary-grid">
@@ -73,6 +74,13 @@ import { EnrollmentState } from '../../enrollment.state';
 
 			@if (state().connectivity.errorMessage) {
 				<p class="full-width error">{{ state().connectivity.errorMessage }}</p>
+			}
+			@if (state().connectivity.lastCheckedAt) {
+				<p class="full-width success">
+					Connectivity checked at {{ state().connectivity.lastCheckedAt | date: 'short' }}.
+					AWS: {{ state().connectivity.cloudValid ? 'OK' : 'Failed' }}, GitHub:
+					{{ state().connectivity.sourceControlValid ? 'OK' : 'Failed' }}
+				</p>
 			}
 			@if (state().submit.submitError) {
 				<p class="full-width error">{{ state().submit.submitError }}</p>

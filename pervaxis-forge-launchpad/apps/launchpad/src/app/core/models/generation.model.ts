@@ -18,6 +18,64 @@
 
 export type GenerationStatus = 'pending' | 'in-progress' | 'success' | 'failed' | 'partial-failure';
 
+export interface GenesisModule {
+	name: string;
+	label: string;
+	description: string;
+}
+
+export interface CanvasModule {
+	id: string;
+	name: string;
+	label: string;
+}
+
+export interface GenerationDatabaseConfig {
+	engine: string;
+	schema: string;
+}
+
+export interface GenerationQueueConfig {
+	name: string;
+	role: 'publish' | 'subscribe';
+}
+
+export interface GenerationMetadata {
+	deployInfrastructure: boolean;
+	pushToGitHub: boolean;
+	environment: string;
+}
+
+export interface GenerationRequest {
+	verticalSlug: string;
+	name: string;
+	displayName: string;
+	description: string;
+	version: string;
+	type: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe';
+	genesisModules: string[];
+	canvasModules?: string[];
+	database: GenerationDatabaseConfig | null;
+	createGitHubRepo: boolean;
+}
+
+export interface ValidationPreviewResult {
+	isValid: boolean;
+	errors: string[];
+	serviceName: string | null;
+	namespace: string | null;
+	projectName: string | null;
+}
+
+export interface GenerationExecutionResult {
+	zipBlob: Blob;
+	fileName: string;
+	gitHubRepoUrl: string | null;
+	generatedServiceName: string | null;
+	generatedVertical: string | null;
+	generationTimestamp: string | null;
+}
+
 export interface ServiceGenerationRequest {
 	name: string;
 	type: 'BFF' | 'MFE';

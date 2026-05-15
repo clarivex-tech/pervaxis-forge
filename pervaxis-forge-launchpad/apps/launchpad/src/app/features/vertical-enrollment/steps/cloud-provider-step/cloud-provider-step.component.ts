@@ -70,7 +70,11 @@ import { MatStepperModule } from '@angular/material/stepper';
 			.form-grid {
 				display: grid;
 				grid-template-columns: repeat(2, minmax(0, 1fr));
-				gap: 0.75rem;
+				gap: 1.15rem;
+			}
+
+			.form-grid mat-form-field {
+				margin-bottom: 0.5rem;
 			}
 
 			.full-width {

@@ -32,6 +32,8 @@ import { VERTICAL_API_SERVICE, VerticalApiService } from '@core/api/vertical-api
 import { MockVerticalApiService } from '@core/api/mock-vertical-api.service';
 import { GENERATION_API_SERVICE, GenerationApiService } from '@core/api/generation-api.service';
 import { MockGenerationApiService } from '@core/api/mock-generation-api.service';
+import { MODULES_API_SERVICE, ModulesApiService } from '@core/api/modules-api.service';
+import { MockModulesApiService } from '@core/api/mock-modules-api.service';
 
 export const appConfig: ApplicationConfig = {
 	providers: [
@@ -48,6 +50,10 @@ export const appConfig: ApplicationConfig = {
 		{
 			provide: GENERATION_API_SERVICE,
 			useClass: environment.useMockApi ? MockGenerationApiService : GenerationApiService,
+		},
+		{
+			provide: MODULES_API_SERVICE,
+			useClass: environment.useMockApi ? MockModulesApiService : ModulesApiService,
 		},
 	],
 };

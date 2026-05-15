@@ -1,9 +1,9 @@
 # Pervaxis Forge — Frontend Blueprint
 **Launchpad UI & Angular Template Implementation Plan**
 
-**Version:** 1.2  
-**Date:** May 5, 2026  
-**Last Updated:** May 5, 2026  
+**Version:** 1.3  
+**Date:** May 14, 2026  
+**Last Updated:** May 15, 2026  
 **Project Start:** May 6, 2026  
 **Projected Completion:** June 18, 2026 (6 weeks)  
 **Team:** Pervaxis Platform Team — Frontend  
@@ -325,6 +325,113 @@ Route: `/verticals/:slug`
 
 > At this point the BFF team has the Engine + REST templates complete.  
 > Generation API endpoints (`POST /api/v1/generate/batch`, `POST /api/v1/validate`) available for integration.
+
+### 4.0 Next Task Update (BFF Handoff - May 14, 2026)
+
+**Priority:** High  
+**Owner:** UI Team  
+**Status:** Next Task
+
+This update supersedes the current generation form flow and aligns the wizard to the live BFF contract.
+
+**Wizard sequence to implement:**
+
+1. Step 1 - Select Vertical
+  - Load dropdown from `GET /api/v1/verticals`.
+  - Resolve cloud provider from selected vertical and show as read-only.
+  - Resolve GitHub org from selected vertical and use when `createGitHubRepo` is true.
+  - Resolve available environments from selected vertical.
+
+2. Step 2 - What are you building?
+  - Backend options:
+    - REST API -> `RestApi` (live)
+    - GraphQL -> `GraphQL` (disabled, Coming Soon - Phase 3.6)
+    - gRPC -> `Grpc` (disabled, Coming Soon - Phase 3.6)
+  - Frontend options:
+    - Shell App -> `AngularShell` (disabled, Coming Soon - Phase 3.5)
+    - Micro Frontend (MFE) -> `AngularMfe` (disabled, Coming Soon - Phase 3.5)
+
+3. Step 3 - Service/App Details (all types)
+  - `name` (kebab-case)
+  - `displayName`
+  - `description`
+  - `version`
+
+4. Step 4 - Genesis Modules (backend only)
+  - Load module list dynamically from `GET /api/v1/modules`.
+  - Show multi-select checkboxes with nothing preselected.
+  - Submit selected values as `genesisModules`, for example `"genesisModules": ["FileStorage", "Messaging"]`.
+
+5. Step 5 - Database (backend only, optional)
+  - Show only when user enables database toggle.
+  - Map fields to:
+    - `database.engine` -> `postgresql | sqlserver | mysql`
+    - `database.schema`
+
+6. Step 6 - GitHub Repo
+  - Toggle for `createGitHubRepo`.
+  - When enabled, BFF creates repo in vertical org and applies branch protection.
+  - On success, read `X-Generation-GitHub-Url` from response headers and show link in UI.
+
+7. Step 7 - Review and Generate
+  - Call `POST /api/v1/generate/validate` before generate.
+  - Show derived preview values (namespace and project name).
+  - Enable Generate only when validation passes.
+  - Call `POST /api/v1/generate` to download ZIP and show repo link when available.
+
+**Request shape to support (example):**
+
+```json
+{
+  "verticalSlug": "clarivolt",
+  "name": "intake-service",
+  "displayName": "Intake Service",
+  "description": "Handles intake processing for Clarivolt",
+  "version": "1.0.0",
+  "type": "RestApi",
+  "genesisModules": ["FileStorage", "Messaging"],
+  "database": {
+   "engine": "postgresql",
+   "schema": "intake_db"
+  },
+  "createGitHubRepo": true,
+  "metadata": {
+   "owner": "Anand",
+   "team": "Platform Team"
+  }
+}
+```
+
+**Endpoints required by UI for this task:**
+
+- `GET /api/v1/verticals`
+- `GET /api/v1/modules`
+- `POST /api/v1/generate/validate`
+- `POST /api/v1/generate`
+- `GET /api/v1/generate/audit/{slug}`
+
+**Important UX note:**
+
+- Keep `AngularShell`, `AngularMfe`, `GraphQL`, and `Grpc` visible but disabled with "Coming Soon" labels so the wizard is forward-compatible with Phase 3.5 and Phase 3.6.
+
+### 4.0.1 Implementation Status (May 15, 2026)
+
+**Status:** Implemented in current UI branch
+
+Completed against handoff sequence:
+
+- Step 1 implemented: Vertical dropdown from `GET /api/v1/verticals`, resolved cloud provider, GitHub org, and environment list.
+- Step 2 implemented: Build type cards with `RestApi` live and `GraphQL`, `Grpc`, `AngularShell`, `AngularMfe` visible as disabled coming soon.
+- Step 3 implemented: Service/App details fields with validation hints.
+- Step 4 implemented: Genesis modules loaded from `GET /api/v1/modules` with multi-select card toggles.
+- Step 5 implemented: Optional database toggle with `postgresql | sqlserver | mysql` and required schema/engine when enabled.
+- Step 6 implemented: GitHub push and create-repo toggles with dependency behavior.
+- Step 7 implemented: Review panel plus validate-before-generate flow, with generate action enabled only after successful validation.
+
+Additional UX updates delivered:
+
+- Compact wizard progress strip for Steps 1-7.
+- Structured queue builder (publish/subscribe) replacing comma-separated queue text entry.
 
 ### 4.1 Wizard Architecture
 
