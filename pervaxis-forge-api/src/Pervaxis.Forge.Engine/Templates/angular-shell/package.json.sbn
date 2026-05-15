@@ -1,6 +1,6 @@
 {
   "name": "@{{ model.manifest.product }}/{{ model.manifest.service_name }}",
-  "version": "{{ model.manifest.metadata.version }}",
+  "version": "{{ model.manifest.metadata?.version ?? '0.1.0' }}",
   "scripts": {
     "start": "nx serve {{ model.manifest.service_name }}",
     "build": "nx build {{ model.manifest.service_name }}",
