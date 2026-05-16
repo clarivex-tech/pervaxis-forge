@@ -21,8 +21,11 @@ import { Observable, of, delay } from 'rxjs';
 
 import {
 	BatchGenerationRequest,
+	GenerationExecutionResult,
+	GenerationRequest,
 	GenerationAuditEntry,
 	RecentGenerationsResponse,
+	ValidationPreviewResult,
 } from '../models/generation.model';
 import { IGenerationApiService } from './generation-api.service';
 
@@ -246,6 +249,35 @@ export class MockGenerationApiService implements IGenerationApiService {
 			],
 		],
 	]);
+
+	validateManifest(request: GenerationRequest): Observable<ValidationPreviewResult> {
+		const normalizedName = request.name.trim();
+		const isValid = normalizedName.length >= 3 && !!request.verticalSlug;
+
+		return of({
+			isValid,
+			errors: isValid ? [] : ['Service name must be at least 3 characters long.'],
+			serviceName: normalizedName || null,
+			namespace: isValid ? `${request.verticalSlug}.${normalizedName}` : null,
+			projectName: isValid ? `${normalizedName}.csproj` : null,
+		}).pipe(delay(300));
+	}
+
+	generateService(request: GenerationRequest): Observable<GenerationExecutionResult> {
+		const content = `Generated scaffold for ${request.name} in ${request.verticalSlug}`;
+		const zipBlob = new Blob([content], { type: 'application/zip' });
+
+		return of({
+			zipBlob,
+			fileName: `${request.name}-scaffold.zip`,
+			gitHubRepoUrl: request.createGitHubRepo
+				? `https://github.com/clarivex-tech/${request.name}`
+				: null,
+			generatedServiceName: request.name,
+			generatedVertical: request.verticalSlug,
+			generationTimestamp: new Date().toISOString(),
+		}).pipe(delay(600));
+	}
 
 	generateBatch(request: BatchGenerationRequest): Observable<GenerationAuditEntry> {
 		const audit: GenerationAuditEntry = {

@@ -18,6 +18,7 @@
 
 using Microsoft.EntityFrameworkCore;
 using Pervaxis.Forge.Api.Data.Entities;
+using System.Text.Json;
 
 namespace Pervaxis.Forge.Api.Data;
 
@@ -30,6 +31,7 @@ public class ForgeDbContext(
     public DbSet<VerticalSourceControlConfig> VerticalSourceControlConfigs => Set<VerticalSourceControlConfig>();
     public DbSet<VerticalTechDefaults> VerticalTechDefaults => Set<VerticalTechDefaults>();
     public DbSet<GenerationLog> GenerationLogs => Set<GenerationLog>();
+    public DbSet<GeneratedService> GeneratedServices => Set<GeneratedService>();
     public DbSet<DeploymentOutput> DeploymentOutputs => Set<DeploymentOutput>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -72,6 +74,11 @@ public class ForgeDbContext(
                 .WithOne(g => g.Vertical)
                 .HasForeignKey(g => g.VerticalId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            e.HasMany(v => v.GeneratedServices)
+                .WithOne(s => s.Vertical)
+                .HasForeignKey(s => s.VerticalId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         // ── VerticalCloudConfig ───────────────────────────────────────────────
@@ -132,7 +139,12 @@ public class ForgeDbContext(
             e.ToTable("generation_logs");
             e.HasKey(g => g.Id);
             e.Property(g => g.Id).HasDefaultValueSql("gen_random_uuid()");
-            e.Property(g => g.Manifest).HasColumnType("jsonb").IsRequired();
+            e.Property(g => g.Manifest)
+                .HasConversion(
+                    v => v.RootElement.GetRawText(),
+                    v => JsonDocument.Parse(v))
+                .HasColumnType("jsonb")
+                .IsRequired();
             e.Property(g => g.InfrastructureDeployed).HasDefaultValue(false);
             e.Property(g => g.GitHubReposCreated).HasDefaultValue(false);
             e.Property(g => g.CreatedBy).HasMaxLength(255).IsRequired();
@@ -159,6 +171,28 @@ public class ForgeDbContext(
             e.Property(d => d.CreatedAt).HasDefaultValueSql("NOW()");
 
             e.HasIndex(d => d.GenerationLogId).HasDatabaseName("idx_deployment_outputs_generation");
+        });
+
+        // ── GeneratedService ─────────────────────────────────────────────────
+        modelBuilder.Entity<GeneratedService>(e =>
+        {
+            e.ToTable("generated_services");
+            e.HasKey(s => s.Id);
+            e.Property(s => s.Id).HasDefaultValueSql("gen_random_uuid()");
+            e.Property(s => s.ServiceName).HasMaxLength(255).IsRequired();
+            e.Property(s => s.ServiceType).HasMaxLength(50).IsRequired();
+            e.Property(s => s.ManifestJson)
+                .HasConversion(
+                    v => v.RootElement.GetRawText(),
+                    v => JsonDocument.Parse(v))
+                .HasColumnType("jsonb")
+                .IsRequired();
+            e.Property(s => s.CloudProvider).HasMaxLength(50).IsRequired();
+            e.Property(s => s.GeneratedAt).HasDefaultValueSql("NOW()");
+            e.Property(s => s.GeneratedBy).HasMaxLength(255).IsRequired();
+
+            e.HasIndex(s => new { s.VerticalId, s.ServiceName }).IsUnique().HasDatabaseName("idx_generated_services_vertical_name");
+            e.HasIndex(s => new { s.VerticalId, s.GeneratedAt }).HasDatabaseName("idx_generated_services_vertical_generated_at");
         });
     }
 }

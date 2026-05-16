@@ -176,13 +176,61 @@ export class VerticalEnrollmentComponent {
 	}
 
 	validateConnectivity(): void {
+		this.syncStateFromForms();
+		const slug = this.state().identity.slug.trim();
+
+		if (!slug) {
+			this.state.update((current: EnrollmentState) => ({
+				...current,
+				connectivity: {
+					...current.connectivity,
+					errorMessage: 'Provide a valid slug before validating connectivity.',
+				},
+			}));
+			return;
+		}
+
 		this.state.update((current: EnrollmentState) => ({
 			...current,
 			connectivity: {
-				...current.connectivity,
-				errorMessage: 'Connectivity validation is available after enrollment in this phase.',
+				isChecking: true,
+				cloudValid: null,
+				sourceControlValid: null,
+				lastCheckedAt: null,
+				errorMessage: null,
 			},
 		}));
+
+		this.verticalApiService.validateConnectivity(slug).subscribe({
+			next: (response: ConnectivityValidationResponse) => {
+				const errors = [
+					response.awsConnectivity.errorMessage,
+					response.gitHubConnectivity.errorMessage,
+				].filter((value): value is string => !!value && value.trim().length > 0);
+
+				this.state.update((current: EnrollmentState) => ({
+					...current,
+					connectivity: {
+						isChecking: false,
+						cloudValid: response.awsConnectivity.success,
+						sourceControlValid: response.gitHubConnectivity.success,
+						lastCheckedAt: new Date().toISOString(),
+						errorMessage: errors.length > 0 ? errors.join(' ') : null,
+					},
+				}));
+			},
+			error: () => {
+				this.state.update((current: EnrollmentState) => ({
+					...current,
+					connectivity: {
+						...current.connectivity,
+						isChecking: false,
+						errorMessage:
+							'Connectivity validation failed. Enroll the vertical first or verify the slug.',
+					},
+				}));
+			},
+		});
 	}
 
 	enrollVertical(): void {

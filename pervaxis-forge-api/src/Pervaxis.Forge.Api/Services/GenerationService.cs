@@ -49,13 +49,14 @@ public sealed class GenerationService : IGenerationService
         this.gitHubService = gitHubService;
     }
 
-    public async Task<(byte[] Zip, GenerationResult Result)> GenerateAsync(GenerationRequest request, CancellationToken ct = default)
+    public async Task<(byte[] Zip, GenerationResult Result)> GenerateAsync(GenerationRequest request, string generatedBy, CancellationToken ct = default)
     {
         var vertical = await verticalService.GetAsync(request.VerticalSlug, ct);
         if (vertical == null)
             throw new KeyNotFoundException($"Vertical '{request.VerticalSlug}' not found or inactive");
 
         var manifest = BuildManifest(request, vertical);
+        await EnsureServiceNameAvailableAsync(vertical.Id, manifest.ServiceName, ct);
         var zipBytes = await printGenerator.GenerateAsync(manifest, vertical.CloudProvider, ct);
 
         var verticalEntity = await db.Verticals
@@ -96,6 +97,7 @@ public sealed class GenerationService : IGenerationService
         }
 
         await WriteGenerationLogAsync(vertical.Id, manifest, 1, gitHubReposCreated, ct);
+        await WriteGeneratedServiceAsync(vertical.Id, manifest, generatedBy, ct);
 
         var result = new GenerationResult
         {
@@ -137,6 +139,7 @@ public sealed class GenerationService : IGenerationService
                 };
 
                 var manifest = BuildManifest(fullRequest, vertical);
+                await EnsureServiceNameAvailableAsync(vertical.Id, manifest.ServiceName, ct);
                 var zipBytes = await printGenerator.GenerateAsync(manifest, vertical.CloudProvider, ct);
 
                 serviceZips.Add((serviceSpec.Name, zipBytes));
@@ -247,6 +250,56 @@ public sealed class GenerationService : IGenerationService
         return entries.AsReadOnly();
     }
 
+    public async Task<IReadOnlyList<GeneratedServiceResponse>> ListGeneratedServicesAsync(string verticalSlug, CancellationToken ct = default)
+    {
+        var vertical = await db.Verticals.AsNoTracking().FirstOrDefaultAsync(v => v.Slug == verticalSlug && v.IsActive, ct);
+        if (vertical is null)
+            throw new KeyNotFoundException($"Vertical '{verticalSlug}' not found or inactive");
+
+        var services = await db.GeneratedServices
+            .AsNoTracking()
+            .Where(s => s.VerticalId == vertical.Id)
+            .OrderByDescending(s => s.GeneratedAt)
+            .ToListAsync(ct);
+
+        return services.Select(s => new GeneratedServiceResponse
+        {
+            Id = s.Id,
+            ServiceName = s.ServiceName,
+            ServiceType = s.ServiceType,
+            CloudProvider = s.CloudProvider,
+            GeneratedAt = s.GeneratedAt,
+            GeneratedBy = s.GeneratedBy
+        }).ToList();
+    }
+
+    public async Task<(byte[] Zip, GeneratedServiceResponse Service)> RegenerateAsync(string verticalSlug, Guid serviceId, CancellationToken ct = default)
+    {
+        var vertical = await db.Verticals.AsNoTracking().FirstOrDefaultAsync(v => v.Slug == verticalSlug && v.IsActive, ct);
+        if (vertical is null)
+            throw new KeyNotFoundException($"Vertical '{verticalSlug}' not found or inactive");
+
+        var service = await db.GeneratedServices
+            .AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == serviceId && s.VerticalId == vertical.Id, ct);
+        if (service is null)
+            throw new KeyNotFoundException($"Generated service '{serviceId}' not found for vertical '{verticalSlug}'");
+
+        var manifest = JsonSerializer.Deserialize<ForgeManifest>(service.ManifestJson.RootElement.GetRawText())
+            ?? throw new InvalidOperationException("Stored manifest could not be read.");
+
+        var zipBytes = await printGenerator.GenerateAsync(manifest, service.CloudProvider, ct);
+        return (zipBytes, new GeneratedServiceResponse
+        {
+            Id = service.Id,
+            ServiceName = service.ServiceName,
+            ServiceType = service.ServiceType,
+            CloudProvider = service.CloudProvider,
+            GeneratedAt = service.GeneratedAt,
+            GeneratedBy = service.GeneratedBy
+        });
+    }
+
     private static ServiceType ParseServiceType(string type) => type.ToLowerInvariant() switch
     {
         "restapi" => ServiceType.RestApi,
@@ -334,5 +387,31 @@ public sealed class GenerationService : IGenerationService
 
         db.GenerationLogs.Add(log);
         await db.SaveChangesAsync(ct);
+    }
+
+    private async Task WriteGeneratedServiceAsync(Guid verticalId, ForgeManifest manifest, string generatedBy, CancellationToken ct = default)
+    {
+        var manifestJson = JsonSerializer.Serialize(manifest);
+        var jsonDoc = JsonDocument.Parse(manifestJson);
+
+        db.GeneratedServices.Add(new GeneratedService
+        {
+            VerticalId = verticalId,
+            ServiceName = manifest.ServiceName,
+            ServiceType = manifest.ServiceType.ToString(),
+            ManifestJson = jsonDoc,
+            CloudProvider = manifest.CloudProvider,
+            GeneratedAt = DateTimeOffset.UtcNow,
+            GeneratedBy = generatedBy
+        });
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    private async Task EnsureServiceNameAvailableAsync(Guid verticalId, string serviceName, CancellationToken ct)
+    {
+        var exists = await db.GeneratedServices.AnyAsync(s => s.VerticalId == verticalId && s.ServiceName == serviceName, ct);
+        if (exists)
+            throw new InvalidOperationException($"Service name '{serviceName}' already exists for this vertical.");
     }
 }
