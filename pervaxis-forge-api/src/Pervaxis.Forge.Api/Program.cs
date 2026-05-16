@@ -124,6 +124,8 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 app.UseHttpsRedirection();
 app.UseCors(ForgeUiCorsPolicy);
 
+await ApplyPendingMigrationsAsync(app.Services);
+
 app.MapVerticalEndpoints();
 app.MapGenerationEndpoints();
 app.MapModuleEndpoints();
@@ -249,4 +251,11 @@ static async Task SeedSampleVerticalsAsync(IServiceProvider services)
     {
         await verticalService.EnrollAsync(request);
     }
+}
+
+static async Task ApplyPendingMigrationsAsync(IServiceProvider services)
+{
+    using var scope = services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ForgeDbContext>();
+    await db.Database.MigrateAsync();
 }
