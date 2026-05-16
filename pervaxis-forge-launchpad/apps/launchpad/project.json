@@ -27,7 +27,24 @@
 				"production": {
 					"optimization": true,
 					"extractLicenses": true,
-					"sourceMap": false
+					"sourceMap": false,
+					"fileReplacements": [
+						{
+							"replace": "apps/launchpad/src/environments/environment.ts",
+							"with": "apps/launchpad/src/environments/environment.prod.ts"
+						}
+					]
+				},
+				"accp": {
+					"optimization": true,
+					"extractLicenses": true,
+					"sourceMap": false,
+					"fileReplacements": [
+						{
+							"replace": "apps/launchpad/src/environments/environment.ts",
+							"with": "apps/launchpad/src/environments/environment.accp.ts"
+						}
+					]
 				},
 				"development": {
 					"optimization": false,
