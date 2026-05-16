@@ -24,6 +24,7 @@ import {
 	GenerationExecutionResult,
 	GenerationRequest,
 	GenerationAuditEntry,
+	GeneratedServiceRecord,
 	RecentGenerationsResponse,
 	ValidationPreviewResult,
 } from '../models/generation.model';
@@ -320,5 +321,53 @@ export class MockGenerationApiService implements IGenerationApiService {
 		const audit = generations.find((g) => g.id === generationId);
 
 		return of(audit ?? generations[0]).pipe(delay(300));
+	}
+
+	listGeneratedServices(verticalSlug: string): Observable<GeneratedServiceRecord[]> {
+		const generations = this.auditLog.get(verticalSlug) ?? [];
+		const services: GeneratedServiceRecord[] = [];
+
+		for (const gen of generations) {
+			for (const result of gen.results) {
+				if (result.status === 'success') {
+					services.push({
+						id: `svc-${verticalSlug}-${result.name}`,
+						serviceName: result.name,
+						serviceType: 'RestApi',
+						cloudProvider: 'AWS',
+						generatedAt: gen.timestamp,
+						generatedBy: gen.operator,
+					});
+				}
+			}
+		}
+
+		return of(services).pipe(delay(400));
+	}
+
+	regenerateService(verticalSlug: string, serviceId: string): Observable<GenerationExecutionResult> {
+		const generations = this.auditLog.get(verticalSlug) ?? [];
+		let serviceName = 'unknown-service';
+
+		for (const gen of generations) {
+			for (const result of gen.results) {
+				if (`svc-${verticalSlug}-${result.name}` === serviceId) {
+					serviceName = result.name;
+					break;
+				}
+			}
+		}
+
+		const content = `Regenerated scaffold for ${serviceName} in ${verticalSlug}`;
+		const zipBlob = new Blob([content], { type: 'application/zip' });
+
+		return of({
+			zipBlob,
+			fileName: `${serviceName}-regenerated.zip`,
+			gitHubRepoUrl: null,
+			generatedServiceName: serviceName,
+			generatedVertical: verticalSlug,
+			generationTimestamp: new Date().toISOString(),
+		}).pipe(delay(600));
 	}
 }

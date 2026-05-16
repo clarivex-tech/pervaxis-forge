@@ -129,3 +129,12 @@ export interface GenerationAuditEntry {
 export interface RecentGenerationsResponse {
 	generations: GenerationAuditEntry[];
 }
+
+export interface GeneratedServiceRecord {
+	id: string;
+	serviceName: string;
+	serviceType: string;
+	cloudProvider: string;
+	generatedAt: string;
+	generatedBy: string;
+}

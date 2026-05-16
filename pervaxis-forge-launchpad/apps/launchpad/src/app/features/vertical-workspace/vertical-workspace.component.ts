@@ -38,7 +38,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { VERTICAL_API_SERVICE } from '@core/api/vertical-api.service';
 import { GENERATION_API_SERVICE } from '@core/api/generation-api.service';
 import { VerticalResponse } from '@core/models/vertical.model';
-import { GenerationAuditEntry } from '@core/models/generation.model';
+import { GenerationAuditEntry, GeneratedServiceRecord } from '@core/models/generation.model';
 import { VerticalSettingsPanelComponent } from './vertical-settings/vertical-settings-panel.component';
 
 @Component({
@@ -69,11 +69,15 @@ export class VerticalWorkspaceComponent {
 	readonly slug = signal<string>('');
 	readonly vertical = signal<VerticalResponse | null>(null);
 	readonly recentGenerations = signal<GenerationAuditEntry[]>([]);
+	readonly generatedServices = signal<GeneratedServiceRecord[]>([]);
 	readonly isLoadingVertical = signal(false);
 	readonly isLoadingGenerations = signal(false);
+	readonly isLoadingServices = signal(false);
+	readonly regeneratingServiceId = signal<string | null>(null);
 	readonly showSettingsPanel = signal(false);
 
 	readonly displayColumns = ['timestamp', 'operator', 'services', 'status'];
+	readonly serviceColumns = ['name', 'type', 'generatedAt', 'generatedBy', 'actions'];
 
 	readonly hasData = computed(() => this.vertical() !== null);
 	readonly serviceCount = computed(() => this.vertical()?.serviceCount ?? 0);
@@ -86,6 +90,7 @@ export class VerticalWorkspaceComponent {
 				this.slug.set(slug);
 				this.loadVertical(slug);
 				this.loadRecentGenerations(slug);
+				this.loadGeneratedServices(slug);
 			}
 		});
 	}
@@ -114,6 +119,41 @@ export class VerticalWorkspaceComponent {
 				this.isLoadingGenerations.set(false);
 			},
 		});
+	}
+
+	private loadGeneratedServices(slug: string): void {
+		this.isLoadingServices.set(true);
+		this.generationApiService.listGeneratedServices(slug).subscribe({
+			next: (services) => {
+				this.generatedServices.set(services);
+				this.isLoadingServices.set(false);
+			},
+			error: () => {
+				this.isLoadingServices.set(false);
+			},
+		});
+	}
+
+	regenerateService(serviceId: string): void {
+		this.regeneratingServiceId.set(serviceId);
+		this.generationApiService.regenerateService(this.slug(), serviceId).subscribe({
+			next: (result) => {
+				this.downloadZip(result.zipBlob, result.fileName);
+				this.regeneratingServiceId.set(null);
+			},
+			error: () => {
+				this.regeneratingServiceId.set(null);
+			},
+		});
+	}
+
+	private downloadZip(blob: Blob, fileName: string): void {
+		const url = URL.createObjectURL(blob);
+		const anchor = document.createElement('a');
+		anchor.href = url;
+		anchor.download = fileName;
+		anchor.click();
+		URL.revokeObjectURL(url);
 	}
 
 	openSettings(): void {

@@ -26,6 +26,7 @@ import {
 	GenerationExecutionResult,
 	GenerationRequest,
 	GenerationAuditEntry,
+	GeneratedServiceRecord,
 	RecentGenerationsResponse,
 	ValidationPreviewResult,
 } from '../models/generation.model';
@@ -36,6 +37,8 @@ export interface IGenerationApiService {
 	generateBatch(request: BatchGenerationRequest): Observable<GenerationAuditEntry>;
 	getRecentGenerations(verticalSlug: string, limit?: number): Observable<RecentGenerationsResponse>;
 	getGenerationAudit(verticalSlug: string, generationId: string): Observable<GenerationAuditEntry>;
+	listGeneratedServices(verticalSlug: string): Observable<GeneratedServiceRecord[]>;
+	regenerateService(verticalSlug: string, serviceId: string): Observable<GenerationExecutionResult>;
 }
 
 export const GENERATION_API_SERVICE = new InjectionToken<IGenerationApiService>(
@@ -90,5 +93,36 @@ export class GenerationApiService implements IGenerationApiService {
 
 	getGenerationAudit(verticalSlug: string, generationId: string): Observable<GenerationAuditEntry> {
 		return this.http.get<GenerationAuditEntry>(`${this.baseUrl}/audit/${verticalSlug}/${generationId}`);
+	}
+
+	listGeneratedServices(verticalSlug: string): Observable<GeneratedServiceRecord[]> {
+		return this.http.get<GeneratedServiceRecord[]>(
+			`${environment.apiBaseUrl}/verticals/${verticalSlug}/services`
+		);
+	}
+
+	regenerateService(verticalSlug: string, serviceId: string): Observable<GenerationExecutionResult> {
+		return this.http
+			.post(
+				`${environment.apiBaseUrl}/verticals/${verticalSlug}/services/${serviceId}/regenerate`,
+				{},
+				{ observe: 'response', responseType: 'blob' }
+			)
+			.pipe(
+				map((response) => {
+					const contentDisposition = response.headers.get('content-disposition') ?? '';
+					const fileNameMatch = /filename="?([^\";]+)"?/i.exec(contentDisposition);
+					const fileName = fileNameMatch?.[1] ?? `service-${serviceId}-regenerated.zip`;
+
+					return {
+						zipBlob: response.body ?? new Blob(),
+						fileName,
+						gitHubRepoUrl: null,
+						generatedServiceName: response.headers.get('X-Generation-Service-Name'),
+						generatedVertical: response.headers.get('X-Generation-Vertical'),
+						generationTimestamp: response.headers.get('X-Generation-Timestamp'),
+					};
+				})
+			);
 	}
 }
