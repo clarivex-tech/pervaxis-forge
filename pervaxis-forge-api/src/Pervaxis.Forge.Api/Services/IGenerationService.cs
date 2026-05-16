@@ -23,8 +23,10 @@ namespace Pervaxis.Forge.Api.Services;
 
 public interface IGenerationService
 {
-    Task<(byte[] Zip, GenerationResult Result)> GenerateAsync(GenerationRequest request, CancellationToken ct = default);
+    Task<(byte[] Zip, GenerationResult Result)> GenerateAsync(GenerationRequest request, string generatedBy, CancellationToken ct = default);
     Task<(byte[] Zip, BatchGenerationResult Result)> GenerateBatchAsync(BatchGenerationRequest request, CancellationToken ct = default);
     Task<ValidationPreviewResult> ValidateAsync(GenerationRequest request, CancellationToken ct = default);
     Task<IReadOnlyList<GenerationAuditEntry>> GetAuditLogAsync(string verticalSlug, CancellationToken ct = default);
+    Task<IReadOnlyList<GeneratedServiceResponse>> ListGeneratedServicesAsync(string verticalSlug, CancellationToken ct = default);
+    Task<(byte[] Zip, GeneratedServiceResponse Service)> RegenerateAsync(string verticalSlug, Guid serviceId, CancellationToken ct = default);
 }

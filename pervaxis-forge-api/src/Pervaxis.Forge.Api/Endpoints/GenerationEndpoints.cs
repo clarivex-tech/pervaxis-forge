@@ -58,6 +58,21 @@ internal static class GenerationEndpoints
             .Produces<IReadOnlyList<GenerationAuditEntry>>()
             .ProducesProblem(StatusCodes.Status404NotFound);
 
+        var servicesGroup = app.MapGroup("/api/v1/verticals/{slug}/services")
+            .WithTags("Generation");
+
+        servicesGroup.MapGet("/", ListGeneratedServices)
+            .WithName("ListGeneratedServices")
+            .WithSummary("List generated services for a vertical")
+            .Produces<IReadOnlyList<GeneratedServiceResponse>>()
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
+        servicesGroup.MapPost("/{id:guid}/regenerate", RegenerateService)
+            .WithName("RegenerateGeneratedService")
+            .WithSummary("Regenerate a service ZIP from the stored manifest")
+            .Produces(StatusCodes.Status200OK)
+            .ProducesProblem(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -65,7 +80,8 @@ internal static class GenerationEndpoints
     {
         try
         {
-            var (zip, result) = await generationService.GenerateAsync(request, ct);
+            var generatedBy = ResolveGeneratedBy(httpContext);
+            var (zip, result) = await generationService.GenerateAsync(request, generatedBy, ct);
             httpContext.Response.Headers["X-Generation-Service-Name"] = result.ServiceName;
             httpContext.Response.Headers["X-Generation-Vertical"] = result.VerticalSlug;
             httpContext.Response.Headers["X-Generation-Timestamp"] = result.GeneratedAt.ToString("O");
@@ -79,6 +95,8 @@ internal static class GenerationEndpoints
         }
         catch (InvalidOperationException ex)
         {
+            if (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+                return Results.Conflict(new { errors = new[] { ex.Message } });
             return Results.UnprocessableEntity(new { errors = new[] { ex.Message } });
         }
     }
@@ -122,5 +140,42 @@ internal static class GenerationEndpoints
     {
         var entries = await generationService.GetAuditLogAsync(slug, ct);
         return Results.Ok(entries);
+    }
+
+    private static async Task<IResult> ListGeneratedServices(string slug, IGenerationService generationService, CancellationToken ct = default)
+    {
+        var services = await generationService.ListGeneratedServicesAsync(slug, ct);
+        return Results.Ok(services);
+    }
+
+    private static async Task<IResult> RegenerateService(string slug, Guid id, IGenerationService generationService, CancellationToken ct = default)
+    {
+        try
+        {
+            var (zip, service) = await generationService.RegenerateAsync(slug, id, ct);
+            return Results.File(zip, "application/zip", $"{service.ServiceName}-regenerated.zip");
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(new { errors = new[] { ex.Message } });
+        }
+    }
+
+    private static string ResolveGeneratedBy(HttpContext httpContext)
+    {
+        var userName = httpContext.User?.Identity?.Name;
+        if (!string.IsNullOrWhiteSpace(userName))
+            return userName;
+
+        if (httpContext.Request.Headers.TryGetValue("X-Api-Key-Id", out var apiKeyId) && !string.IsNullOrWhiteSpace(apiKeyId))
+            return apiKeyId.ToString();
+
+        if (httpContext.Request.Headers.TryGetValue("X-Forwarded-User", out var forwardedUser) && !string.IsNullOrWhiteSpace(forwardedUser))
+            return forwardedUser.ToString();
+
+        if (httpContext.Request.Headers.TryGetValue("X-Amzn-Oidc-Identity", out var oidcIdentity) && !string.IsNullOrWhiteSpace(oidcIdentity))
+            return oidcIdentity.ToString();
+
+        return "forge-api";
     }
 }
