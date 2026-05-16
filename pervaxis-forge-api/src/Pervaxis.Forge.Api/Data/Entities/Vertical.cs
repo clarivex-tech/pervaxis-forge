@@ -35,4 +35,5 @@ public class Vertical
     public VerticalSourceControlConfig? SourceControlConfig { get; set; }
     public VerticalTechDefaults? TechDefaults { get; set; }
     public ICollection<GenerationLog> GenerationLogs { get; set; } = new List<GenerationLog>();
+    public ICollection<GeneratedService> GeneratedServices { get; set; } = new List<GeneratedService>();
 }

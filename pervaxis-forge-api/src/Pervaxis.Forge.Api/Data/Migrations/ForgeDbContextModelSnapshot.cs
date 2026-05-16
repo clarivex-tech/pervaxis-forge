@@ -64,6 +64,57 @@ namespace Pervaxis.Forge.Api.Data.Migrations
                     b.ToTable("deployment_outputs", (string)null);
                 });
 
+            modelBuilder.Entity("Pervaxis.Forge.Api.Data.Entities.GeneratedService", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasDefaultValueSql("gen_random_uuid()");
+
+                    b.Property<string>("CloudProvider")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateTimeOffset>("GeneratedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("GeneratedBy")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<JsonDocument>("ManifestJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("ServiceName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("ServiceType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("VerticalId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("VerticalId", "GeneratedAt")
+                        .HasDatabaseName("idx_generated_services_vertical_generated_at");
+
+                    b.HasIndex("VerticalId", "ServiceName")
+                        .IsUnique()
+                        .HasDatabaseName("idx_generated_services_vertical_name");
+
+                    b.ToTable("generated_services", (string)null);
+                });
+
             modelBuilder.Entity("Pervaxis.Forge.Api.Data.Entities.GenerationLog", b =>
                 {
                     b.Property<Guid>("Id")
@@ -356,6 +407,17 @@ namespace Pervaxis.Forge.Api.Data.Migrations
                     b.Navigation("Vertical");
                 });
 
+            modelBuilder.Entity("Pervaxis.Forge.Api.Data.Entities.GeneratedService", b =>
+                {
+                    b.HasOne("Pervaxis.Forge.Api.Data.Entities.Vertical", "Vertical")
+                        .WithMany("GeneratedServices")
+                        .HasForeignKey("VerticalId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Vertical");
+                });
+
             modelBuilder.Entity("Pervaxis.Forge.Api.Data.Entities.VerticalCloudConfig", b =>
                 {
                     b.HasOne("Pervaxis.Forge.Api.Data.Entities.Vertical", "Vertical")
@@ -399,6 +461,8 @@ namespace Pervaxis.Forge.Api.Data.Migrations
                     b.Navigation("CloudConfig");
 
                     b.Navigation("GenerationLogs");
+
+                    b.Navigation("GeneratedServices");
 
                     b.Navigation("SourceControlConfig");
 
