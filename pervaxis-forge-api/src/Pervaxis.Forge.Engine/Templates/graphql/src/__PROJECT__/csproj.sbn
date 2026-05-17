@@ -14,7 +14,7 @@
     <PackageReference Include="HotChocolate.AspNetCore" Version="14.*" />
     <PackageReference Include="HotChocolate.Data" Version="14.*" />
 {{- for module in model.selected_modules }}
-    <PackageReference Include="{{ module.package_name }}" Version="*" />
+    <PackageReference Include="{{ module.package_name }}" Version="2.0.0" />
 {{- end }}
 {{- if model.manifest.database != null && model.manifest.database.engine == "postgresql" }}
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />

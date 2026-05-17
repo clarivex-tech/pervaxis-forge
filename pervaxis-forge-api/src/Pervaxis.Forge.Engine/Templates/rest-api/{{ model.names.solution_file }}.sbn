@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src/{{ model.names.namespace }}/{{ model.names.project_file }}" />
+  <Project Path="tests/{{ model.names.test_project_name }}/{{ model.names.test_project_name }}.csproj" />
+</Solution>
