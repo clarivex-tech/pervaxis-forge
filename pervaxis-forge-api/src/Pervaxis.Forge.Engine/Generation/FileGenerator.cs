@@ -26,8 +26,10 @@ public sealed class FileGenerator
             var template = await templateLoader.LoadAsync(resourceName, cancellationToken);
             var rendered = templateEngine.Render(template, model);
             var relativeSuffix = TemplateLoader.GetRelativeSuffix(resourceName, templateRoot);
+            // Render the path itself so filename tokens like {{ model.names.solution_file }} are resolved.
+            var renderedPath = templateEngine.Render(relativeSuffix, model);
             // Strip .sbn, normalise path separators, then map template extensions to real extensions
-            var outputPath = relativeSuffix[..^4].Replace('\\', '/')
+            var outputPath = renderedPath[..^4].Replace('\\', '/')
                 .Replace(".cstemplate", ".cs")
                 .Replace(".tstemplate", ".ts")
                 .Replace(".htmltemplate", ".html");
