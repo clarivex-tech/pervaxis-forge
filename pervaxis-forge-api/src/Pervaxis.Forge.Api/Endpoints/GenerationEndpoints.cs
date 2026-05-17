@@ -144,8 +144,15 @@ internal static class GenerationEndpoints
 
     private static async Task<IResult> ListGeneratedServices(string slug, IGenerationService generationService, CancellationToken ct = default)
     {
-        var services = await generationService.ListGeneratedServicesAsync(slug, ct);
-        return Results.Ok(services);
+        try
+        {
+            var services = await generationService.ListGeneratedServicesAsync(slug, ct);
+            return Results.Ok(services);
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(new { errors = new[] { ex.Message } });
+        }
     }
 
     private static async Task<IResult> RegenerateService(string slug, Guid id, IGenerationService generationService, CancellationToken ct = default)
@@ -158,6 +165,10 @@ internal static class GenerationEndpoints
         catch (KeyNotFoundException ex)
         {
             return Results.NotFound(new { errors = new[] { ex.Message } });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.UnprocessableEntity(new { errors = new[] { ex.Message } });
         }
     }
 
