@@ -1,0 +1,5 @@
+# Genesis Provider Usage
+
+Use the Genesis provider abstractions for infrastructure concerns such as caching, messaging, storage, search, notifications, workflows, AI, and reporting.
+
+Follow the same DI and configuration patterns used in the REST API scaffold.

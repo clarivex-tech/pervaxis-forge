@@ -1,0 +1,10 @@
+# Pervaxis Genesis - Development Standards
+
+Use the same platform coding standards shipped with the REST API scaffold:
+- file-scoped namespaces
+- sealed concrete classes
+- `ConfigureAwait(false)` in library code
+- null and whitespace guards
+- UTC time only
+- no TODOs without an issue
+- tests for new logic
