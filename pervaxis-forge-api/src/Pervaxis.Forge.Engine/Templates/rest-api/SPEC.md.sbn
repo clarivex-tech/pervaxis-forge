@@ -11,6 +11,7 @@
 | **Namespace** | `{{ model.names.namespace }}` |
 | **Cloud** | `{{ model.cloud_provider }}` |
 | **API Base Route** | `{{ model.names.api_base_route }}` |
+| **OpenAPI Document** | `v1` |
 
 ## Genesis Modules
 {{ if model.selected_modules.size > 0 }}

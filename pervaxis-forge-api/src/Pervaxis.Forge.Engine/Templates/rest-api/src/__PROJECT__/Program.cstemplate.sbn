@@ -20,6 +20,7 @@ using {{ model.names.namespace }}.Extensions;
 {{- for module in model.selected_modules }}
 using {{ module.package_name }};
 {{- end }}
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,7 +32,15 @@ builder.Services.{{ module.di_extension_name }}(
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo
+    {
+        Title = "{{ model.names.dot_net_class_name }} API",
+        Version = "v1",
+        Description = "Versioned REST API for the {{ model.manifest.product }} {{ model.manifest.service_name }} service.",
+    });
+});
 builder.Services.AddHealthChecks();
 
 var app = builder.Build();
@@ -39,7 +48,10 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/swagger/v1/swagger.json", "{{ model.names.dot_net_class_name }} API v1");
+    });
 }
 
 app.UseHttpsRedirection();
