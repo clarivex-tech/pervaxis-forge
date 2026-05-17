@@ -32,11 +32,11 @@ builder.Services.{{ module.di_extension_name }}(
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment() ||
-    builder.Configuration.GetValue<bool>("Forge:EnableSwagger"))
+if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
@@ -44,6 +44,7 @@ if (app.Environment.IsDevelopment() ||
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
+app.MapHealthChecks("/health");
 app.MapControllers();
 
 app.Run();

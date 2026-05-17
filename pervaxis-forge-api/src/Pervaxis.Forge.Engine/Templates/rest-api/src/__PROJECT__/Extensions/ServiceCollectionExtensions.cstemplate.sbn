@@ -26,7 +26,7 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddScoped<I{{ model.names.dot_net_class_name }}, {{ model.names.dot_net_class_name }}>(
+        services.AddScoped<I{{ model.names.dot_net_class_name }}>(
             _ => throw new NotImplementedException("Implement {{ model.names.dot_net_class_name }} service."));
 
         return services;
