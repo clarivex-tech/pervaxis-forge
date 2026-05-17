@@ -1,0 +1,7 @@
+# Git Workflow
+
+Follow the shared platform workflow:
+- branch from `develop`
+- open PRs to `develop`
+- promote `develop` to `main` for releases
+- keep branch protection and CI green

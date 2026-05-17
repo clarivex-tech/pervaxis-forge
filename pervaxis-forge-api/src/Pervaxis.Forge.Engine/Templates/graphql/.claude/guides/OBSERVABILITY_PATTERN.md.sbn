@@ -1,0 +1,7 @@
+# Observability Pattern
+
+Use the standard Genesis observability approach:
+- create an `Activity` for each public provider operation
+- add stable tags for operation and resource identifiers
+- add tenant tags when tenant isolation is enabled
+- mark spans with error status on failures

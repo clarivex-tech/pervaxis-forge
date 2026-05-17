@@ -1,0 +1,15 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "Forge": {
+    "EnableSwagger": false
+  }{{ if model.manifest.database != null }},
+  "ConnectionStrings": {
+    "Default": ""
+  }{{ end }}{{ for module in model.selected_modules }},
+  "{{ module.name }}": {}{{ end }}
+}
