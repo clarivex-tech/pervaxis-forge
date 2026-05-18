@@ -18,7 +18,7 @@
 
 using {{ model.names.namespace }}.Extensions;
 {{- for module in model.selected_modules }}
-using {{ module.package_name }};
+using {{ module.package_name }}.Extensions;
 {{- end }}
 using Microsoft.OpenApi.Models;
 
