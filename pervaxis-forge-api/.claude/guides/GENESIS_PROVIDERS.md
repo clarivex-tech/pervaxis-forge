@@ -27,16 +27,14 @@ This guide shows how to integrate and use all 8 Genesis AWS providers in your mi
 
 ```json
 {
-  "Genesis": {
-    "Caching": {
-      "UseLocalStack": true,
-      "LocalStackUrl": "http://localhost:4566",
-      "Region": "us-east-1",
-      "ConnectionString": "localhost:6379",
-      "KeyPrefix": "myservice",
-      "EnableTenantIsolation": true,
-      "DefaultExpiration": "01:00:00"
-    }
+  "Caching": {
+    "UseLocalStack": true,
+    "LocalStackUrl": "http://localhost:4566",
+    "Region": "us-east-1",
+    "ConnectionString": "localhost:6379",
+    "KeyPrefix": "myservice",
+    "EnableTenantIsolation": true,
+    "DefaultExpiration": "01:00:00"
   }
 }
 ```
@@ -47,14 +45,15 @@ This guide shows how to integrate and use all 8 Genesis AWS providers in your mi
 // Program.cs
 using Pervaxis.Genesis.Caching.AWS.Extensions;
 
-builder.Services.AddGenesisCaching(
-    builder.Configuration.GetSection("Genesis:Caching"));
+builder.Services.AddGenesisCachingAWS(
+    builder.Configuration.GetSection("Caching"));
 ```
 
 ### NuGet Package
 
 ```xml
-<PackageReference Include="Pervaxis.Genesis.Caching.AWS" Version="1.0.0" />
+<PackageReference Include="Pervaxis.Genesis.Caching.AWS" Version="2.0.0" />
+```
 ```
 
 ### Usage Example
@@ -79,10 +78,10 @@ public class ProductService
 
         // Try cache first
         var cached = await _cache.GetAsync<Product>(cacheKey, cancellationToken);
-        if (cached.IsSuccess && cached.Data != null)
+        if (cached != null)
         {
             _logger.LogInformation("Cache hit for product {ProductId}", productId);
-            return cached.Data;
+            return cached;
         }
 
         // Cache miss - fetch from database
@@ -126,7 +125,6 @@ public record Product
 ```csharp
 using NSubstitute;
 using Pervaxis.Core.Abstractions.Genesis.Modules;
-using Pervaxis.Genesis.Base.Result;
 
 public class ProductServiceTests
 {
@@ -139,7 +137,7 @@ public class ProductServiceTests
         
         var cachedProduct = new Product { Id = "123", Name = "Cached Product", Price = 49.99m };
         mockCache.GetAsync<Product>(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(ProviderResult<Product>.Success(cachedProduct));
+            .Returns(cachedProduct);
 
         var service = new ProductService(mockCache, mockLogger);
 
@@ -160,7 +158,7 @@ public class ProductServiceTests
         var mockLogger = Substitute.For<ILogger<ProductService>>();
         
         mockCache.GetAsync<Product>(Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(ProviderResult<Product>.Success(null));
+            .Returns((Product?)null);
 
         var service = new ProductService(mockCache, mockLogger);
 
@@ -188,17 +186,15 @@ public class ProductServiceTests
 
 ```json
 {
-  "Genesis": {
-    "Messaging": {
-      "UseLocalStack": true,
-      "LocalStackUrl": "http://localhost:4566",
-      "Region": "us-east-1",
-      "QueueUrl": "http://localhost:4566/000000000000/orders-queue",
-      "TopicArn": "arn:aws:sns:us-east-1:000000000000:orders-topic",
-      "EnableTenantIsolation": true,
-      "MessageRetentionPeriod": 345600,
-      "VisibilityTimeout": 30
-    }
+  "Messaging": {
+    "UseLocalStack": true,
+    "LocalStackUrl": "http://localhost:4566",
+    "Region": "us-east-1",
+    "QueueUrl": "http://localhost:4566/000000000000/orders-queue",
+    "TopicArn": "arn:aws:sns:us-east-1:000000000000:orders-topic",
+    "EnableTenantIsolation": true,
+    "MessageRetentionPeriod": 345600,
+    "VisibilityTimeout": 30
   }
 }
 ```
@@ -209,14 +205,15 @@ public class ProductServiceTests
 // Program.cs
 using Pervaxis.Genesis.Messaging.AWS.Extensions;
 
-builder.Services.AddGenesisMessaging(
-    builder.Configuration.GetSection("Genesis:Messaging"));
+builder.Services.AddGenesisMessagingAWS(
+    builder.Configuration.GetSection("Messaging"));
 ```
 
 ### NuGet Package
 
 ```xml
-<PackageReference Include="Pervaxis.Genesis.Messaging.AWS" Version="1.0.0" />
+<PackageReference Include="Pervaxis.Genesis.Messaging.AWS" Version="2.0.0" />
+```
 ```
 
 ### Usage Example
@@ -250,36 +247,32 @@ public class OrderService
         };
 
         var result = await _messaging.PublishAsync(
-            "order-created", 
-            orderCreatedEvent, 
+            "order-created",
+            orderCreatedEvent,
             cancellationToken);
 
-        if (result.IsSuccess)
+        if (result != null)
         {
             _logger.LogInformation("Published OrderCreated event for order {OrderId}", order.Id);
-        }
-        else
-        {
-            _logger.LogError("Failed to publish OrderCreated event: {Error}", result.ErrorMessage);
         }
     }
 
     // Consuming messages
     public async Task ProcessOrderMessagesAsync(CancellationToken cancellationToken = default)
     {
-        var result = await _messaging.ReceiveAsync<OrderCreatedEvent>(10, 30, cancellationToken);
+        var messages = await _messaging.ReceiveAsync<OrderCreatedEvent>("orders-queue", 10, cancellationToken);
 
-        if (result.IsSuccess && result.Data.Any())
+        if (messages.Any())
         {
-            foreach (var message in result.Data)
+            foreach (var message in messages)
             {
-                _logger.LogInformation("Processing order {OrderId}", message.Content.OrderId);
-                
+                _logger.LogInformation("Processing order {OrderId}", message.OrderId);
+
                 // Process the order
-                await ProcessOrderAsync(message.Content, cancellationToken);
+                await ProcessOrderAsync(message, cancellationToken);
 
                 // Delete message after successful processing
-                await _messaging.DeleteAsync(message.MessageId, cancellationToken);
+                await _messaging.DeleteAsync("orders-queue", message.ReceiptHandle, cancellationToken);
             }
         }
     }
@@ -318,17 +311,15 @@ public record OrderCreatedEvent
 
 ```json
 {
-  "Genesis": {
-    "FileStorage": {
-      "UseLocalStack": true,
-      "LocalStackUrl": "http://localhost:4566",
-      "Region": "us-east-1",
-      "BucketName": "myservice-files",
-      "KeyPrefix": "uploads",
-      "EnableTenantIsolation": true,
-      "EnableServerSideEncryption": true,
-      "PresignedUrlExpiration": "00:15:00"
-    }
+  "FileStorage": {
+    "UseLocalStack": true,
+    "LocalStackUrl": "http://localhost:4566",
+    "Region": "us-east-1",
+    "BucketName": "myservice-files",
+    "KeyPrefix": "uploads",
+    "EnableTenantIsolation": true,
+    "EnableServerSideEncryption": true,
+    "PresignedUrlExpiration": "00:15:00"
   }
 }
 ```
@@ -339,14 +330,44 @@ public record OrderCreatedEvent
 // Program.cs
 using Pervaxis.Genesis.FileStorage.AWS.Extensions;
 
-builder.Services.AddGenesisFileStorage(
-    builder.Configuration.GetSection("Genesis:FileStorage"));
+builder.Services.AddGenesisFileStorageAWS(
+    builder.Configuration.GetSection("FileStorage"));
 ```
 
 ### NuGet Package
 
 ```xml
-<PackageReference Include="Pervaxis.Genesis.FileStorage.AWS" Version="1.0.0" />
+<PackageReference Include="Pervaxis.Genesis.FileStorage.AWS" Version="2.0.0" />
+```
+
+### Usage Example
+
+```csharp
+using Pervaxis.Core.Abstractions.Genesis.Modules;
+
+public class FileService
+{
+    private readonly IFileStorage _fileStorage;
+
+    public FileService(IFileStorage fileStorage)
+    {
+        _fileStorage = fileStorage;
+    }
+
+    public Task<string> UploadAsync(string key, Stream content, string? contentType, IDictionary<string, string>? metadata, CancellationToken cancellationToken = default) =>
+        _fileStorage.UploadAsync(key, content, contentType, metadata, cancellationToken);
+
+    public Task<Stream?> DownloadAsync(string fileId, CancellationToken cancellationToken = default) =>
+        _fileStorage.DownloadAsync(fileId, cancellationToken);
+}
+```
+
+### Testing
+
+```csharp
+var mockFileStorage = Substitute.For<IFileStorage>();
+mockFileStorage.UploadAsync(Arg.Any<string>(), Arg.Any<Stream>(), Arg.Any<string?>(), Arg.Any<IDictionary<string, string>?>(), Arg.Any<CancellationToken>())
+    .Returns(Task.FromResult("etag"));
 ```
 
 ---
@@ -359,17 +380,15 @@ builder.Services.AddGenesisFileStorage(
 
 ```json
 {
-  "Genesis": {
-    "Search": {
-      "UseLocalStack": true,
-      "LocalStackUrl": "http://localhost:4566",
-      "Region": "us-east-1",
-      "ServiceUrl": "http://localhost:4566",
-      "IndexPrefix": "myservice",
-      "EnableTenantIsolation": true,
-      "DefaultPageSize": 20,
-      "MaxPageSize": 100
-    }
+  "Search": {
+    "UseLocalStack": true,
+    "LocalStackUrl": "http://localhost:4566",
+    "Region": "us-east-1",
+    "ServiceUrl": "http://localhost:4566",
+    "IndexPrefix": "myservice",
+    "EnableTenantIsolation": true,
+    "DefaultPageSize": 20,
+    "MaxPageSize": 100
   }
 }
 ```
@@ -380,14 +399,41 @@ builder.Services.AddGenesisFileStorage(
 // Program.cs
 using Pervaxis.Genesis.Search.AWS.Extensions;
 
-builder.Services.AddGenesisSearch(
-    builder.Configuration.GetSection("Genesis:Search"));
+builder.Services.AddGenesisSearchAWS(
+    builder.Configuration.GetSection("Search"));
 ```
 
 ### NuGet Package
 
 ```xml
-<PackageReference Include="Pervaxis.Genesis.Search.AWS" Version="1.0.0" />
+<PackageReference Include="Pervaxis.Genesis.Search.AWS" Version="2.0.0" />
+```
+
+### Usage Example
+
+```csharp
+using Pervaxis.Core.Abstractions.Genesis.Modules;
+
+public class SearchService
+{
+    private readonly ISearch _search;
+
+    public SearchService(ISearch search)
+    {
+        _search = search;
+    }
+
+    public Task<bool> IndexAsync<T>(string index, string id, T document, CancellationToken cancellationToken = default) =>
+        _search.IndexAsync(index, id, document, cancellationToken);
+}
+```
+
+### Testing
+
+```csharp
+var mockSearch = Substitute.For<ISearch>();
+mockSearch.SearchAsync<object>(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+    .Returns(Task.FromResult(Enumerable.Empty<object>()));
 ```
 
 ---
@@ -400,17 +446,15 @@ builder.Services.AddGenesisSearch(
 
 ```json
 {
-  "Genesis": {
-    "Notifications": {
-      "UseLocalStack": true,
-      "LocalStackUrl": "http://localhost:4566",
-      "Region": "us-east-1",
-      "SenderEmail": "noreply@myservice.com",
-      "SenderName": "MyService",
-      "EnableTenantIsolation": true,
-      "DefaultSmsTopicArn": "arn:aws:sns:us-east-1:000000000000:sms-topic",
-      "DefaultPushTopicArn": "arn:aws:sns:us-east-1:000000000000:push-topic"
-    }
+  "Notifications": {
+    "UseLocalStack": true,
+    "LocalStackUrl": "http://localhost:4566",
+    "Region": "us-east-1",
+    "SenderEmail": "noreply@myservice.com",
+    "SenderName": "MyService",
+    "EnableTenantIsolation": true,
+    "DefaultSmsTopicArn": "arn:aws:sns:us-east-1:000000000000:sms-topic",
+    "DefaultPushTopicArn": "arn:aws:sns:us-east-1:000000000000:push-topic"
   }
 }
 ```
@@ -421,14 +465,41 @@ builder.Services.AddGenesisSearch(
 // Program.cs
 using Pervaxis.Genesis.Notifications.AWS.Extensions;
 
-builder.Services.AddGenesisNotifications(
-    builder.Configuration.GetSection("Genesis:Notifications"));
+builder.Services.AddGenesisNotificationsAWS(
+    builder.Configuration.GetSection("Notifications"));
 ```
 
 ### NuGet Package
 
 ```xml
-<PackageReference Include="Pervaxis.Genesis.Notifications.AWS" Version="1.0.0" />
+<PackageReference Include="Pervaxis.Genesis.Notifications.AWS" Version="2.0.0" />
+```
+
+### Usage Example
+
+```csharp
+using Pervaxis.Core.Abstractions.Genesis.Modules;
+
+public class NotificationService
+{
+    private readonly INotification _notification;
+
+    public NotificationService(INotification notification)
+    {
+        _notification = notification;
+    }
+
+    public Task<string> SendEmailAsync(string recipient, string subject, string body, bool isHtml, CancellationToken cancellationToken = default) =>
+        _notification.SendEmailAsync(recipient, subject, body, isHtml, cancellationToken);
+}
+```
+
+### Testing
+
+```csharp
+var mockNotification = Substitute.For<INotification>();
+mockNotification.SendSmsAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+    .Returns(Task.FromResult("message-id"));
 ```
 
 ---
@@ -441,15 +512,13 @@ builder.Services.AddGenesisNotifications(
 
 ```json
 {
-  "Genesis": {
-    "Workflow": {
-      "UseLocalStack": true,
-      "LocalStackUrl": "http://localhost:4566",
-      "Region": "us-east-1",
-      "StateMachineArn": "arn:aws:states:us-east-1:000000000000:stateMachine:order-fulfillment",
-      "EnableTenantIsolation": true,
-      "ExecutionNamePrefix": "myservice"
-    }
+  "Workflow": {
+    "UseLocalStack": true,
+    "LocalStackUrl": "http://localhost:4566",
+    "Region": "us-east-1",
+    "StateMachineArn": "arn:aws:states:us-east-1:000000000000:stateMachine:order-fulfillment",
+    "EnableTenantIsolation": true,
+    "ExecutionNamePrefix": "myservice"
   }
 }
 ```
@@ -460,14 +529,41 @@ builder.Services.AddGenesisNotifications(
 // Program.cs
 using Pervaxis.Genesis.Workflow.AWS.Extensions;
 
-builder.Services.AddGenesisWorkflow(
-    builder.Configuration.GetSection("Genesis:Workflow"));
+builder.Services.AddGenesisWorkflowAWS(
+    builder.Configuration.GetSection("Workflow"));
 ```
 
 ### NuGet Package
 
 ```xml
-<PackageReference Include="Pervaxis.Genesis.Workflow.AWS" Version="1.0.0" />
+<PackageReference Include="Pervaxis.Genesis.Workflow.AWS" Version="2.0.0" />
+```
+
+### Usage Example
+
+```csharp
+using Pervaxis.Core.Abstractions.Genesis.Modules;
+
+public class WorkflowService
+{
+    private readonly IWorkflow _workflow;
+
+    public WorkflowService(IWorkflow workflow)
+    {
+        _workflow = workflow;
+    }
+
+    public Task<string> StartExecutionAsync(string workflowName, object input, CancellationToken cancellationToken = default) =>
+        _workflow.StartExecutionAsync(workflowName, input, cancellationToken);
+}
+```
+
+### Testing
+
+```csharp
+var mockWorkflow = Substitute.For<IWorkflow>();
+mockWorkflow.GetExecutionStatusAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+    .Returns(Task.FromResult("RUNNING"));
 ```
 
 ---
@@ -480,16 +576,14 @@ builder.Services.AddGenesisWorkflow(
 
 ```json
 {
-  "Genesis": {
-    "AIAssistance": {
-      "UseLocalStack": false,
-      "Region": "us-east-1",
-      "TextModelId": "anthropic.claude-3-sonnet-20240229-v1:0",
-      "ImageModelId": "stability.stable-diffusion-xl-v1",
-      "EnableTenantIsolation": true,
-      "DefaultMaxTokens": 1024,
-      "DefaultTemperature": 0.7
-    }
+  "AIAssistance": {
+    "UseLocalStack": false,
+    "Region": "us-east-1",
+    "TextModelId": "anthropic.claude-3-sonnet-20240229-v1:0",
+    "ImageModelId": "stability.stable-diffusion-xl-v1",
+    "EnableTenantIsolation": true,
+    "DefaultMaxTokens": 1024,
+    "DefaultTemperature": 0.7
   }
 }
 ```
@@ -500,14 +594,41 @@ builder.Services.AddGenesisWorkflow(
 // Program.cs
 using Pervaxis.Genesis.AIAssistance.AWS.Extensions;
 
-builder.Services.AddGenesisAIAssistance(
-    builder.Configuration.GetSection("Genesis:AIAssistance"));
+builder.Services.AddGenesisAIAssistanceAWS(
+    builder.Configuration.GetSection("AIAssistance"));
 ```
 
 ### NuGet Package
 
 ```xml
-<PackageReference Include="Pervaxis.Genesis.AIAssistance.AWS" Version="1.0.0" />
+<PackageReference Include="Pervaxis.Genesis.AIAssistance.AWS" Version="2.0.0" />
+```
+
+### Usage Example
+
+```csharp
+using Pervaxis.Core.Abstractions.Genesis.Modules;
+
+public class AiService
+{
+    private readonly IAIAssistant _aiAssistant;
+
+    public AiService(IAIAssistant aiAssistant)
+    {
+        _aiAssistant = aiAssistant;
+    }
+
+    public Task<string> GenerateTextAsync(string prompt, CancellationToken cancellationToken = default) =>
+        _aiAssistant.GenerateTextAsync(prompt, cancellationToken);
+}
+```
+
+### Testing
+
+```csharp
+var mockAiAssistant = Substitute.For<IAIAssistant>();
+mockAiAssistant.GenerateEmbeddingAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+    .Returns(Task.FromResult(Array.Empty<float>()));
 ```
 
 ---
@@ -520,13 +641,11 @@ builder.Services.AddGenesisAIAssistance(
 
 ```json
 {
-  "Genesis": {
-    "Reporting": {
-      "BaseUrl": "http://localhost:3000",
-      "ApiKey": "your-metabase-api-key",
-      "EnableTenantIsolation": true,
-      "DefaultTimeout": 30
-    }
+  "Reporting": {
+    "BaseUrl": "http://localhost:3000",
+    "ApiKey": "your-metabase-api-key",
+    "EnableTenantIsolation": true,
+    "DefaultTimeout": 30
   }
 }
 ```
@@ -537,14 +656,41 @@ builder.Services.AddGenesisAIAssistance(
 // Program.cs
 using Pervaxis.Genesis.Reporting.AWS.Extensions;
 
-builder.Services.AddGenesisReporting(
-    builder.Configuration.GetSection("Genesis:Reporting"));
+builder.Services.AddGenesisReportingAWS(
+    builder.Configuration.GetSection("Reporting"));
 ```
 
 ### NuGet Package
 
 ```xml
-<PackageReference Include="Pervaxis.Genesis.Reporting.AWS" Version="1.0.0" />
+<PackageReference Include="Pervaxis.Genesis.Reporting.AWS" Version="2.0.0" />
+```
+
+### Usage Example
+
+```csharp
+using Pervaxis.Core.Abstractions.Genesis.Modules;
+
+public class ReportingService
+{
+    private readonly IReporting _reporting;
+
+    public ReportingService(IReporting reporting)
+    {
+        _reporting = reporting;
+    }
+
+    public Task<IEnumerable<T>> ExecuteQueryAsync<T>(string query, CancellationToken cancellationToken = default) =>
+        _reporting.ExecuteQueryAsync<T>(query, cancellationToken);
+}
+```
+
+### Testing
+
+```csharp
+var mockReporting = Substitute.For<IReporting>();
+mockReporting.GetDashboardAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+    .Returns(Task.FromResult<object>("{}"));
 ```
 
 ---
@@ -561,19 +707,18 @@ public async Task<Result> MyMethodAsync(CancellationToken cancellationToken = de
 }
 ```
 
-### 2. Handle ProviderResult Properly
+### 2. Handle Null Results Properly
 
 ```csharp
 var result = await _cache.GetAsync<Product>("key");
 
-if (result.IsSuccess)
+if (result != null)
 {
-    // Use result.Data
+    // Use result
 }
 else
 {
-    // Log result.ErrorMessage
-    // Decide: throw, return default, retry, etc.
+    // Cache miss
 }
 ```
 
@@ -596,16 +741,18 @@ Your code doesn't need to add tenant prefixes - Genesis does it.
 
 ### 5. LocalStack for Development
 
-All providers support LocalStack. Set in appsettings.Development.json:
+All providers support LocalStack. Set in `appsettings.Development.json`:
 
 ```json
 {
-  "Genesis": {
-    "ProviderName": {
-      "UseLocalStack": true,
-      "LocalStackUrl": "http://localhost:4566"
-    }
-  }
+  "Caching": { "UseLocalStack": true, "LocalStackUrl": "http://localhost:4566" },
+  "Messaging": { "UseLocalStack": true, "LocalStackUrl": "http://localhost:4566" },
+  "FileStorage": { "UseLocalStack": true, "LocalStackUrl": "http://localhost:4566" },
+  "Search": { "UseLocalStack": true, "LocalStackUrl": "http://localhost:4566" },
+  "Notifications": { "UseLocalStack": true, "LocalStackUrl": "http://localhost:4566" },
+  "Workflow": { "UseLocalStack": true, "LocalStackUrl": "http://localhost:4566" },
+  "AIAssistance": { "UseLocalStack": true, "LocalStackUrl": "http://localhost:4566" },
+  "Reporting": { "UseLocalStack": true, "LocalStackUrl": "http://localhost:4566" }
 }
 ```
 
@@ -616,7 +763,7 @@ Use NSubstitute or Moq:
 ```csharp
 var mockCache = Substitute.For<ICache>();
 mockCache.GetAsync<string>(Arg.Any<string>())
-    .Returns(ProviderResult<string>.Success("cached-value"));
+    .Returns("cached-value");
 ```
 
 ### 7. Error Handling Strategy
@@ -624,15 +771,12 @@ mockCache.GetAsync<string>(Arg.Any<string>())
 ```csharp
 try
 {
-    var result = await _provider.OperationAsync(...);
-    
-    if (!result.IsSuccess)
-    {
-        // Genesis resilience (Polly) already retried
-        // This is a real failure - handle accordingly
-        _logger.LogError("Operation failed: {Error}", result.ErrorMessage);
-        // Throw, return error result, use fallback, etc.
-    }
+        var result = await _provider.OperationAsync(...);
+
+        if (result == null)
+        {
+            _logger.LogWarning("Operation returned no result");
+        }
 }
 catch (GenesisException ex)
 {
