@@ -10,6 +10,7 @@ REST API service scaffolded for the **{{ model.manifest.product }}** vertical on
 - **API Base Route:** `{{ model.names.api_base_route }}`
 - **OpenAPI Document:** `v1`
 - **Docker Image:** `{{ model.names.docker_image }}`
+- **Package Source:** `nuget.org` for `Pervaxis.Genesis.*`
 
 ## Prerequisites
 
