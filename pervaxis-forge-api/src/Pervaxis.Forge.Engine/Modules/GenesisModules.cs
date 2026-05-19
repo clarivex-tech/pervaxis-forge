@@ -34,7 +34,7 @@ public static class GenesisModules
     {
         var module = GetById(moduleName);
         var segment = module?.DisplayName ?? NormalizeModuleName(moduleName);
-        return $"AddGenesis{segment}{NormalizeCloudProvider(cloudProvider)}";
+        return $"AddGenesis{segment}";
     }
 
     private static string NormalizeSegment(string value)
