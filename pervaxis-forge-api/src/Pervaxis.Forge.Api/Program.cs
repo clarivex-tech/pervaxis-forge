@@ -45,7 +45,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 var isRunningInLambda = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME"));
-var dataProtectionEnabled = isRunningInLambda || builder.Configuration.GetValue<bool>("Forge:DataProtection:Enabled");
+var dataProtectionEnabled = !isRunningInLambda && builder.Configuration.GetValue<bool>("Forge:DataProtection:Enabled");
 var dataProtectionPrefix = builder.Configuration["Forge:DataProtection:Prefix"] ?? "/Pervaxis/Forge/DataProtection";
 var dataProtectionKmsKeyId = builder.Configuration["Forge:DataProtection:KmsKeyId"];
 
