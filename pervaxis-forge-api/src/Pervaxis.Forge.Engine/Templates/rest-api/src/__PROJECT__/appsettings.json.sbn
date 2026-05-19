@@ -7,7 +7,16 @@
   },
   "AllowedHosts": "*",
   "Forge": {
-    "EnableSwagger": false
+    "EnableSwagger": false,
+    "Authentication": {
+      "ApiKey": ""
+    },
+    "Secrets": {
+      "UseSecretsManager": false,
+      "SecretId": "",
+      "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+    },
+    "AllowedOrigins": ["http://localhost:4200"]
   }{{ if model.manifest.database != null }},
   "ConnectionStrings": {
     "Default": ""
