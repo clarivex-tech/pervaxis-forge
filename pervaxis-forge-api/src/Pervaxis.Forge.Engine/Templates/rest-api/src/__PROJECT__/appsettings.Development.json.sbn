@@ -6,7 +6,15 @@
     }
   },
   "Forge": {
-    "EnableSwagger": true
+    "EnableSwagger": true,
+    "Authentication": {
+      "ApiKey": "dev-api-key"
+    },
+    "Secrets": {
+      "UseSecretsManager": false,
+      "SecretId": "",
+      "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+    }
   },
   "Caching": {
     "UseLocalStack": true,

@@ -6,7 +6,15 @@
     }
   },
   "Forge": {
-    "EnableSwagger": false
+    "EnableSwagger": false,
+    "Authentication": {
+      "ApiKey": ""
+    },
+    "Secrets": {
+      "UseSecretsManager": true,
+      "SecretId": "{{ model.manifest.vertical_slug }}/{{ model.manifest.product }}/{{ model.manifest.service_name }}/config",
+      "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+    }
   }{{ if model.manifest.database != null }},
   "ConnectionStrings": {
     "Default": ""

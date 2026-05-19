@@ -20,7 +20,11 @@ using {{ model.names.namespace }}.Extensions;
 {{- for module in model.selected_modules }}
 using {{ module.package_name }}.Extensions;
 {{- end }}
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.OpenApi.Models;
+using {{ model.names.namespace }}.Models.Configuration;
+using {{ model.names.namespace }}.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -32,6 +36,19 @@ builder.Services.{{ module.di_extension_name }}(
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "ForgeApiKey";
+    options.DefaultChallengeScheme = "ForgeApiKey";
+})
+    .AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>("ForgeApiKey", _ => { });
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .AddAuthenticationSchemes("ForgeApiKey")
+        .RequireAuthenticatedUser()
+        .Build();
+});
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -55,6 +72,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health");
 app.MapControllers();

@@ -17,12 +17,16 @@
  */
 
 using Amazon.Extensions.NETCore.Setup;
+using Amazon.SecretsManager;
 using Amazon.SecurityToken;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Octokit;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
+using Pervaxis.Forge.Api.Models.Configuration;
 using Pervaxis.Forge.Api.Models.Requests;
 using Pervaxis.Forge.Api.Services;
 using Pervaxis.Forge.Engine.Generation;
@@ -44,6 +48,24 @@ builder.Services.AddScoped<IGenerationService, GenerationService>();
 
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonSecurityTokenService>();
+builder.Services.AddAWSService<IAmazonSecretsManager>();
+builder.Services.AddOptions<ForgeAuthenticationOptions>()
+    .BindConfiguration(ForgeAuthenticationOptions.SectionName);
+builder.Services.AddOptions<ForgeSecretsOptions>()
+    .BindConfiguration(ForgeSecretsOptions.SectionName);
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "ForgeApiKey";
+    options.DefaultChallengeScheme = "ForgeApiKey";
+})
+    .AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>("ForgeApiKey", _ => { });
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .AddAuthenticationSchemes("ForgeApiKey")
+        .RequireAuthenticatedUser()
+        .Build();
+});
 builder.Services.AddSingleton<Func<string, IGitHubClient>>(
     _ => token => new GitHubClient(new ProductHeaderValue("pervaxis-forge"))
     {
@@ -123,6 +145,8 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 
 app.UseHttpsRedirection();
 app.UseCors(ForgeUiCorsPolicy);
+app.UseAuthentication();
+app.UseAuthorization();
 
 await ApplyPendingMigrationsAsync(app.Services);
 
