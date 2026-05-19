@@ -144,6 +144,25 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 }
 
 app.UseHttpsRedirection();
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "no-referrer";
+
+        if (!app.Environment.IsDevelopment())
+        {
+            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+        }
+
+        return Task.CompletedTask;
+    });
+
+    await next();
+});
 app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();

@@ -51,12 +51,6 @@ These are chosen during generation, similar to Genesis provider selection.
   - Make policy tuning configurable per service.
   - Do not leave resilience as documentation-only.
 
-- [ ] Rate limiting
-  - Add request rate limiting middleware.
-  - Provide sane default limits.
-  - Allow per-service override.
-  - Keep it optional only when a service truly does not need it.
-
 ### 3. Conditional Features
 
 These are enabled only when the service’s use case calls for them.
@@ -78,6 +72,12 @@ These are enabled only when the service’s use case calls for them.
   - Prefer read-heavy, stable-response services.
   - Avoid for write-heavy or highly dynamic endpoints.
 
+- [ ] Rate limiting
+  - Add request rate limiting middleware when a service is directly exposed.
+  - Prefer gateway enforcement first when a gateway is present.
+  - Provide sane defaults and per-service override.
+  - Keep it lower priority than core security and resilience concerns.
+
 ## Generation Model
 
 - [ ] The UI should expose baseline items as always-on defaults.
@@ -92,9 +92,9 @@ These are enabled only when the service’s use case calls for them.
 2. Secrets management
 3. Resilience / Polly wiring
 4. Security headers
-5. Rate limiting
-6. Audit logging
-7. CORS
-8. PII / data classification
-9. Output caching
+5. Audit logging
+6. CORS
+7. PII / data classification
+8. Output caching
+9. Rate limiting
 10. Performance defaults

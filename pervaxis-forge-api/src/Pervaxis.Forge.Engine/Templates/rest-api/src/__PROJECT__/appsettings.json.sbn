@@ -16,6 +16,12 @@
       "SecretId": "",
       "ApiKeySecretKey": "Forge:Authentication:ApiKey"
     },
+    "Resilience": {
+      "Enabled": true,
+      "RetryCount": 3,
+      "RetryDelayMilliseconds": 1000,
+      "TimeoutSeconds": 30
+    },
     "AllowedOrigins": ["http://localhost:4200"]
   }{{ if model.manifest.database != null }},
   "ConnectionStrings": {
