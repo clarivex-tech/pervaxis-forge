@@ -13,7 +13,7 @@ Use this file to track the production-readiness requirements for generated servi
 
 These should be generated for every service by default.
 
-- [ ] Security headers
+- [x] Security headers
   - Add baseline headers in the scaffold.
   - Include HSTS for non-development environments.
   - Include `X-Content-Type-Options`, `X-Frame-Options`, and `Referrer-Policy`.
