@@ -29,6 +29,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using System.Diagnostics;
 using System.Threading.RateLimiting;
+using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 
