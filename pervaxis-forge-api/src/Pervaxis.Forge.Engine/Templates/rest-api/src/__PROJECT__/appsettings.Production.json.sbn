@@ -12,7 +12,7 @@
     },
     "Secrets": {
       "UseSecretsManager": true,
-      "SecretId": "{{ model.manifest.vertical_slug }}/{{ model.manifest.product }}/{{ model.manifest.service_name }}/config",
+      "SecretId": "<set-to-your-secret-arn>",
       "ApiKeySecretKey": "Forge:Authentication:ApiKey"
     },
     "AuditLogging": {
