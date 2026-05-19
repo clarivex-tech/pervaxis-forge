@@ -13,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="HotChocolate.AspNetCore" Version="14.*" />
     <PackageReference Include="HotChocolate.Data" Version="14.*" />
+    <PackageReference Include="AWSSDK.SecretsManager" Version="*" />
 {{- for module in model.selected_modules }}
     <PackageReference Include="{{ module.package_name }}" Version="2.0.0" />
 {{- end }}
