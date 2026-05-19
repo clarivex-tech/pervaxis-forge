@@ -9,7 +9,6 @@ using {{ model.names.namespace }}.Models.Configuration;
 
 namespace {{ model.names.namespace }}.Auth;
 
-#pragma warning disable CS0618
 public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     private const string ApiKeyHeaderName = "X-Api-Key";
@@ -21,11 +20,10 @@ public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         IOptionsMonitor<AuthenticationSchemeOptions> options,
         ILoggerFactory logger,
         UrlEncoder encoder,
-        TimeProvider timeProvider,
         IAmazonSecretsManager secretsManager,
         IOptionsMonitor<ForgeAuthenticationOptions> authenticationOptions,
         IOptionsMonitor<ForgeSecretsOptions> secretsOptions)
-        : base(options, logger, encoder, timeProvider)
+        : base(options, logger, encoder)
     {
         _secretsManager = secretsManager;
         _authenticationOptions = authenticationOptions;
@@ -88,4 +86,3 @@ public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<Aut
             : null;
     }
 }
-#pragma warning restore CS0618
