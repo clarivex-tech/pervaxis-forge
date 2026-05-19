@@ -25,7 +25,8 @@ internal static class ModuleEndpoints
     internal static IEndpointRouteBuilder MapModuleEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1")
-            .WithTags("Modules");
+            .WithTags("Modules")
+            .RequireAuthorization();
 
         group.MapGet("/modules", ListGenesisModules)
             .WithName("ListGenesisModules")
