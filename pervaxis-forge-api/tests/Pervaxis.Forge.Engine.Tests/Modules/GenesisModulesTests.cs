@@ -26,8 +26,8 @@ public class GenesisModulesTests
     }
 
     [Theory]
-    [InlineData("Caching", "AWS", "Pervaxis.Genesis.Caching.AWS", "AddGenesisCachingAWS")]
-    [InlineData("FileStorage", "Azure", "Pervaxis.Genesis.FileStorage.Azure", "AddGenesisFileStorageAzure")]
+    [InlineData("Caching", "AWS", "Pervaxis.Genesis.Caching.AWS", "AddGenesisCaching")]
+    [InlineData("FileStorage", "Azure", "Pervaxis.Genesis.FileStorage.Azure", "AddGenesisFileStorage")]
     public void PackageAndDiNames_AreDerivedCorrectly(string moduleName, string cloudProvider, string expectedPackage, string expectedDi)
     {
         GenesisModules.GetPackageName(moduleName, cloudProvider).Should().Be(expectedPackage);

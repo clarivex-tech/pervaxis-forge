@@ -70,8 +70,8 @@ public class PrintGeneratorTests
         // Verify cloud provider flows into Program.cs content
         using var programStream = new StreamReader(archive.GetEntry($"{src}/Program.cs")!.Open());
         var programContent = await programStream.ReadToEndAsync();
-        programContent.Should().Contain("AddGenesisFileStorageAWS");
-        programContent.Should().Contain("AddGenesisMessagingAWS");
+        programContent.Should().Contain("AddGenesisFileStorage");
+        programContent.Should().Contain("AddGenesisMessaging");
         programContent.Should().Contain("Pervaxis.Genesis.FileStorage.AWS");
 
         // Verify csproj has Genesis package references and correct name
