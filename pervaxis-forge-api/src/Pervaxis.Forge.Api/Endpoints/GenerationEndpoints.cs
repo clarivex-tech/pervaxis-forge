@@ -28,7 +28,7 @@ internal static class GenerationEndpoints
     {
         var group = app.MapGroup("/api/v1/generate")
             .WithTags("Generation")
-            .RequireAuthorization();
+            .AllowAnonymous();
 
         group.MapPost("/", GenerateSingle)
             .WithName("GenerateService")
