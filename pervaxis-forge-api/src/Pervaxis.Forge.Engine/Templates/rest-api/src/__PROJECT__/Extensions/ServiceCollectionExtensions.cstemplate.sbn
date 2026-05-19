@@ -28,6 +28,8 @@ public static class ServiceCollectionExtensions
     {
         services.AddScoped<I{{ model.names.dot_net_class_name }}>(
             _ => throw new NotImplementedException("Implement {{ model.names.dot_net_class_name }} service."));
+        services.AddHttpClient("forge-resilience")
+            .AddStandardResilienceHandler();
 
         return services;
     }
