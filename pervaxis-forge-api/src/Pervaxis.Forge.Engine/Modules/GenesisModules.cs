@@ -19,7 +19,9 @@ public static class GenesisModules
     public static IReadOnlyList<GenesisModule> GetAll() => Modules;
 
     public static GenesisModule? GetById(string id)
-        => Modules.FirstOrDefault(module => string.Equals(module.Id, id, StringComparison.OrdinalIgnoreCase));
+        => Modules.FirstOrDefault(module =>
+            string.Equals(module.Id, id, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(module.DisplayName, id, StringComparison.OrdinalIgnoreCase));
 
     public static IReadOnlyList<string> GetAllNames() => Modules.Select(module => module.DisplayName).ToArray();
 
@@ -34,7 +36,7 @@ public static class GenesisModules
     {
         var module = GetById(moduleName);
         var segment = module?.DisplayName ?? NormalizeModuleName(moduleName);
-        return $"AddGenesis{segment}";
+        return $"AddGenesis{segment}{NormalizeCloudProvider(cloudProvider)}";
     }
 
     private static string NormalizeSegment(string value)
