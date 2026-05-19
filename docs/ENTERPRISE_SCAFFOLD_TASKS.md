@@ -13,19 +13,19 @@ Use this file to track the production-readiness requirements for generated servi
 
 These should be generated for every service by default.
 
-- [ ] Security headers
+- [x] Security headers
   - Add baseline headers in the scaffold.
   - Include HSTS for non-development environments.
   - Include `X-Content-Type-Options`, `X-Frame-Options`, and `Referrer-Policy`.
   - Add CSP when the service serves browser traffic.
 
-- [ ] CORS policy
+- [x] CORS policy
   - Generate a real CORS policy in the scaffold.
   - Prefer explicit allowed origins.
   - Keep it configurable for browser-facing services.
   - Disable or narrow it by default for backend-only services.
 
-- [ ] Performance baseline
+- [x] Performance baseline
   - Enable response compression where appropriate.
   - Configure EF Core connection pooling explicitly.
   - Include retry settings on DB connections where applicable.
@@ -45,38 +45,38 @@ These are chosen during generation, similar to Genesis provider selection.
   - Keep local development fallback support.
   - Bind secret-backed config through normal configuration patterns.
 
-- [ ] Resilience / Polly wiring
+- [x] Resilience / Polly wiring
   - Wire retries, timeouts, and circuit breakers into generated external calls.
   - Apply resilience to Genesis provider calls and other dependencies.
   - Make policy tuning configurable per service.
   - Do not leave resilience as documentation-only.
 
-- [ ] Rate limiting
-  - Add request rate limiting middleware.
-  - Provide sane default limits.
-  - Allow per-service override.
-  - Keep it optional only when a service truly does not need it.
-
 ### 3. Conditional Features
 
 These are enabled only when the service’s use case calls for them.
 
-- [ ] Audit logging
+- [x] Audit logging
   - Capture who did what and when.
   - Include actor, action, target, timestamp, and request context.
   - Use structured logs or an audit sink.
   - Treat this as required for admin, provisioning, or data-access services.
 
-- [ ] PII and data classification guidance
+- [x] PII and data classification guidance
   - Define handling rules beyond "do not log PII".
   - Add data classification levels such as public, internal, confidential, and restricted.
   - Provide redaction patterns for logs and events.
   - Document how classification affects storage and transport.
 
-- [ ] Output caching
+- [x] Output caching
   - Support output caching as an opt-in capability.
   - Prefer read-heavy, stable-response services.
   - Avoid for write-heavy or highly dynamic endpoints.
+
+- [x] Rate limiting
+  - Add request rate limiting middleware when a service is directly exposed.
+  - Prefer gateway enforcement first when a gateway is present.
+  - Provide sane defaults and per-service override.
+  - Keep it lower priority than core security and resilience concerns.
 
 ## Generation Model
 
@@ -92,9 +92,9 @@ These are enabled only when the service’s use case calls for them.
 2. Secrets management
 3. Resilience / Polly wiring
 4. Security headers
-5. Rate limiting
-6. Audit logging
-7. CORS
-8. PII / data classification
-9. Output caching
+5. Audit logging
+6. CORS
+7. PII / data classification
+8. Output caching
+9. Rate limiting
 10. Performance defaults

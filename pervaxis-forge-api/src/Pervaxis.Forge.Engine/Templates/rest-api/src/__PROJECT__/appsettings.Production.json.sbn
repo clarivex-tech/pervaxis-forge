@@ -14,6 +14,25 @@
       "UseSecretsManager": true,
       "SecretId": "{{ model.manifest.vertical_slug }}/{{ model.manifest.product }}/{{ model.manifest.service_name }}/config",
       "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+    },
+    "AuditLogging": {
+      "Enabled": true
+    },
+    "DataClassification": {
+      "DefaultClassification": "restricted",
+      "SensitiveKeys": ["password", "secret", "token", "apiKey", "email", "phone"]
+    },
+    "OutputCaching": {
+      "Enabled": false,
+      "DefaultExpirationSeconds": 60
+    },
+    "RateLimiting": {
+      "Enabled": false,
+      "PermitLimit": 100,
+      "WindowMinutes": 1
+    },
+    "Cors": {
+      "AllowedOrigins": []
     }
   }{{ if model.manifest.database != null }},
   "ConnectionStrings": {

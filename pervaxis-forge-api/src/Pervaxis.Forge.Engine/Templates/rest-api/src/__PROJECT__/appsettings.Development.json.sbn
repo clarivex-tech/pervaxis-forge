@@ -14,6 +14,25 @@
       "UseSecretsManager": false,
       "SecretId": "",
       "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+    },
+    "AuditLogging": {
+      "Enabled": true
+    },
+    "DataClassification": {
+      "DefaultClassification": "internal",
+      "SensitiveKeys": ["password", "secret", "token", "apiKey", "email", "phone"]
+    },
+    "OutputCaching": {
+      "Enabled": false,
+      "DefaultExpirationSeconds": 60
+    },
+    "RateLimiting": {
+      "Enabled": false,
+      "PermitLimit": 100,
+      "WindowMinutes": 1
+    },
+    "Cors": {
+      "AllowedOrigins": ["http://localhost:4200"]
     }
   },
   "Caching": {
