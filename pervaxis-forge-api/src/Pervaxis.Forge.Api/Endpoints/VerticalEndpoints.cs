@@ -27,7 +27,8 @@ internal static class VerticalEndpoints
     internal static IEndpointRouteBuilder MapVerticalEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/verticals")
-            .WithTags("Verticals");
+            .WithTags("Verticals")
+            .RequireAuthorization();
 
         group.MapPost("/", EnrollVertical)
             .WithName("EnrollVertical")
