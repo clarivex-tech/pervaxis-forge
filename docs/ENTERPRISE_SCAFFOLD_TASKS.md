@@ -45,7 +45,7 @@ These are chosen during generation, similar to Genesis provider selection.
   - Keep local development fallback support.
   - Bind secret-backed config through normal configuration patterns.
 
-- [ ] Resilience / Polly wiring
+- [x] Resilience / Polly wiring
   - Wire retries, timeouts, and circuit breakers into generated external calls.
   - Apply resilience to Genesis provider calls and other dependencies.
   - Make policy tuning configurable per service.
