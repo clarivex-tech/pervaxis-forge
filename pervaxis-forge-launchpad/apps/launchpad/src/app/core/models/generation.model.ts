@@ -46,6 +46,16 @@ export interface GenerationMetadata {
 	environment: string;
 }
 
+export interface EnterpriseScaffoldOptions {
+	authenticationEnabled?: boolean;
+	secretsManagementEnabled?: boolean;
+	resilienceEnabled?: boolean;
+	rateLimitingEnabled?: boolean;
+	auditLoggingEnabled?: boolean;
+	piiClassificationEnabled?: boolean;
+	outputCachingEnabled?: boolean;
+}
+
 export interface GenerationRequest {
 	verticalSlug: string;
 	name: string;
@@ -57,6 +67,7 @@ export interface GenerationRequest {
 	canvasModules?: string[];
 	database: GenerationDatabaseConfig | null;
 	createGitHubRepo: boolean;
+	enterprise?: EnterpriseScaffoldOptions;
 }
 
 export interface ValidationPreviewResult {

@@ -17,24 +17,40 @@
  */
 
 using Amazon.Extensions.NETCore.Setup;
+using Amazon.SecretsManager;
 using Amazon.SecurityToken;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
+using System.Threading.RateLimiting;
 using Octokit;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
+using Pervaxis.Forge.Api.Models.Configuration;
 using Pervaxis.Forge.Api.Models.Requests;
 using Pervaxis.Forge.Api.Services;
 using Pervaxis.Forge.Engine.Generation;
 using Amazon.Lambda.AspNetCoreServer;
 using System.Text.Json;
+using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
-builder.Services.AddDbContext<ForgeDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("ForgeDb")));
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
+
+builder.Services.AddDbContextPool<ForgeDbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("ForgeDb"),
+        npgsql => npgsql.EnableRetryOnFailure(3)));
 
 builder.Services.AddScoped<IVerticalService, VerticalService>();
 
@@ -44,6 +60,52 @@ builder.Services.AddScoped<IGenerationService, GenerationService>();
 
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonSecurityTokenService>();
+builder.Services.AddAWSService<IAmazonSecretsManager>();
+builder.Services.AddOptions<ForgeAuthenticationOptions>()
+    .BindConfiguration(ForgeAuthenticationOptions.SectionName);
+builder.Services.AddOptions<ForgeSecretsOptions>()
+    .BindConfiguration(ForgeSecretsOptions.SectionName);
+builder.Services.AddOptions<ForgeDataClassificationOptions>()
+    .BindConfiguration(ForgeDataClassificationOptions.SectionName);
+builder.Services.AddSingleton<ForgeDataRedaction>();
+builder.Services.AddOptions<ForgeOutputCachingOptions>()
+    .BindConfiguration(ForgeOutputCachingOptions.SectionName);
+builder.Services.AddOutputCache();
+builder.Services.AddOptions<ForgeRateLimitingOptions>()
+    .BindConfiguration(ForgeRateLimitingOptions.SectionName);
+builder.Services.AddRateLimiter(limiterOptions =>
+{
+    var rateLimiting = builder.Configuration.GetSection(ForgeRateLimitingOptions.SectionName)
+        .Get<ForgeRateLimitingOptions>() ?? new ForgeRateLimitingOptions();
+
+    if (rateLimiting.Enabled)
+    {
+        limiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        limiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = Math.Max(1, rateLimiting.PermitLimit),
+                    Window = TimeSpan.FromMinutes(Math.Max(1, rateLimiting.WindowMinutes)),
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                }));
+    }
+});
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "ForgeApiKey";
+    options.DefaultChallengeScheme = "ForgeApiKey";
+})
+    .AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>("ForgeApiKey", _ => { });
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .AddAuthenticationSchemes("ForgeApiKey")
+        .RequireAuthenticatedUser()
+        .Build();
+});
 builder.Services.AddSingleton<Func<string, IGitHubClient>>(
     _ => token => new GitHubClient(new ProductHeaderValue("pervaxis-forge"))
     {
@@ -55,7 +117,7 @@ const string ForgeUiCorsPolicy = "ForgeUi";
 builder.Services.AddCors(options =>
 {
     var allowedOrigins = builder.Configuration
-        .GetSection("Forge:AllowedOrigins")
+        .GetSection("Forge:Cors:AllowedOrigins")
         .Get<string[]>() ?? ["http://localhost:4200"];
 
     options.AddPolicy(ForgeUiCorsPolicy, policy => policy
@@ -122,7 +184,51 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 }
 
 app.UseHttpsRedirection();
+app.UseResponseCompression();
+app.UseOutputCache();
+app.UseRateLimiter();
+app.Use(async (context, next) =>
+{
+    var startedAt = Stopwatch.GetTimestamp();
+    await next();
+
+    var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+    var actor = context.User.Identity?.IsAuthenticated == true
+        ? context.User.Identity?.Name ?? "authenticated-user"
+        : "anonymous";
+
+    app.Logger.LogInformation(
+        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {TraceId}",
+        "request",
+        context.Request.Method,
+        context.Request.Path.Value,
+        context.Response.StatusCode,
+        elapsedMs,
+        actor,
+        context.TraceIdentifier);
+});
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "no-referrer";
+
+        if (!app.Environment.IsDevelopment())
+        {
+            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+        }
+
+        return Task.CompletedTask;
+    });
+
+    await next();
+});
 app.UseCors(ForgeUiCorsPolicy);
+app.UseAuthentication();
+app.UseAuthorization();
 
 await ApplyPendingMigrationsAsync(app.Services);
 
