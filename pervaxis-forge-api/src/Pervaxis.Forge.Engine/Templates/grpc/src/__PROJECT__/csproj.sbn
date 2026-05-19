@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.*" />
+    <PackageReference Include="AWSSDK.SecretsManager" Version="*" />
     <Protobuf Include="Protos\{{ model.manifest.service_name }}.proto" GrpcServices="Server" />
 {{- for module in model.selected_modules }}
     <PackageReference Include="{{ module.package_name }}" Version="2.0.0" />
