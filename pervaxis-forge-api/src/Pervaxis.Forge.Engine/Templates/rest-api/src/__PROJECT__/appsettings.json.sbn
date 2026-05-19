@@ -33,6 +33,11 @@
       "Enabled": false,
       "DefaultExpirationSeconds": 60
     },
+    "RateLimiting": {
+      "Enabled": false,
+      "PermitLimit": 100,
+      "WindowMinutes": 1
+    },
     "Cors": {
       "AllowedOrigins": ["http://localhost:4200"]
     }

@@ -24,7 +24,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
+using System.Threading.RateLimiting;
 using Octokit;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
@@ -69,6 +71,28 @@ builder.Services.AddSingleton<ForgeDataRedaction>();
 builder.Services.AddOptions<ForgeOutputCachingOptions>()
     .BindConfiguration(ForgeOutputCachingOptions.SectionName);
 builder.Services.AddOutputCache();
+builder.Services.AddOptions<ForgeRateLimitingOptions>()
+    .BindConfiguration(ForgeRateLimitingOptions.SectionName);
+builder.Services.AddRateLimiter(limiterOptions =>
+{
+    var rateLimiting = builder.Configuration.GetSection(ForgeRateLimitingOptions.SectionName)
+        .Get<ForgeRateLimitingOptions>() ?? new ForgeRateLimitingOptions();
+
+    if (rateLimiting.Enabled)
+    {
+        limiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+        limiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+            RateLimitPartition.GetFixedWindowLimiter(
+                partitionKey: context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+                factory: _ => new FixedWindowRateLimiterOptions
+                {
+                    PermitLimit = Math.Max(1, rateLimiting.PermitLimit),
+                    Window = TimeSpan.FromMinutes(Math.Max(1, rateLimiting.WindowMinutes)),
+                    QueueLimit = 0,
+                    AutoReplenishment = true,
+                }));
+    }
+});
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = "ForgeApiKey";
@@ -162,6 +186,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 app.UseHttpsRedirection();
 app.UseResponseCompression();
 app.UseOutputCache();
+app.UseRateLimiter();
 app.Use(async (context, next) =>
 {
     var startedAt = Stopwatch.GetTimestamp();

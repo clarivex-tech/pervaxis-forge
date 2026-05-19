@@ -72,7 +72,7 @@ These are enabled only when the service’s use case calls for them.
   - Prefer read-heavy, stable-response services.
   - Avoid for write-heavy or highly dynamic endpoints.
 
-- [ ] Rate limiting
+- [x] Rate limiting
   - Add request rate limiting middleware when a service is directly exposed.
   - Prefer gateway enforcement first when a gateway is present.
   - Provide sane defaults and per-service override.
