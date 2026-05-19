@@ -103,7 +103,10 @@ public sealed class GitHubService : IGitHubService
                     }
             };
 
-            repo.Network.Push(repo.Branches["main"], options);
+            // LibGit2Sharp push is synchronous — run on thread pool and enforce a hard timeout
+            // so a stalled push doesn't block the Lambda until the 60s function timeout
+            await Task.Run(() => repo.Network.Push(repo.Branches["main"], options))
+                .WaitAsync(TimeSpan.FromSeconds(30), ct);
         }
         finally
         {
