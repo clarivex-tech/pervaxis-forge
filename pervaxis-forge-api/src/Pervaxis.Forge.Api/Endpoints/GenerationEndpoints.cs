@@ -27,7 +27,8 @@ internal static class GenerationEndpoints
     internal static IEndpointRouteBuilder MapGenerationEndpoints(this IEndpointRouteBuilder app)
     {
         var group = app.MapGroup("/api/v1/generate")
-            .WithTags("Generation");
+            .WithTags("Generation")
+            .AllowAnonymous();
 
         group.MapPost("/", GenerateSingle)
             .WithName("GenerateService")
@@ -59,7 +60,8 @@ internal static class GenerationEndpoints
             .ProducesProblem(StatusCodes.Status404NotFound);
 
         var servicesGroup = app.MapGroup("/api/v1/verticals/{slug}/services")
-            .WithTags("Generation");
+            .WithTags("Generation")
+            .AllowAnonymous();
 
         servicesGroup.MapGet("/", ListGeneratedServices)
             .WithName("ListGeneratedServices")
