@@ -4,6 +4,7 @@ using System.Text.Json;
 using Amazon.SecretsManager;
 using Amazon.SecretsManager.Model;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Pervaxis.Forge.Api.Models.Configuration;
 
@@ -13,9 +14,14 @@ namespace Pervaxis.Forge.Api.Services;
 public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     private const string ApiKeyHeaderName = "X-Api-Key";
+    private const string ResolvedKeyCacheKey = "forge:resolved-api-key";
+    private static readonly TimeSpan SecretsCacheDuration = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan SecretsCallTimeout = TimeSpan.FromSeconds(10);
+
     private readonly IAmazonSecretsManager _secretsManager;
     private readonly IOptionsMonitor<ForgeAuthenticationOptions> _authenticationOptions;
     private readonly IOptionsMonitor<ForgeSecretsOptions> _secretsOptions;
+    private readonly IMemoryCache _cache;
 
     public ForgeApiKeyAuthenticationHandler(
         IOptionsMonitor<AuthenticationSchemeOptions> options,
@@ -24,12 +30,14 @@ public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         ISystemClock clock,
         IAmazonSecretsManager secretsManager,
         IOptionsMonitor<ForgeAuthenticationOptions> authenticationOptions,
-        IOptionsMonitor<ForgeSecretsOptions> secretsOptions)
+        IOptionsMonitor<ForgeSecretsOptions> secretsOptions,
+        IMemoryCache cache)
         : base(options, logger, encoder, clock)
     {
         _secretsManager = secretsManager;
         _authenticationOptions = authenticationOptions;
         _secretsOptions = secretsOptions;
+        _cache = cache;
     }
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
@@ -62,30 +70,44 @@ public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<Aut
     {
         var directKey = _authenticationOptions.CurrentValue.ApiKey;
         if (!string.IsNullOrWhiteSpace(directKey))
-        {
             return directKey;
-        }
 
         var secrets = _secretsOptions.CurrentValue;
         if (!secrets.UseSecretsManager || string.IsNullOrWhiteSpace(secrets.SecretId))
+            return null;
+
+        if (_cache.TryGetValue<string>(ResolvedKeyCacheKey, out var cached))
+            return cached;
+
+        try
         {
+            using var cts = new CancellationTokenSource(SecretsCallTimeout);
+            var response = await _secretsManager.GetSecretValueAsync(new GetSecretValueRequest
+            {
+                SecretId = secrets.SecretId,
+            }, cts.Token);
+
+            if (string.IsNullOrWhiteSpace(response.SecretString))
+                return null;
+
+            using var document = JsonDocument.Parse(response.SecretString);
+            var resolved = document.RootElement.TryGetProperty(secrets.ApiKeySecretKey, out var value)
+                ? value.GetString()
+                : null;
+
+            if (!string.IsNullOrWhiteSpace(resolved))
+                _cache.Set(ResolvedKeyCacheKey, resolved, SecretsCacheDuration);
+
+            return resolved;
+        }
+        catch (OperationCanceledException)
+        {
+            Logger.LogWarning(
+                "Secrets Manager call timed out after {TimeoutSeconds}s for secret {SecretId}",
+                SecretsCallTimeout.TotalSeconds,
+                secrets.SecretId);
             return null;
         }
-
-        var response = await _secretsManager.GetSecretValueAsync(new GetSecretValueRequest
-        {
-            SecretId = secrets.SecretId,
-        });
-
-        if (string.IsNullOrWhiteSpace(response.SecretString))
-        {
-            return null;
-        }
-
-        using var document = JsonDocument.Parse(response.SecretString);
-        return document.RootElement.TryGetProperty(secrets.ApiKeySecretKey, out var value)
-            ? value.GetString()
-            : null;
     }
 }
 #pragma warning restore CS0618
