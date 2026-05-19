@@ -17,10 +17,12 @@
  */
 
 using Amazon.Extensions.NETCore.Setup;
+using Amazon.AspNetCore.DataProtection.SSM;
 using Amazon.SecretsManager;
 using Amazon.SecurityToken;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.AspNetCore.OutputCaching;
@@ -41,6 +43,30 @@ using System.Diagnostics;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
+
+var isRunningInLambda = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME"));
+var dataProtectionEnabled = isRunningInLambda || builder.Configuration.GetValue<bool>("Forge:DataProtection:Enabled");
+var dataProtectionPrefix = builder.Configuration["Forge:DataProtection:Prefix"] ?? "/Pervaxis/Forge/DataProtection";
+var dataProtectionKmsKeyId = builder.Configuration["Forge:DataProtection:KmsKeyId"];
+
+if (dataProtectionEnabled)
+{
+    builder.Services.AddDataProtection()
+        .SetApplicationName("Pervaxis.Forge.Api")
+        .PersistKeysToAWSSystemsManager(dataProtectionPrefix, options =>
+        {
+            if (!string.IsNullOrWhiteSpace(dataProtectionKmsKeyId))
+            {
+                options.KMSKeyId = dataProtectionKmsKeyId;
+            }
+        });
+}
+
+builder.Logging.AddConsole();
+builder.Logging.AddFilter("Microsoft.AspNetCore.DataProtection", LogLevel.Information);
+builder.Logging.AddFilter("Amazon.AspNetCore.DataProtection.SSM", LogLevel.Information);
+builder.Logging.AddFilter("Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository", LogLevel.Warning);
+builder.Logging.AddFilter("Microsoft.AspNetCore.DataProtection.KeyManagement.XmlKeyManager", LogLevel.Warning);
 
 builder.Services.AddResponseCompression(options =>
 {
@@ -144,6 +170,13 @@ builder.Services.AddSwaggerGen(options =>
 });
 
 var app = builder.Build();
+
+app.Logger.LogInformation(
+    dataProtectionEnabled
+        ? "Data Protection configured for prefix {Prefix} with KMS key {KmsKeyId}"
+        : "Data Protection SSM persistence is disabled in this environment",
+    dataProtectionPrefix,
+    string.IsNullOrWhiteSpace(dataProtectionKmsKeyId) ? "<default AWS-managed SSM encryption>" : dataProtectionKmsKeyId);
 
 app.Use(async (context, next) =>
 {

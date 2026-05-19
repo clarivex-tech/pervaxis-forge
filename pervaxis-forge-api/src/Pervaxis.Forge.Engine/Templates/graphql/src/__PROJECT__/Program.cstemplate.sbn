@@ -21,6 +21,11 @@ using {{ model.names.namespace }}.GraphQL;
 {{- for module in model.selected_modules }}
 using {{ module.package_name }};
 {{- end }}
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
+using System.Diagnostics;
+using {{ model.names.namespace }}.Models.Configuration;
+using {{ model.names.namespace }}.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -34,10 +39,68 @@ builder.Services
     .AddGraphQLServer()
     .AddQueryType<Query>()
     .AddMutationType<Mutation>();
+builder.Services.AddOptions<ForgeAuthenticationOptions>()
+    .BindConfiguration(ForgeAuthenticationOptions.SectionName);
+builder.Services.AddOptions<ForgeSecretsOptions>()
+    .BindConfiguration(ForgeSecretsOptions.SectionName);
+builder.Services.AddOptions<ForgeDataClassificationOptions>()
+    .BindConfiguration(ForgeDataClassificationOptions.SectionName);
+builder.Services.AddSingleton<ForgeDataRedaction>();
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = "ForgeApiKey";
+    options.DefaultChallengeScheme = "ForgeApiKey";
+})
+    .AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>("ForgeApiKey", _ => { });
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .AddAuthenticationSchemes("ForgeApiKey")
+        .RequireAuthenticatedUser()
+        .Build();
+});
 
 var app = builder.Build();
 
 app.UseRouting();
+app.Use(async (context, next) =>
+{
+    var startedAt = Stopwatch.GetTimestamp();
+    await next();
+
+    var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+    var actor = context.User.Identity?.IsAuthenticated == true
+        ? context.User.Identity?.Name ?? "authenticated-user"
+        : "anonymous";
+
+    app.Logger.LogInformation(
+        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {TraceId}",
+        "request",
+        context.Request.Method,
+        context.Request.Path.Value,
+        context.Response.StatusCode,
+        elapsedMs,
+        actor,
+        context.TraceIdentifier);
+});
+app.Use(async (context, next) =>
+{
+    context.Response.OnStarting(() =>
+    {
+        var headers = context.Response.Headers;
+        headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"] = "DENY";
+        headers["Referrer-Policy"] = "no-referrer";
+        if (!app.Environment.IsDevelopment())
+        {
+            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
+        }
+        return Task.CompletedTask;
+    });
+    await next();
+});
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapGraphQL();
 
 app.Run();

@@ -1,0 +1,8 @@
+namespace {{ model.names.namespace }}.Models.Configuration;
+
+public sealed class ForgeAuthenticationOptions
+{
+    public const string SectionName = "Forge:Authentication";
+
+    public string? ApiKey { get; init; }
+}

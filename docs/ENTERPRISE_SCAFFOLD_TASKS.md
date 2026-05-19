@@ -86,6 +86,20 @@ These are enabled only when the service’s use case calls for them.
 - [x] The generator should emit the correct wiring, config, and defaults when a feature is selected.
 - [ ] Manual integration should remain possible, but not required for production-sensitive concerns.
 
+## Implementation Scope
+
+- [x] REST API generation has the current scaffold baseline implemented.
+- [ ] GraphQL generation still needs the same scaffold baseline mirrored.
+- [ ] gRPC generation still needs the same scaffold baseline mirrored.
+
+## Propagation Plan
+
+1. Keep REST API as the reference implementation.
+2. Mirror shared enterprise controls into GraphQL next.
+3. Mirror shared enterprise controls into gRPC after GraphQL.
+4. Adapt only the HTTP-specific pieces per template type.
+5. Reuse the same priority order unless a template has a technical reason to differ.
+
 ## Priority Order
 
 1. Authentication / authorization
