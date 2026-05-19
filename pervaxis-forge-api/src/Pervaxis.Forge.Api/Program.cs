@@ -263,7 +263,12 @@ app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
-await ApplyPendingMigrationsAsync(app.Services);
+// Keep Lambda startup lean: schema migrations must run out of band because
+// they can exceed the cold-start budget and cause INIT timeouts.
+if (!isRunningInLambda && app.Environment.IsDevelopment())
+{
+    await ApplyPendingMigrationsAsync(app.Services);
+}
 
 app.MapVerticalEndpoints();
 app.MapGenerationEndpoints();
