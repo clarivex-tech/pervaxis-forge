@@ -33,6 +33,7 @@ using Pervaxis.Forge.Api.Services;
 using Pervaxis.Forge.Engine.Generation;
 using Amazon.Lambda.AspNetCoreServer;
 using System.Text.Json;
+using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -153,6 +154,26 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 
 app.UseHttpsRedirection();
 app.UseResponseCompression();
+app.Use(async (context, next) =>
+{
+    var startedAt = Stopwatch.GetTimestamp();
+    await next();
+
+    var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+    var actor = context.User.Identity?.IsAuthenticated == true
+        ? context.User.Identity?.Name ?? "authenticated-user"
+        : "anonymous";
+
+    app.Logger.LogInformation(
+        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {TraceId}",
+        "request",
+        context.Request.Method,
+        context.Request.Path.Value,
+        context.Response.StatusCode,
+        elapsedMs,
+        actor,
+        context.TraceIdentifier);
+});
 app.Use(async (context, next) =>
 {
     context.Response.OnStarting(() =>

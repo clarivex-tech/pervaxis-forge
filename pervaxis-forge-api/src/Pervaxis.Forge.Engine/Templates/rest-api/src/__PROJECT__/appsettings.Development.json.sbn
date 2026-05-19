@@ -15,6 +15,9 @@
       "SecretId": "",
       "ApiKeySecretKey": "Forge:Authentication:ApiKey"
     },
+    "AuditLogging": {
+      "Enabled": true
+    },
     "Cors": {
       "AllowedOrigins": ["http://localhost:4200"]
     }

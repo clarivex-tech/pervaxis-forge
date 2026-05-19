@@ -22,6 +22,9 @@
       "RetryDelayMilliseconds": 1000,
       "TimeoutSeconds": 30
     },
+    "AuditLogging": {
+      "Enabled": true
+    },
     "Cors": {
       "AllowedOrigins": ["http://localhost:4200"]
     }

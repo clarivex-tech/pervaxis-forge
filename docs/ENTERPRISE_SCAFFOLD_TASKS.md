@@ -55,7 +55,7 @@ These are chosen during generation, similar to Genesis provider selection.
 
 These are enabled only when the service’s use case calls for them.
 
-- [ ] Audit logging
+- [x] Audit logging
   - Capture who did what and when.
   - Include actor, action, target, timestamp, and request context.
   - Use structured logs or an audit sink.

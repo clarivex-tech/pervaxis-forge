@@ -15,6 +15,9 @@
       "SecretId": "{{ model.manifest.vertical_slug }}/{{ model.manifest.product }}/{{ model.manifest.service_name }}/config",
       "ApiKeySecretKey": "Forge:Authentication:ApiKey"
     },
+    "AuditLogging": {
+      "Enabled": true
+    },
     "Cors": {
       "AllowedOrigins": []
     }
