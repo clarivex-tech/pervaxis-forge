@@ -43,6 +43,9 @@ builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
 });
+builder.Services.AddOptions<ForgeDataClassificationOptions>()
+    .BindConfiguration(ForgeDataClassificationOptions.SectionName);
+builder.Services.AddSingleton<ForgeDataRedaction>();
 const string ForgeUiCorsPolicy = "ForgeUi";
 builder.Services.AddCors(options =>
 {

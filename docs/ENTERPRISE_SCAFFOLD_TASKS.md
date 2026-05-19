@@ -61,7 +61,7 @@ These are enabled only when the service’s use case calls for them.
   - Use structured logs or an audit sink.
   - Treat this as required for admin, provisioning, or data-access services.
 
-- [ ] PII and data classification guidance
+- [x] PII and data classification guidance
   - Define handling rules beyond "do not log PII".
   - Add data classification levels such as public, internal, confidential, and restricted.
   - Provide redaction patterns for logs and events.

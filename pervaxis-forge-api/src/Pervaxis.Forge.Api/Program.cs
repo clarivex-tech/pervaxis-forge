@@ -62,6 +62,9 @@ builder.Services.AddOptions<ForgeAuthenticationOptions>()
     .BindConfiguration(ForgeAuthenticationOptions.SectionName);
 builder.Services.AddOptions<ForgeSecretsOptions>()
     .BindConfiguration(ForgeSecretsOptions.SectionName);
+builder.Services.AddOptions<ForgeDataClassificationOptions>()
+    .BindConfiguration(ForgeDataClassificationOptions.SectionName);
+builder.Services.AddSingleton<ForgeDataRedaction>();
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = "ForgeApiKey";

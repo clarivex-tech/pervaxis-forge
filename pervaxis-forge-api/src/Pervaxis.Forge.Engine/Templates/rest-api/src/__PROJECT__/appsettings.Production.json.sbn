@@ -18,6 +18,10 @@
     "AuditLogging": {
       "Enabled": true
     },
+    "DataClassification": {
+      "DefaultClassification": "restricted",
+      "SensitiveKeys": ["password", "secret", "token", "apiKey", "email", "phone"]
+    },
     "Cors": {
       "AllowedOrigins": []
     }
