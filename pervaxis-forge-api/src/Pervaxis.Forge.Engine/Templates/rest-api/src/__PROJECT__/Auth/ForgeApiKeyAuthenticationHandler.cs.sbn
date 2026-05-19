@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.Extensions.Options;
 using {{ model.names.namespace }}.Models.Configuration;
 
-namespace {{ model.names.namespace }}.Services;
+namespace {{ model.names.namespace }}.Auth;
 
 #pragma warning disable CS0618
 public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
