@@ -76,7 +76,11 @@ builder.Services.AddResponseCompression(options =>
 builder.Services.AddDbContextPool<ForgeDbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("ForgeDb"),
-        npgsql => npgsql.EnableRetryOnFailure(3)));
+        npgsql =>
+        {
+            npgsql.EnableRetryOnFailure(3);
+            npgsql.CommandTimeout(10);
+        }));
 
 builder.Services.AddScoped<IVerticalService, VerticalService>();
 
@@ -96,6 +100,7 @@ builder.Services.AddOptions<ForgeDataClassificationOptions>()
 builder.Services.AddSingleton<ForgeDataRedaction>();
 builder.Services.AddOptions<ForgeOutputCachingOptions>()
     .BindConfiguration(ForgeOutputCachingOptions.SectionName);
+builder.Services.AddMemoryCache();
 builder.Services.AddOutputCache();
 builder.Services.AddOptions<ForgeRateLimitingOptions>()
     .BindConfiguration(ForgeRateLimitingOptions.SectionName);
