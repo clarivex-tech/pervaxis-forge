@@ -22,6 +22,8 @@ using {{ module.package_name }}.Extensions;
 {{- end }}
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
@@ -36,6 +38,22 @@ builder.Services.{{ module.di_extension_name }}(
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
+const string ForgeUiCorsPolicy = "ForgeUi";
+builder.Services.AddCors(options =>
+{
+    var allowedOrigins = builder.Configuration
+        .GetSection("Forge:Cors:AllowedOrigins")
+        .Get<string[]>() ?? ["http://localhost:4200"];
+
+    options.AddPolicy(ForgeUiCorsPolicy, policy => policy
+        .WithOrigins(allowedOrigins)
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = "ForgeApiKey";
@@ -49,6 +67,10 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("{{ model.names.dot_net_class_name }}Db"),
+        npgsql => npgsql.EnableRetryOnFailure(3)));
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -72,6 +94,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseResponseCompression();
 app.Use(async (context, next) =>
 {
     context.Response.OnStarting(() =>
@@ -91,6 +114,7 @@ app.Use(async (context, next) =>
 
     await next();
 });
+app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health");

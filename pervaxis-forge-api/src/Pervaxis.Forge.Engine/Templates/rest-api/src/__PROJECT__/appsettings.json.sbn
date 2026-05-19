@@ -22,7 +22,9 @@
       "RetryDelayMilliseconds": 1000,
       "TimeoutSeconds": 30
     },
-    "AllowedOrigins": ["http://localhost:4200"]
+    "Cors": {
+      "AllowedOrigins": ["http://localhost:4200"]
+    }
   }{{ if model.manifest.database != null }},
   "ConnectionStrings": {
     "Default": ""

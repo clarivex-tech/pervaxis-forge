@@ -19,13 +19,13 @@ These should be generated for every service by default.
   - Include `X-Content-Type-Options`, `X-Frame-Options`, and `Referrer-Policy`.
   - Add CSP when the service serves browser traffic.
 
-- [ ] CORS policy
+- [x] CORS policy
   - Generate a real CORS policy in the scaffold.
   - Prefer explicit allowed origins.
   - Keep it configurable for browser-facing services.
   - Disable or narrow it by default for backend-only services.
 
-- [ ] Performance baseline
+- [x] Performance baseline
   - Enable response compression where appropriate.
   - Configure EF Core connection pooling explicitly.
   - Include retry settings on DB connections where applicable.

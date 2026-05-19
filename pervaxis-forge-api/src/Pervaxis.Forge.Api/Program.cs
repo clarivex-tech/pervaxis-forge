@@ -22,6 +22,7 @@ using Amazon.SecurityToken;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.OpenApi.Models;
 using Octokit;
 using Pervaxis.Forge.Api.Data;
@@ -37,8 +38,15 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
-builder.Services.AddDbContext<ForgeDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("ForgeDb")));
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+});
+
+builder.Services.AddDbContextPool<ForgeDbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("ForgeDb"),
+        npgsql => npgsql.EnableRetryOnFailure(3)));
 
 builder.Services.AddScoped<IVerticalService, VerticalService>();
 
@@ -77,7 +85,7 @@ const string ForgeUiCorsPolicy = "ForgeUi";
 builder.Services.AddCors(options =>
 {
     var allowedOrigins = builder.Configuration
-        .GetSection("Forge:AllowedOrigins")
+        .GetSection("Forge:Cors:AllowedOrigins")
         .Get<string[]>() ?? ["http://localhost:4200"];
 
     options.AddPolicy(ForgeUiCorsPolicy, policy => policy
@@ -144,6 +152,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 }
 
 app.UseHttpsRedirection();
+app.UseResponseCompression();
 app.Use(async (context, next) =>
 {
     context.Response.OnStarting(() =>
