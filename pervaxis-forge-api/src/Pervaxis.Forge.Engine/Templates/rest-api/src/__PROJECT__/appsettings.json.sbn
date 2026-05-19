@@ -29,6 +29,10 @@
       "DefaultClassification": "internal",
       "SensitiveKeys": ["password", "secret", "token", "apiKey", "email", "phone"]
     },
+    "OutputCaching": {
+      "Enabled": false,
+      "DefaultExpirationSeconds": 60
+    },
     "Cors": {
       "AllowedOrigins": ["http://localhost:4200"]
     }

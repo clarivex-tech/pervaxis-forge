@@ -23,6 +23,7 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.OpenApi.Models;
 using Octokit;
 using Pervaxis.Forge.Api.Data;
@@ -65,6 +66,9 @@ builder.Services.AddOptions<ForgeSecretsOptions>()
 builder.Services.AddOptions<ForgeDataClassificationOptions>()
     .BindConfiguration(ForgeDataClassificationOptions.SectionName);
 builder.Services.AddSingleton<ForgeDataRedaction>();
+builder.Services.AddOptions<ForgeOutputCachingOptions>()
+    .BindConfiguration(ForgeOutputCachingOptions.SectionName);
+builder.Services.AddOutputCache();
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = "ForgeApiKey";
@@ -157,6 +161,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 
 app.UseHttpsRedirection();
 app.UseResponseCompression();
+app.UseOutputCache();
 app.Use(async (context, next) =>
 {
     var startedAt = Stopwatch.GetTimestamp();

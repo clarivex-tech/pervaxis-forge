@@ -67,7 +67,7 @@ These are enabled only when the service’s use case calls for them.
   - Provide redaction patterns for logs and events.
   - Document how classification affects storage and transport.
 
-- [ ] Output caching
+- [x] Output caching
   - Support output caching as an opt-in capability.
   - Prefer read-heavy, stable-response services.
   - Avoid for write-heavy or highly dynamic endpoints.
