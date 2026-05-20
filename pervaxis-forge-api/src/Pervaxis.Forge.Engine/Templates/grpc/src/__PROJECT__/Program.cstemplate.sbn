@@ -103,4 +103,9 @@ app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>();
 app.MapGrpcHealthChecksService();
 app.MapGet("/", () => "gRPC service â€” use a gRPC client to communicate.");
 
+app.Lifetime.ApplicationStopping.Register(() =>
+{
+    app.Logger.LogInformation("Application stopping; drain in-flight gRPC calls before shutdown.");
+});
+
 app.Run();

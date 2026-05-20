@@ -48,7 +48,7 @@ These are the service-level primitives the template should include for productio
 - [x] Add gRPC health checks.
   - Use the gRPC health protocol for platform probing and service readiness.
 
-- [ ] Add graceful shutdown handling.
+- [x] Add graceful shutdown handling.
   - Drain in-flight requests before process exit.
   - Avoid hard-killing active calls on deploy.
 
