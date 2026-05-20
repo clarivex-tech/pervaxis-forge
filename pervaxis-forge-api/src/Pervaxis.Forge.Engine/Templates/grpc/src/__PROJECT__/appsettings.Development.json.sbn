@@ -1,0 +1,12 @@
+{
+  "Forge:Authentication": {
+    "ApiKey": "dev-api-key"
+  },
+  "Forge:Secrets": {
+    "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+  },
+  "Forge:DataClassification": {
+    "DefaultLevel": "internal",
+    "RedactionToken": "[REDACTED]"
+  }
+}

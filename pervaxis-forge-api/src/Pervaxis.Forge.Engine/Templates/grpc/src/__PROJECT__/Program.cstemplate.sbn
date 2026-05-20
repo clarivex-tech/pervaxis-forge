@@ -16,12 +16,9 @@
  ************************************************************************
  */
 
-using {{ model.names.namespace }}.Services;
 {{- for module in model.selected_modules }}
 using {{ module.package_name }};
 {{- end }}
-using Amazon.Extensions.NETCore.Setup;
-using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using System.Diagnostics;
@@ -31,8 +28,7 @@ using {{ model.names.namespace }}.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddGrpc();
-builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
-builder.Services.AddAWSService<IAmazonSecretsManager>();
+builder.Services.AddGrpcHealthChecks();
 builder.Services.AddOptions<ForgeAuthenticationOptions>()
     .BindConfiguration(ForgeAuthenticationOptions.SectionName);
 builder.Services.AddOptions<ForgeSecretsOptions>()
@@ -104,6 +100,7 @@ app.Use(async (context, next) =>
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>();
+app.MapGrpcHealthChecksService();
 app.MapGet("/", () => "gRPC service â€” use a gRPC client to communicate.");
 
 app.Run();
