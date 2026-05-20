@@ -2,6 +2,12 @@
   "Forge:Authentication": {
     "ApiKey": "dev-api-key"
   },
+  "Forge:Resilience": {
+    "Enabled": true,
+    "RetryCount": 3,
+    "RetryDelayMilliseconds": 1000,
+    "TimeoutSeconds": 30
+  },
   "Forge:Secrets": {
     "ApiKeySecretKey": "Forge:Authentication:ApiKey"
   },

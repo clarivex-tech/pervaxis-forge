@@ -13,6 +13,7 @@
   <ItemGroup>
     <PackageReference Include="Grpc.AspNetCore" Version="2.*" />
     <PackageReference Include="Grpc.AspNetCore.HealthChecks" Version="2.*" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.*" />
     <PackageReference Include="AWSSDK.SecretsManager" Version="3.7.*" />
     <Protobuf Include="Protos\{{ model.manifest.service_name }}.proto" GrpcServices="Server" />
 {{- for module in model.selected_modules }}

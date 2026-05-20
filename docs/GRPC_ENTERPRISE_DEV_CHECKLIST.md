@@ -52,7 +52,7 @@ These are the service-level primitives the template should include for productio
   - Drain in-flight requests before process exit.
   - Avoid hard-killing active calls on deploy.
 
-- [ ] Add outbound resilience for internal service calls.
+- [x] Add outbound resilience for internal service calls.
   - Use a standard resilience handler or equivalent policy for HTTP-based dependencies.
 
 - [ ] Configure gRPC performance settings explicitly.

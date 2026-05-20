@@ -29,6 +29,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddGrpc();
 builder.Services.AddGrpcHealthChecks();
+builder.Services.AddOptions<ForgeResilienceOptions>()
+    .BindConfiguration(ForgeResilienceOptions.SectionName);
 builder.Services.AddOptions<ForgeAuthenticationOptions>()
     .BindConfiguration(ForgeAuthenticationOptions.SectionName);
 builder.Services.AddOptions<ForgeSecretsOptions>()
@@ -53,6 +55,9 @@ builder.Services.AddAuthorization(options =>
 builder.Services.{{ module.di_extension_name }}(
     builder.Configuration.GetSection("{{ module.name }}"));
 {{- end }}
+
+builder.Services.AddHttpClient("forge-outbound")
+    .AddStandardResilienceHandler();
 
 var app = builder.Build();
 
