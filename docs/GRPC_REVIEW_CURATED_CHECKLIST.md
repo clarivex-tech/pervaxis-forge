@@ -96,7 +96,7 @@ Status legend:
 - [ ] Add copyright headers to files that are missing them.
   - Apply the standard Clarivex header to the remaining scaffold files.
 
-- [ ] Add a solution file.
+- [x] Add a solution file.
   - Let CI and IDEs target both app and test projects together.
   - Simplify `dotnet test` and package management.
 
@@ -110,7 +110,7 @@ Status legend:
   - Keep the workflow lean.
   - Only fetch full history when a job actually needs it.
 
-- [ ] Add liveness/readiness checks for critical dependencies.
+- [x] Add liveness/readiness checks for critical dependencies.
   - Register DB and other critical dependency checks.
   - Avoid a health endpoint that always reports healthy.
 
