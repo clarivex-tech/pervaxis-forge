@@ -63,7 +63,8 @@ builder.Services.AddOpenTelemetry()
         .AddOtlpExporter())
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
-        .AddHttpClientInstrumentation());
+        .AddHttpClientInstrumentation()
+        .AddMeter("{{ model.names.namespace }}"));
 {{- for module in model.selected_modules }}
 builder.Services.{{ module.di_extension_name }}(
     builder.Configuration.GetSection("{{ module.name }}"));

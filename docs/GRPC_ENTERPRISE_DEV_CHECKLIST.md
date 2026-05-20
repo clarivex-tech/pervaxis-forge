@@ -88,7 +88,7 @@ These controls are important for service-to-service debugging and production sup
   - Propagate trace context across every hop.
   - Use gRPC-aware instrumentation.
 
-- [ ] Add gRPC-specific metrics.
+- [x] Add gRPC-specific metrics.
   - Track request volume, failures, latency, and gRPC status codes.
   - Do not rely only on HTTP status code reporting.
 

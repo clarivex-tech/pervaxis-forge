@@ -27,9 +27,11 @@ public sealed class {{ model.names.dot_net_class_name }}Impl : {{ model.names.do
     private static readonly ActivitySource ActivitySource = new("{{ model.names.namespace }}");
     private static readonly Meter Meter = new("{{ model.names.namespace }}");
     private static readonly Counter<long> RpcCounter = Meter.CreateCounter<long>("{{ model.manifest.service_name }}.rpc.calls");
+    private static readonly Histogram<double> RpcDuration = Meter.CreateHistogram<double>("{{ model.manifest.service_name }}.rpc.duration.ms");
 
     public override Task<HelloReply> Hello(HelloRequest request, ServerCallContext context)
     {
+        var startedAt = Stopwatch.GetTimestamp();
         using var activity = ActivitySource.StartActivity("{{ model.manifest.service_name }}.hello");
         activity?.SetTag("rpc.system", "grpc");
         activity?.SetTag("rpc.method", "Hello");
@@ -37,6 +39,12 @@ public sealed class {{ model.names.dot_net_class_name }}Impl : {{ model.names.do
         activity?.SetTag("request.name", request.Name);
 
         RpcCounter.Add(1, new TagList
+        {
+            { "rpc.method", "Hello" },
+            { "result", "success" }
+        });
+
+        RpcDuration.Record(Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds, new TagList
         {
             { "rpc.method", "Hello" },
             { "result", "success" }
