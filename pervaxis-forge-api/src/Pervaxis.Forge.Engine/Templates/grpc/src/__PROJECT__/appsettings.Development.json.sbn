@@ -1,6 +1,6 @@
 {
   "Forge:Authentication": {
-    "ApiKey": "dev-api-key"
+    "ApiKey": ""
   },
   "Forge:Resilience": {
     "Enabled": true,

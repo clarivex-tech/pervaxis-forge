@@ -21,6 +21,7 @@ using {{ module.package_name }};
 {{- end }}
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
@@ -29,6 +30,7 @@ using OpenTelemetry.Trace;
 using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,6 +64,21 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+builder.Services.AddRateLimiter(limiterOptions =>
+{
+    limiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    limiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
+        RateLimitPartition.GetSlidingWindowLimiter(
+            partitionKey: context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            factory: _ => new SlidingWindowRateLimiterOptions
+            {
+                PermitLimit = 1000,
+                Window = TimeSpan.FromMinutes(1),
+                SegmentsPerWindow = 6,
+                QueueLimit = 0,
+                AutoReplenishment = true,
+            }));
+});
 {{- if model.manifest.database != null && model.manifest.database.engine == "postgresql" }}
 builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>(options =>
     options.UseNpgsql(
@@ -78,6 +95,7 @@ builder.Services.AddOpenTelemetry()
     .WithMetrics(metrics => metrics
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
+        .AddOtlpExporter()
         .AddMeter("{{ model.names.namespace }}"));
 {{- for module in model.selected_modules }}
 builder.Services.{{ module.di_extension_name }}(
@@ -85,7 +103,7 @@ builder.Services.{{ module.di_extension_name }}(
 {{- end }}
 
 builder.Services.AddHttpClient("forge-outbound")
-    .AddStandardResilienceHandler();
+    .AddForgeResilience();
 
 var app = builder.Build();
 
@@ -121,8 +139,6 @@ app.Use(async (context, next) =>
     {
         var headers = context.Response.Headers;
         headers["X-Content-Type-Options"] = "nosniff";
-        headers["X-Frame-Options"] = "DENY";
-        headers["Referrer-Policy"] = "no-referrer";
 
         if (!app.Environment.IsDevelopment())
         {
@@ -136,10 +152,11 @@ app.Use(async (context, next) =>
 });
 
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>().AddInterceptor<ForgeGrpcInterceptor>();
-app.MapGrpcHealthChecksService();
-app.MapGet("/", () => "gRPC service â€” use a gRPC client to communicate.");
+app.MapGrpcHealthChecksService().AllowAnonymous();
+app.MapGet("/", () => "gRPC service - use a gRPC client to communicate.");
 
 app.Lifetime.ApplicationStopping.Register(() =>
 {
