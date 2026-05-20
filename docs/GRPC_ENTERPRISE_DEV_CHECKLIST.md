@@ -100,7 +100,7 @@ These controls are important for service-to-service debugging and production sup
 
 These items make the service easier to inspect, debug, and extend.
 
-- [ ] Add gRPC reflection for development only.
+- [x] Add gRPC reflection for development only.
   - Make grpcurl and Postman inspection possible in non-production environments.
 
 - [ ] Version the proto package.

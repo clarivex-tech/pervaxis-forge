@@ -75,6 +75,11 @@ builder.Services.AddHttpClient("forge-outbound")
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    app.MapGrpcReflectionService();
+}
+
 app.Use(async (context, next) =>
 {
     var startedAt = Stopwatch.GetTimestamp();
