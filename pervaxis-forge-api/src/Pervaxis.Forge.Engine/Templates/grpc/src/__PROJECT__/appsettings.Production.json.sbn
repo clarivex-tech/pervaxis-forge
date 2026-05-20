@@ -15,4 +15,9 @@
     "DefaultLevel": "internal",
     "RedactionToken": "[REDACTED]"
   }
+{{ if model.manifest.database != null }},
+  "ConnectionStrings": {
+    "Default": ""
+  }
+{{ end }}
 }

@@ -22,9 +22,11 @@ using {{ module.package_name }};
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 
@@ -60,6 +62,12 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+{{- if model.manifest.database != null && model.manifest.database.engine == "postgresql" }}
+builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("Default"),
+        npgsql => npgsql.EnableRetryOnFailure(3)));
+{{- end }}
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService(serviceName: "{{ model.names.namespace }}"))
     .WithTracing(tracing => tracing

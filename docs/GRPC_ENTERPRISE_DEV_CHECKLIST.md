@@ -60,7 +60,7 @@ These are the service-level primitives the template should include for productio
   - Configure message size and stream limits as needed.
   - Document compression decisions instead of leaving them implicit.
 
-- [ ] Enable database connection pooling where persistence is present.
+- [x] Enable database connection pooling where persistence is present.
   - Use pooled DbContext registration if the service owns a DbContext.
   - Keep retry behavior explicit.
 

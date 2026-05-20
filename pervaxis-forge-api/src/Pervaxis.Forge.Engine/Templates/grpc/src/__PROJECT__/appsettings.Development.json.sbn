@@ -15,4 +15,9 @@
     "DefaultLevel": "internal",
     "RedactionToken": "[REDACTED]"
   }
+{{ if model.manifest.database != null }},
+  "ConnectionStrings": {
+    "Default": "Host=localhost;Database={{ model.names.database_schema }}_dev;Username=postgres;Password=postgres"
+  }
+{{ end }}
 }
