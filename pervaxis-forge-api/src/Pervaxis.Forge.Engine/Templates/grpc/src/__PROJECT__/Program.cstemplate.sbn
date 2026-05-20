@@ -96,6 +96,10 @@ builder.Services.AddOpenTelemetry()
         .AddAspNetCoreInstrumentation()
         .AddHttpClientInstrumentation()
         .AddOtlpExporter()
+        .AddView("{{ model.manifest.service_name }}.rpc.duration.ms", new ExplicitBucketHistogramConfiguration
+        {
+            Boundaries = new double[] { 1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000 }
+        })
         .AddMeter("{{ model.names.namespace }}"));
 {{- for module in model.selected_modules }}
 builder.Services.{{ module.di_extension_name }}(

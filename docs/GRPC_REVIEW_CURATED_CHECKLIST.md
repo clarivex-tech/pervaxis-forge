@@ -55,7 +55,7 @@ Status legend:
   - Add `.AddOtlpExporter()` to the metrics pipeline.
   - Verify dashboards receive metrics from the service.
 
-- [ ] Use explicit histogram boundaries for millisecond duration metrics.
+- [x] Use explicit histogram boundaries for millisecond duration metrics.
   - Define sensible millisecond buckets.
   - Keep percentiles meaningful.
 
