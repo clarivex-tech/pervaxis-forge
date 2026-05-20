@@ -56,11 +56,11 @@ I{{ model.names.dot_net_class_name }}              ← You write: business logic
 
 ## 3. Implementing Your Service
 
-The scaffold registers `I{{ model.names.dot_net_class_name }}` as a placeholder that throws `NotImplementedException`. Your first task is to implement it.
+The scaffold provides a stub implementation (`{{ model.names.dot_net_class_name }}Service`) that returns default values and logs a warning. The app starts and runs cleanly — your task is to replace the stub logic with real business logic.
 
-### Step 1 — Create the implementation
+### Step 1 — Update the implementation
 
-Create `Services/{{ model.names.dot_net_class_name }}Impl.cs`:
+Open `Services/{{ model.names.dot_net_class_name }}Service.cs` and replace the stub logic:
 
 ```csharp
 /*
@@ -77,16 +77,16 @@ using {{ model.names.namespace }}.Models;
 
 namespace {{ model.names.namespace }}.Services;
 
-public sealed class {{ model.names.dot_net_class_name }} : I{{ model.names.dot_net_class_name }}
+public sealed class {{ model.names.dot_net_class_name }}Service : I{{ model.names.dot_net_class_name }}
 {
     private readonly IYourDomainRepository _repository;
     private readonly ICache _cache;
-    private readonly ILogger<{{ model.names.dot_net_class_name }}> _logger;
+    private readonly ILogger<{{ model.names.dot_net_class_name }}Service> _logger;
 
-    public {{ model.names.dot_net_class_name }}(
+    public {{ model.names.dot_net_class_name }}Service(
         IYourDomainRepository repository,
         ICache cache,
-        ILogger<{{ model.names.dot_net_class_name }}> logger)
+        ILogger<{{ model.names.dot_net_class_name }}Service> logger)
     {
         _repository = repository;
         _cache = cache;
@@ -110,17 +110,12 @@ public sealed class {{ model.names.dot_net_class_name }} : I{{ model.names.dot_n
 }
 ```
 
-### Step 2 — Wire your implementation
+### Step 2 — Add your repository to DI
 
-Update `Extensions/ServiceCollectionExtensions.cs` — replace the placeholder:
+Update `Extensions/ServiceCollectionExtensions.cs` to add your repository:
 
 ```csharp
-// Remove this:
-services.AddScoped<I{{ model.names.dot_net_class_name }}, {{ model.names.dot_net_class_name }}>(
-    _ => throw new NotImplementedException("Implement {{ model.names.dot_net_class_name }} service."));
-
-// Add this:
-services.AddScoped<I{{ model.names.dot_net_class_name }}, {{ model.names.dot_net_class_name }}>();
+services.AddScoped<I{{ model.names.dot_net_class_name }}, {{ model.names.dot_net_class_name }}Service>();
 services.AddScoped<IYourDomainRepository, YourDomainRepository>();
 ```
 
