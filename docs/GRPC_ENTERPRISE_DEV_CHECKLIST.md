@@ -72,7 +72,7 @@ These items should reflect the internal service trust model rather than the REST
   - Prefer mesh identity or mTLS at the transport layer.
   - Avoid API key auth as the primary long-lived service identity mechanism.
 
-- [ ] Gate HSTS by deployment topology.
+- [x] Gate HSTS by deployment topology.
   - Keep it if TLS terminates at the service.
   - Treat it as redundant if the mesh or edge terminates TLS.
 
