@@ -1,0 +1,14 @@
+namespace {{ model.names.namespace }}.Models.Configuration;
+
+public sealed class ForgeResilienceOptions
+{
+    public const string SectionName = "Forge:Resilience";
+
+    public bool Enabled { get; init; } = true;
+
+    public int RetryCount { get; init; } = 3;
+
+    public int RetryDelayMilliseconds { get; init; } = 1000;
+
+    public int TimeoutSeconds { get; init; } = 30;
+}

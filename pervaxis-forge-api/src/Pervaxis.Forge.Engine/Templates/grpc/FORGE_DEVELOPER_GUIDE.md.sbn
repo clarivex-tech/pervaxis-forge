@@ -7,6 +7,21 @@
 
 ## 1. The Contract: What You Own vs What You Don't
 
+### Authentication model
+- Internal east-west traffic should use mTLS or mesh identity at the transport layer.
+- The scaffold includes API-key auth for compatibility, but that is not the preferred service-to-service identity model.
+- If the deployment uses a mesh or service edge, prefer moving identity enforcement there and keep the service authorization policy aligned with that decision.
+
+### HSTS guidance
+- The scaffold sets HSTS in non-development environments.
+- Keep HSTS when the service terminates TLS directly.
+- Treat HSTS as redundant when TLS is terminated upstream by a mesh or edge proxy.
+
+### Browser-only controls
+- Do not add CORS as a runtime requirement for a pure gRPC east-west service.
+- Do not treat browser security headers as a primary gRPC control surface.
+- If the service later exposes browser-facing HTTP endpoints, scope those controls to the HTTP edge instead of the gRPC path.
+
 ### You own (vertical code)
 - `ServiceImpl.cs` — gRPC service method implementations
 - `Protos/` — proto file additions (message types, new RPCs)
