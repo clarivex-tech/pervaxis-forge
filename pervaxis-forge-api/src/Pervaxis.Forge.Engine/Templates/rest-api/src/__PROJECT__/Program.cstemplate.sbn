@@ -54,6 +54,10 @@ builder.Services.AddResponseCompression(options =>
 });
 builder.Services.AddOptions<ForgeDataClassificationOptions>()
     .BindConfiguration(ForgeDataClassificationOptions.SectionName);
+builder.Services.AddOptions<ForgeAuthenticationOptions>()
+    .BindConfiguration(ForgeAuthenticationOptions.SectionName);
+builder.Services.AddOptions<ForgeSecretsOptions>()
+    .BindConfiguration(ForgeSecretsOptions.SectionName);
 builder.Services.AddSingleton<ForgeDataRedaction>();
 builder.Services.AddOptions<ForgeOutputCachingOptions>()
     .BindConfiguration(ForgeOutputCachingOptions.SectionName);
