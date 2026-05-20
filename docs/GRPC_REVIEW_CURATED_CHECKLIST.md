@@ -45,7 +45,7 @@ Status legend:
   - Drop `X-Frame-Options` and `Referrer-Policy` from the gRPC path.
   - Keep browser headers only where an HTTP/browser edge exists.
 
-- [ ] Document and scaffold mTLS or a mesh pattern for east-west calls.
+- [x] Document and scaffold mTLS or a mesh pattern for east-west calls.
   - Prefer service mesh identity or mTLS over API keys for service-to-service traffic.
   - Add a concrete pattern in the service guidance.
 

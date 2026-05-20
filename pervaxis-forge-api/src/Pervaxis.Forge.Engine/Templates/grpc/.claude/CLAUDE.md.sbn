@@ -40,6 +40,12 @@ Every `.cs` file must start with this exact license header:
 - **gRPC Endpoint:** `https://localhost:7001`
 - **DB Schema:** `{{ model.names.database_schema }}`
 
+### East-West Auth
+
+- Use mTLS or a service mesh sidecar for service-to-service identity.
+- Keep API key auth only for compatibility when the service is accessed outside the mesh.
+- If the deployment terminates TLS upstream, treat the mesh or edge as the identity enforcement point and keep the service authorization policy aligned with that boundary.
+
 ---
 
 ## Proto Definition
