@@ -27,8 +27,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-dotnet@v5
         with:
@@ -44,4 +42,4 @@ jobs:
 
       - run: dotnet build "{{ model.names.project_file }}" --no-restore --configuration Release
 
-      - run: dotnet test "{{ model.names.project_file }}" --no-build --configuration Release --collect:"XPlat Code Coverage"
+      - run: dotnet test "../../tests/{{ model.names.namespace }}.Tests/{{ model.names.namespace }}.Tests.csproj" --no-build --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:Threshold=90 /p:ThresholdType=line /p:ThresholdStat=total
