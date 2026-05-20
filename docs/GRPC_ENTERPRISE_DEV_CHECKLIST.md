@@ -76,7 +76,7 @@ These items should reflect the internal service trust model rather than the REST
   - Keep it if TLS terminates at the service.
   - Treat it as redundant if the mesh or edge terminates TLS.
 
-- [ ] Remove browser-only security assumptions where they do not apply.
+- [x] Remove browser-only security assumptions where they do not apply.
   - Do not treat CORS as a runtime requirement for pure gRPC east-west traffic.
   - Do not treat HTML security headers as a core gRPC primitive.
 
