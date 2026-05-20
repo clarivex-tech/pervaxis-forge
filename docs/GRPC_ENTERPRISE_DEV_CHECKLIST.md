@@ -110,7 +110,7 @@ These items make the service easier to inspect, debug, and extend.
   - Prefer interceptors for logging, auth, and tracing.
   - Keep middleware only for concerns that truly belong at the ASP.NET pipeline level.
 
-- [ ] Verify generated file paths and namespaces.
+- [x] Verify generated file paths and namespaces.
   - Check for namespace suffix mismatches such as missing `.Extensions` imports.
   - Keep generator output consistent with the source template layout.
 
