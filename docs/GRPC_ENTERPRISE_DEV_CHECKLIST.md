@@ -103,7 +103,7 @@ These items make the service easier to inspect, debug, and extend.
 - [x] Add gRPC reflection for development only.
   - Make grpcurl and Postman inspection possible in non-production environments.
 
-- [ ] Version the proto package.
+- [x] Version the proto package.
   - Use a versioned namespace boundary such as `.v1` for breaking changes.
 
 - [ ] Use gRPC interceptors for cross-cutting concerns.
