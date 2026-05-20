@@ -48,7 +48,8 @@ public static class ResilientHttpClientBuilderExtensions
                     return response;
                 }
 
-                await Task.Delay(delay, cancellationToken);
+                var jitteredDelay = TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * delay.TotalMilliseconds);
+                await Task.Delay(jitteredDelay, cancellationToken);
                 delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * 2);
             }
 
