@@ -30,7 +30,12 @@ using {{ model.names.namespace }}.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
+builder.Services.AddGrpc(options =>
+{
+    options.MaxReceiveMessageSize = 4 * 1024 * 1024;
+    options.MaxSendMessageSize = 4 * 1024 * 1024;
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+});
 builder.Services.AddSingleton<ForgeGrpcInterceptor>();
 builder.Services.AddGrpcHealthChecks();
 builder.Services.AddOptions<ForgeResilienceOptions>()

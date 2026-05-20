@@ -55,7 +55,7 @@ These are the service-level primitives the template should include for productio
 - [x] Add outbound resilience for internal service calls.
   - Use a standard resilience handler or equivalent policy for HTTP-based dependencies.
 
-- [ ] Configure gRPC performance settings explicitly.
+- [x] Configure gRPC performance settings explicitly.
   - Set keepalive timing and timeout behavior.
   - Configure message size and stream limits as needed.
   - Document compression decisions instead of leaving them implicit.
