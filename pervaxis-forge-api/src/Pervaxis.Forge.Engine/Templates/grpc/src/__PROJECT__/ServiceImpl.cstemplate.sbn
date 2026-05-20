@@ -17,14 +17,34 @@
  */
 
 using Grpc.Core;
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
 
 namespace {{ model.names.namespace }}.Services;
 
 public sealed class {{ model.names.dot_net_class_name }}Impl : {{ model.names.dot_net_class_name }}.{{ model.names.dot_net_class_name }}Base
 {
+    private static readonly ActivitySource ActivitySource = new("{{ model.names.namespace }}");
+    private static readonly Meter Meter = new("{{ model.names.namespace }}");
+    private static readonly Counter<long> RpcCounter = Meter.CreateCounter<long>("{{ model.manifest.service_name }}.rpc.calls");
+
     public override Task<HelloReply> Hello(HelloRequest request, ServerCallContext context)
-        => Task.FromResult(new HelloReply
+    {
+        using var activity = ActivitySource.StartActivity("{{ model.manifest.service_name }}.hello");
+        activity?.SetTag("rpc.system", "grpc");
+        activity?.SetTag("rpc.method", "Hello");
+        activity?.SetTag("rpc.service", "{{ model.names.dot_net_class_name }}");
+        activity?.SetTag("request.name", request.Name);
+
+        RpcCounter.Add(1, new TagList
+        {
+            { "rpc.method", "Hello" },
+            { "result", "success" }
+        });
+
+        return Task.FromResult(new HelloReply
         {
             Message = $"Hello {request.Name} from {{ model.names.dot_net_class_name }}"
         });
+    }
 }

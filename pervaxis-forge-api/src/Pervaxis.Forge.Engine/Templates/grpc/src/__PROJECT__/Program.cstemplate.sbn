@@ -22,6 +22,9 @@ using {{ module.package_name }};
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using System.Diagnostics;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 
@@ -51,6 +54,16 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(serviceName: "{{ model.names.namespace }}"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddSource("{{ model.names.namespace }}")
+        .AddOtlpExporter())
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation());
 {{- for module in model.selected_modules }}
 builder.Services.{{ module.di_extension_name }}(
     builder.Configuration.GetSection("{{ module.name }}"));

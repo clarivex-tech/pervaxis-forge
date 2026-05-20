@@ -84,7 +84,7 @@ These items should reflect the internal service trust model rather than the REST
 
 These controls are important for service-to-service debugging and production support.
 
-- [ ] Add distributed tracing with OpenTelemetry.
+- [x] Add distributed tracing with OpenTelemetry.
   - Propagate trace context across every hop.
   - Use gRPC-aware instrumentation.
 
