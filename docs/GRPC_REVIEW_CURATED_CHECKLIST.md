@@ -59,7 +59,7 @@ Status legend:
   - Define sensible millisecond buckets.
   - Keep percentiles meaningful.
 
-- [ ] Add jitter to retry backoff.
+- [x] Add jitter to retry backoff.
   - Avoid synchronized retry spikes.
   - Use randomized delay instead of pure exponential growth.
 
@@ -67,7 +67,7 @@ Status legend:
   - Either wire the HTTP client to use it or delete it.
   - Do not ship a config class that is never exercised.
 
-- [ ] Demonstrate `CancellationToken` propagation in the scaffold.
+- [x] Demonstrate `CancellationToken` propagation in the scaffold.
   - Pass `context.CancellationToken` to downstream async work.
   - Show the pattern in service implementation guidance.
 
@@ -81,7 +81,7 @@ Status legend:
   - Prefer `_activitySource`, `_meter`, `_rpcCounter`, `_rpcDuration`.
   - Avoid names that shadow framework types.
 
-- [ ] Add `global.json` at the repo root.
+- [x] Add `global.json` at the repo root.
   - Pin the SDK version for local and CI consistency.
   - Avoid surprise behavior from SDK drift.
 
@@ -89,7 +89,7 @@ Status legend:
   - Avoid wildcard major version ranges.
   - Prefer minor/patch pinning or central package management.
 
-- [ ] Extract shared build properties into `Directory.Build.props`.
+- [x] Extract shared build properties into `Directory.Build.props`.
   - Remove duplicated `Nullable`, `ImplicitUsings`, `LangVersion`, and warning settings.
   - Keep project files aligned.
 
@@ -102,11 +102,11 @@ Status legend:
 
 ## 5. CI Rigour
 
-- [ ] Enforce the coverage threshold in CI.
+- [x] Enforce the coverage threshold in CI.
   - Make the 90% gate real, not just documented.
   - Fail builds when coverage drops below the threshold.
 
-- [ ] Remove unnecessary `fetch-depth: 0` from build-only jobs.
+- [x] Remove unnecessary `fetch-depth: 0` from build-only jobs.
   - Keep the workflow lean.
   - Only fetch full history when a job actually needs it.
 

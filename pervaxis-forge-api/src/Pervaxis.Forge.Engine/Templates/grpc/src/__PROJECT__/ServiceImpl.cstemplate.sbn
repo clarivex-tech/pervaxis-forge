@@ -29,7 +29,7 @@ public sealed class {{ model.names.dot_net_class_name }}Impl : {{ model.names.do
     private static readonly Counter<long> _rpcCounter = _meter.CreateCounter<long>("{{ model.manifest.service_name }}.rpc.calls");
     private static readonly Histogram<double> _rpcDuration = _meter.CreateHistogram<double>("{{ model.manifest.service_name }}.rpc.duration.ms");
 
-    public override Task<HelloReply> Hello(HelloRequest request, ServerCallContext context)
+    public override async Task<HelloReply> Hello(HelloRequest request, ServerCallContext context)
     {
         var startedAt = Stopwatch.GetTimestamp();
         var result = "success";
@@ -40,10 +40,12 @@ public sealed class {{ model.names.dot_net_class_name }}Impl : {{ model.names.do
 
         try
         {
-            return Task.FromResult(new HelloReply
+            await Task.Delay(TimeSpan.Zero, context.CancellationToken);
+
+            return new HelloReply
             {
                 Message = $"Hello {request.Name} from {{ model.names.dot_net_class_name }}"
-            });
+            };
         }
         catch
         {
