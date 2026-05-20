@@ -118,10 +118,31 @@ Each Forge-generated service wires a thin adapter that calls `ClarivexExceptionH
 
 ---
 
+## 8. Forge API — Self-Implementation
+
+The Forge API itself must implement the same exception handling and observability stack once the prerequisites are in place. This is blocked on sections 1–3 above.
+
+**Prerequisites before starting:**
+- `Pervaxis.Core.Exceptions` published to the Pervaxis NuGet feed
+- `Pervaxis.Core` shared handler available
+- Supabase `exceptions` table provisioned
+
+**Work items:**
+- [ ] Add `Pervaxis.Core.Exceptions` and `Pervaxis.Core` package references to `Pervaxis.Forge.Api.csproj`
+- [ ] Wire `UseExceptionHandler` middleware in Forge API `Program.cs`
+- [ ] Return `ProblemDetails` with `exceptionId` + `X-Exception-Id` header on all unhandled exceptions
+- [ ] Add `AddOpenTelemetry()` with HTTP and EF Core instrumentation to Forge API
+- [ ] Verify `exceptionId` appears in Forge API CloudWatch logs and Supabase `exceptions` table
+
+> **Order:** Implement in generated prints first. Migrate Forge API after prints are validated in production.
+
+---
+
 ## Scope
 
 | Service type | Exception model | Adapter | OTel tracing |
 |---|---|---|---|
-| REST API | `[ ]` | `[ ]` | `[ ]` |
-| GraphQL | `[ ]` | `[ ]` | `[ ]` |
-| gRPC | `[ ]` | `[ ]` | `[ ]` |
+| REST API (print) | `[ ]` | `[ ]` | `[ ]` |
+| GraphQL (print) | `[ ]` | `[ ]` | `[ ]` |
+| gRPC (print) | `[ ]` | `[ ]` | `[ ]` |
+| Forge API | `[ ]` | `[ ]` | `[ ]` |
