@@ -21,6 +21,8 @@ using {{ model.names.namespace }}.GraphQL;
 {{- for module in model.selected_modules }}
 using {{ module.package_name }};
 {{- end }}
+using Amazon.Extensions.NETCore.Setup;
+using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using System.Diagnostics;
@@ -30,6 +32,8 @@ using {{ model.names.namespace }}.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
+builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
+builder.Services.AddAWSService<IAmazonSecretsManager>();
 {{- for module in model.selected_modules }}
 builder.Services.{{ module.di_extension_name }}(
     builder.Configuration.GetSection("{{ module.name }}"));
