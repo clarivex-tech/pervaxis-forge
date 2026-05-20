@@ -93,7 +93,7 @@ Status legend:
   - Remove duplicated `Nullable`, `ImplicitUsings`, `LangVersion`, and warning settings.
   - Keep project files aligned.
 
-- [ ] Add copyright headers to files that are missing them.
+- [x] Add copyright headers to files that are missing them.
   - Apply the standard Clarivex header to the remaining scaffold files.
 
 - [x] Add a solution file.
