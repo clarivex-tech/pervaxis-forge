@@ -31,6 +31,7 @@ using {{ model.names.namespace }}.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddGrpc();
+builder.Services.AddSingleton<ForgeGrpcInterceptor>();
 builder.Services.AddGrpcHealthChecks();
 builder.Services.AddOptions<ForgeResilienceOptions>()
     .BindConfiguration(ForgeResilienceOptions.SectionName);
@@ -123,7 +124,7 @@ app.Use(async (context, next) =>
 
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>();
+app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>().AddInterceptor<ForgeGrpcInterceptor>();
 app.MapGrpcHealthChecksService();
 app.MapGet("/", () => "gRPC service â€” use a gRPC client to communicate.");
 

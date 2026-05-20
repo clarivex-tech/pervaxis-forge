@@ -106,7 +106,7 @@ These items make the service easier to inspect, debug, and extend.
 - [x] Version the proto package.
   - Use a versioned namespace boundary such as `.v1` for breaking changes.
 
-- [ ] Use gRPC interceptors for cross-cutting concerns.
+- [x] Use gRPC interceptors for cross-cutting concerns.
   - Prefer interceptors for logging, auth, and tracing.
   - Keep middleware only for concerns that truly belong at the ASP.NET pipeline level.
 
