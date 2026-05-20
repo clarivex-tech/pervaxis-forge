@@ -68,7 +68,7 @@ These are the service-level primitives the template should include for productio
 
 These items should reflect the internal service trust model rather than the REST/browser baseline.
 
-- [ ] Document the auth model for east-west traffic.
+- [x] Document the auth model for east-west traffic.
   - Prefer mesh identity or mTLS at the transport layer.
   - Avoid API key auth as the primary long-lived service identity mechanism.
 
