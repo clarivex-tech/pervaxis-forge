@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-option csharp_namespace = "{{ model.names.namespace }}";
+option csharp_namespace = "{{ model.names.namespace }}.v1";
 
-package {{ model.manifest.product | string.downcase }}.{{ model.manifest.service_name | string.replace "-" "_" | string.replace "_service" "" }};
+package {{ model.manifest.product | string.downcase }}.{{ model.manifest.service_name | string.replace "-" "_" | string.replace "_service" "" }}.v1;
 
 service {{ model.names.dot_net_class_name }} {
   rpc Hello (HelloRequest) returns (HelloReply);

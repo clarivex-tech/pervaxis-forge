@@ -1,0 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+
+namespace {{ model.names.namespace }}.Data;
+
+public sealed class {{ model.names.dot_net_class_name }}DbContext(
+    DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> options) : DbContext(options)
+{
+}

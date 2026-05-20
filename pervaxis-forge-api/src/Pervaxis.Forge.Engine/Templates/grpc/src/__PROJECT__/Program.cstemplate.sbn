@@ -16,23 +16,32 @@
  ************************************************************************
  */
 
-using {{ model.names.namespace }}.Services;
 {{- for module in model.selected_modules }}
 using {{ module.package_name }};
 {{- end }}
-using Amazon.Extensions.NETCore.Setup;
-using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using System.Diagnostics;
+using Microsoft.EntityFrameworkCore;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddGrpc();
-builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
-builder.Services.AddAWSService<IAmazonSecretsManager>();
+builder.Services.AddGrpc(options =>
+{
+    options.MaxReceiveMessageSize = 4 * 1024 * 1024;
+    options.MaxSendMessageSize = 4 * 1024 * 1024;
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+});
+builder.Services.AddSingleton<ForgeGrpcInterceptor>();
+builder.Services.AddGrpcHealthChecks();
+builder.Services.AddOptions<ForgeResilienceOptions>()
+    .BindConfiguration(ForgeResilienceOptions.SectionName);
 builder.Services.AddOptions<ForgeAuthenticationOptions>()
     .BindConfiguration(ForgeAuthenticationOptions.SectionName);
 builder.Services.AddOptions<ForgeSecretsOptions>()
@@ -53,12 +62,37 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+{{- if model.manifest.database != null && model.manifest.database.engine == "postgresql" }}
+builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("Default"),
+        npgsql => npgsql.EnableRetryOnFailure(3)));
+{{- end }}
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(serviceName: "{{ model.names.namespace }}"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddSource("{{ model.names.namespace }}")
+        .AddOtlpExporter())
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddMeter("{{ model.names.namespace }}"));
 {{- for module in model.selected_modules }}
 builder.Services.{{ module.di_extension_name }}(
     builder.Configuration.GetSection("{{ module.name }}"));
 {{- end }}
 
+builder.Services.AddHttpClient("forge-outbound")
+    .AddStandardResilienceHandler();
+
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+{
+    app.MapGrpcReflectionService();
+}
 
 app.Use(async (context, next) =>
 {
@@ -103,7 +137,13 @@ app.Use(async (context, next) =>
 
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>();
+app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>().AddInterceptor<ForgeGrpcInterceptor>();
+app.MapGrpcHealthChecksService();
 app.MapGet("/", () => "gRPC service â€” use a gRPC client to communicate.");
+
+app.Lifetime.ApplicationStopping.Register(() =>
+{
+    app.Logger.LogInformation("Application stopping; drain in-flight gRPC calls before shutdown.");
+});
 
 app.Run();

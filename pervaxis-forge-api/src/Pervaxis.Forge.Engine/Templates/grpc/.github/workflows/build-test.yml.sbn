@@ -1,33 +1,47 @@
-name: Build and Test — {{ model.names.dot_net_class_name }}
+name: Build and Test
 
 on:
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
+    paths:
+      - 'src/**'
+      - '.github/workflows/build-test.yml'
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
+    paths:
+      - 'src/**'
+      - '.github/workflows/build-test.yml'
+
+defaults:
+  run:
+    working-directory: src/{{ model.names.namespace }}
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
   build-test:
+    name: Build and Test
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET 10
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v5
         with:
-          dotnet-version: "10.0.x"
+          fetch-depth: 0
 
-      - name: Restore
-        run: dotnet restore {{ model.names.solution_file }}
-
-      - name: Build
-        run: dotnet build {{ model.names.solution_file }} --no-restore --configuration Release
-
-      - name: Test
-        run: dotnet test {{ model.names.solution_file }} --no-build --configuration Release --verbosity normal --collect:"XPlat Code Coverage" --filter "Category!=Integration"
-
-      - name: Upload coverage
-        uses: codecov/codecov-action@v4
+      - uses: actions/setup-dotnet@v5
         with:
-          fail_ci_if_error: false
+          dotnet-version: "10.x"
+
+      - uses: actions/cache@v5
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - run: dotnet restore "{{ model.names.project_file }}"
+
+      - run: dotnet build "{{ model.names.project_file }}" --no-restore --configuration Release
+
+      - run: dotnet test "{{ model.names.project_file }}" --no-build --configuration Release --collect:"XPlat Code Coverage"
