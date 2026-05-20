@@ -38,7 +38,7 @@ These items are either confirmed defects or missing baseline files that block a 
 - [x] Add a Dockerfile.
   - Support containerized execution of the generated gRPC service.
 
-- [ ] Add a CI workflow.
+- [x] Add a CI workflow.
   - Ensure the scaffold has a repeatable validation path.
 
 ## 2. gRPC Runtime Baseline
