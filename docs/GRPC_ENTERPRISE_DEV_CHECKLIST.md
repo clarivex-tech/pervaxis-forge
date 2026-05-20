@@ -92,7 +92,7 @@ These controls are important for service-to-service debugging and production sup
   - Track request volume, failures, latency, and gRPC status codes.
   - Do not rely only on HTTP status code reporting.
 
-- [ ] Keep audit logging as a first-class concern where appropriate.
+- [x] Keep audit logging as a first-class concern where appropriate.
   - Preserve structured request context.
   - Capture actor, action, target, and trace correlation data.
 

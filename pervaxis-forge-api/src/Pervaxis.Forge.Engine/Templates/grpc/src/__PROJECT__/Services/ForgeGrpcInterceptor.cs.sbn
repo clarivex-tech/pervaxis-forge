@@ -28,10 +28,13 @@ public sealed class ForgeGrpcInterceptor : Interceptor
         {
             var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
             _logger.LogInformation(
-                "gRPC call {Method} completed in {ElapsedMs}ms with {StatusCode}",
+                "Audit event {AuditAction} {Method} {Peer} {StatusCode} {ElapsedMs}ms {TraceId}",
+                "grpc-call",
                 context.Method,
+                context.Peer,
+                context.Status.StatusCode,
                 elapsedMs,
-                context.Status.StatusCode);
+                context.GetHttpContext()?.TraceIdentifier ?? context.TraceId);
         }
     }
 }
