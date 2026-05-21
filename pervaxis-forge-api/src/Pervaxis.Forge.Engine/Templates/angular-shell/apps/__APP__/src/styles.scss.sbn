@@ -1,0 +1,4 @@
+/* Global styles for {{ model.manifest.service_name }}
+ * Add application-wide styles here.
+ * Component-specific styles belong in the component's .scss file.
+ */
