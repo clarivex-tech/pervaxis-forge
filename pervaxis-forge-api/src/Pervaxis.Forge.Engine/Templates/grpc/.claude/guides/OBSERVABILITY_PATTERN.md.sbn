@@ -1,7 +1,113 @@
-# Observability Pattern
+# Observability Pattern — {{ model.names.namespace }}
 
-Use the standard Genesis observability approach:
-- create an `Activity` for each public provider operation
-- add stable tags for operation and resource identifiers
-- add tenant tags when tenant isolation is enabled
-- mark spans with error status on failures
+## Instrumentation
+
+### Tracing
+
+```csharp
+private static readonly ActivitySource ActivitySource = new("{{ model.names.namespace }}");
+
+// Start a span for every domain operation:
+using var activity = ActivitySource.StartActivity("{{ model.manifest.service_name }}.get-record");
+activity?.SetTag("record.id", id);
+activity?.SetTag("db.operation", "SELECT");
+
+try
+{
+    var result = await _repository.GetAsync(id, ct);
+    activity?.SetStatus(ActivityStatusCode.Ok);
+    return result;
+}
+catch (Exception ex)
+{
+    // Always mark spans as error on failure — otherwise all spans appear green in the UI
+    activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+    activity?.RecordException(ex);
+    throw;
+}
+```
+
+### Baggage Propagation
+
+<!-- [5.1.2] For distributed tracing across services, W3C Baggage must be explicitly forwarded -->
+
+Baggage is automatically propagated by ASP.NET Core for inbound gRPC calls when `AddAspNetCoreInstrumentation()` is configured. For **outbound** HTTP calls via `IHttpClientFactory`, it is also automatic via `AddHttpClientInstrumentation()`.
+
+For **manual propagation** (e.g., when publishing to a message queue):
+
+```csharp
+// Write baggage on the outbound call side:
+Baggage.SetBaggage("tenant-id", tenantId);
+Baggage.SetBaggage("correlation-id", correlationId);
+
+// The baggage values are then available in downstream services:
+var tenantId = Baggage.GetBaggage("tenant-id");
+```
+
+**Standard baggage keys for Pervaxis services:**
+
+| Key | Description |
+|---|---|
+| `tenant-id` | Tenant identifier for multi-tenant services |
+| `correlation-id` | Business-level correlation ID (not the same as trace ID) |
+| `service-version` | Caller's deployed version (for cross-version debugging) |
+
+### Metrics
+
+```csharp
+private static readonly Meter Meter = new("{{ model.names.namespace }}");
+private static readonly Counter<long> RpcCount =
+    Meter.CreateCounter<long>("{{ model.manifest.service_name }}.rpc.count",
+        description: "Number of RPC calls by method and result");
+private static readonly Histogram<double> RpcDuration =
+    Meter.CreateHistogram<double>("{{ model.manifest.service_name }}.rpc.duration.ms",
+        unit: "ms", description: "RPC handler duration in milliseconds");
+
+// Record on every call (from ServiceImpl):
+var sw = Stopwatch.GetTimestamp();
+try
+{
+    var result = await continuation(request, context);
+    RpcCount.Add(1, new TagList { { "method", context.Method }, { "result", "success" } });
+    return result;
+}
+catch (Exception)
+{
+    RpcCount.Add(1, new TagList { { "method", context.Method }, { "result", "error" } });
+    throw;
+}
+finally
+{
+    RpcDuration.Record(Stopwatch.GetElapsedTime(sw).TotalMilliseconds,
+        new TagList { { "method", context.Method } });
+}
+```
+
+---
+
+## SLOs and Alert Thresholds
+
+<!-- [5.3.1] Metric names, baselines, and suggested alert thresholds -->
+
+| Metric | Description | Suggested alert |
+|---|---|---|
+| `{{ model.manifest.service_name }}.rpc.duration.ms` (p99) | 99th-percentile RPC latency | Alert if p99 > 500 ms for 5 min |
+| `{{ model.manifest.service_name }}.rpc.duration.ms` (p999) | Worst-case RPC latency | Alert if p999 > 2000 ms for 5 min |
+| `{{ model.manifest.service_name }}.rpc.count{result=error}` rate | Error rate | Alert if error rate > 1% over 5 min |
+| `aspnetcore.routing.match_attempts{outcome=failure}` | Unrouted requests | Alert if > 0 sustained (misconfiguration signal) |
+| `http.server.request.duration` (p95, /healthz) | Health probe latency | Alert if p95 > 100 ms |
+| `process.runtime.dotnet.gc.collections` | GC pressure | Alert if Gen2 > 5/min sustained |
+
+**Error budget:** Define your error budget as `(1 - target_availability) * rolling_window_requests`. Example: 99.9% availability on a 1M req/day service = 1000 tolerated errors/day.
+
+**Runbook links:** Add links to your team's runbook for each alert.
+
+---
+
+## Logging Rules
+
+1. **Never log PII.** Log IDs and operation names only. Use `[REDACTED]` or the `ForgeDataClassification` redaction service.
+2. Use **structured properties** — not string interpolation — in `LogXxx` calls.
+3. Log **request IDs** and **trace IDs** on every log line (the audit middleware does this automatically).
+4. Use `LogWarning` for recoverable errors (not found, validation fail). Use `LogError` for unexpected exceptions.
+5. Never log at `Debug` in production hot paths — use `LogInformation` or `LogWarning` only.

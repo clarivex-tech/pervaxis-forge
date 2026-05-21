@@ -1,17 +1,128 @@
+// [10.5] Field-level comments are generated as stubs — replace with your domain descriptions.
+// These comments drive API documentation tooling (grpc-gateway, protoc-gen-doc, etc.).
+
 syntax = "proto3";
 
-option csharp_namespace = "{{ model.names.namespace }}.v1";
+// [10.2] Versioned package name — bump to v2 only for breaking changes (field type change,
+// field removal). Additive changes (new fields, new RPCs) do not require a version bump.
+option csharp_namespace = "{{ model.names.namespace }}";
 
 package {{ model.manifest.product | string.downcase }}.{{ model.manifest.service_name | string.replace "-" "_" | string.replace "_service" "" }}.v1;
 
+// [10.1] Hello is kept as the smoke-test RPC. Replace or extend with your domain RPCs.
+// Commented CRUD scaffold below — uncomment and adapt to your domain entity.
 service {{ model.names.dot_net_class_name }} {
+  // Health smoke test — authenticated ping to verify the service is reachable.
   rpc Hello (HelloRequest) returns (HelloReply);
+
+  // --- CRUD scaffold — uncomment and replace YourEntity with your domain entity name ---
+  //
+  // Retrieve a single record by its unique identifier.
+  // rpc Get (GetRequest) returns (RecordResponse);
+  //
+  // Create a new record. Use an Idempotency-Key metadata header to prevent duplicates on retry.
+  // rpc Create (CreateRequest) returns (RecordResponse);
+  //
+  // Update an existing record. Only the fields present in the request are changed (patch semantics).
+  // rpc Update (UpdateRequest) returns (RecordResponse);
+  //
+  // Soft-delete a record. Returns NotFound if the record does not exist.
+  // rpc Delete (DeleteRequest) returns (DeleteResponse);
+  //
+  // List records with cursor-based pagination. See ListRequest for page_token usage.
+  // rpc List (ListRequest) returns (ListResponse);
 }
 
+// HelloRequest — replace with your domain request message.
 message HelloRequest {
+  // The caller's identity or display name (used for the smoke-test echo response).
+  // Required. Max length: 100 characters.
   string name = 1;
 }
 
+// HelloReply — replace with your domain response message.
 message HelloReply {
+  // Echo of the name provided in HelloRequest, formatted as a greeting.
   string message = 1;
 }
+
+// === CRUD scaffold messages — uncomment and adapt ===
+//
+// // GetRequest — retrieve a single record.
+// message GetRequest {
+//   // Unique record identifier (UUID). Required.
+//   string id = 1;
+// }
+//
+// // CreateRequest — create a new record.
+// message CreateRequest {
+//   // Human-readable reference code. Required. Max length: 100 characters. Must be unique.
+//   string reference = 1;
+//
+//   // Identity of the submitting user or system. Required. Used for audit trail.
+//   string submitted_by = 2;
+//
+//   // Submission timestamp (Unix milliseconds UTC). Required. Must be > 0.
+//   int64 submitted_at_unix = 3;
+// }
+//
+// // UpdateRequest — update fields on an existing record (patch semantics).
+// message UpdateRequest {
+//   // Unique record identifier. Required.
+//   string id = 1;
+//
+//   // New status value. Optional. Allowed values: "Open", "InProgress", "Closed".
+//   string status = 2;
+//
+//   // Free-text notes. Optional. Max length: 500 characters.
+//   string notes = 3;
+// }
+//
+// // DeleteRequest — soft-delete a record.
+// message DeleteRequest {
+//   // Unique record identifier. Required.
+//   string id = 1;
+// }
+//
+// // DeleteResponse — result of a delete operation.
+// message DeleteResponse {
+//   // True if the record was found and deleted. False is never returned — NotFound is raised instead.
+//   bool success = 1;
+// }
+//
+// // RecordResponse — returned by Get, Create, and Update.
+// message RecordResponse {
+//   // Unique record identifier (UUID).
+//   string id = 1;
+//
+//   // Human-readable reference code.
+//   string reference = 2;
+//
+//   // Current lifecycle status. One of: "Open", "InProgress", "Closed".
+//   string status = 3;
+//
+//   // Record creation time (Unix milliseconds UTC).
+//   int64 created_at_unix = 4;
+//
+//   // Last modification time (Unix milliseconds UTC).
+//   int64 updated_at_unix = 5;
+// }
+//
+// // [10.3] ListRequest — cursor-based pagination (preferred over offset pagination).
+// // page_token is opaque — treat it as a blob, not a number.
+// message ListRequest {
+//   // Maximum records to return. Server may return fewer. Default: 20. Max: 100.
+//   int32 page_size = 1;
+//
+//   // Cursor from the previous response's next_page_token. Omit to start from the beginning.
+//   string page_token = 2;
+// }
+//
+// // ListResponse — paginated record list.
+// message ListResponse {
+//   // The records for this page.
+//   repeated RecordResponse records = 1;
+//
+//   // Opaque cursor for the next page. Empty string means no more pages.
+//   string next_page_token = 2;
+// }

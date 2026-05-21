@@ -1,10 +1,90 @@
-# Pervaxis Genesis - Development Standards
+# Pervaxis Platform — C# Coding Standards
 
-Use the same platform coding standards shipped with the REST API scaffold:
-- file-scoped namespaces
-- sealed concrete classes
-- `ConfigureAwait(false)` in library code
-- null and whitespace guards
-- UTC time only
-- no TODOs without an issue
-- tests for new logic
+## File Layout
+
+Every `.cs` file must start with the Clarivex license header (see `CLAUDE.md`).
+
+Use **file-scoped namespaces**:
+
+```csharp
+namespace {{ model.names.namespace }}.Services;   // file-scoped — not block-scoped
+```
+
+## Class Design
+
+- **Seal concrete classes** unless designed for inheritance: `public sealed class MyService`
+- **Prefer `sealed record` for immutable value objects** and domain models
+- **Prefer primary constructors** (C# 12) for simple DI — only if all dependencies are readonly
+- No partial classes except `Program` (required for `WebApplicationFactory`)
+
+## Async
+
+- `ConfigureAwait(false)` on **every** `await` in library/service code — never in ASP.NET Core middleware
+- Never block async code with `.Result`, `.Wait()`, or `GetAwaiter().GetResult()`
+- Pass `CancellationToken` through every async call chain; use `ct` as the parameter name
+- Use `IAsyncEnumerable<T>` for server-streaming results instead of `List<T>`
+
+## Null Safety
+
+- Nullable reference types are enabled (`<Nullable>enable</Nullable>`) — no `#nullable` overrides
+- Use `ArgumentNullException.ThrowIfNull(param)` at public API entry points
+- Use `ArgumentException.ThrowIfNullOrWhiteSpace(param)` for string inputs
+- Prefer `is not null` over `!= null`; prefer pattern matching over casting
+
+## Time
+
+- Use `DateTimeOffset.UtcNow` — never `DateTime.Now` or `DateTime.UtcNow`
+- Store and transfer timestamps as `long` (Unix milliseconds) in proto; convert at the gRPC boundary
+- Use `TimeProvider` (injected) in testable code instead of static `DateTimeOffset.UtcNow`
+
+## Logging
+
+```csharp
+// Correct — structured properties, not string interpolation
+_logger.LogInformation("Processing record {RecordId} for {Actor}", id, actor);
+
+// Wrong — string interpolation loses structured log fields
+_logger.LogInformation($"Processing record {id} for {actor}");
+```
+
+## Error Handling
+
+- Catch the most specific exception type first
+- **Always** catch `OperationCanceledException` separately — never treat cancellation as an error
+- Map domain exceptions to `RpcException` with the correct `StatusCode` at the gRPC boundary
+- Never swallow exceptions silently — at minimum, log before re-throwing
+
+```csharp
+catch (OperationCanceledException)
+{
+    // Cancellation is not an error — don't log as error, don't increment error metrics
+    throw;
+}
+catch (YourDomainNotFoundException ex)
+{
+    _logger.LogWarning("Record not found: {RecordId}", ex.RecordId);
+    throw new RpcException(new Status(StatusCode.NotFound, ex.Message));
+}
+```
+
+## Dependency Injection
+
+- Register services as `AddScoped` (per-request) unless they are truly stateless (`AddSingleton`)
+- **Never** inject `IServiceProvider` directly into a service — use constructor injection
+- Use `IOptions<T>` for configuration; validate with `[Required]`, `[Range]` on the options class
+- Register `AddOptions<T>().ValidateDataAnnotations().ValidateOnStart()` for all options
+
+## Code Quality
+
+- `TreatWarningsAsErrors=true` is enforced — fix all Roslyn warnings before committing
+- `AnalysisMode=All` is active — do not suppress analyzer warnings without a documented reason
+- No TODOs in committed code without a linked Pervaxis Jira ticket: `// TODO [PERVAXIS-1234]`
+- No commented-out code blocks — delete dead code, use git history to recover
+- 90% line coverage is a CI gate — tests must be written alongside every new service method
+
+## Formatting
+
+- `dotnet format` enforces style — run before committing (`dotnet format --verify-no-changes` in CI)
+- 4-space indentation, no tabs
+- Opening braces on the same line (Allman style is not used)
+- `var` for local variables when the type is obvious from the right-hand side

@@ -74,9 +74,9 @@
 
 ### 3.2 Database & EF Core
 - [x] **3.2.1** The generated `DbContext` has no `OnModelCreating` override. The DB schema is defined in `manifest.json` but `modelBuilder.HasDefaultSchema(...)` is never set. All generated services will land tables in `public`/`dbo` by default. The generator should emit `HasDefaultSchema` from the manifest's schema value. ✅ *Fixed — `OnModelCreating` override with `HasDefaultSchema("{{ model.names.database_schema }}")` emitted in `DbContext` template.*
-- [ ] **3.2.2** No connection pooling configuration guidance. For high-throughput gRPC services, the scaffold or developer guide should show how to configure `MinPoolSize`, `MaxPoolSize`, and `Connection Lifetime`.
+- [x] **3.2.2** No connection pooling configuration guidance. For high-throughput gRPC services, the scaffold or developer guide should show how to configure `MinPoolSize`, `MaxPoolSize`, and `Connection Lifetime`. ✅ *Fixed — connection pooling section added to developer guide with recommended parameter table and Npgsql configuration example.*
 - [ ] **3.2.3** The generated `DbContext` class is not registered in `Program.cs`. Teams must add the `AddDbContext<>` call themselves with no example. Emit a commented-out registration block in `Program.cs` to guide teams. *(The `Program.cs` template already conditionally emits `AddDbContextPool` when `postgresql` is selected in the manifest.)*
-- [ ] **3.2.4** No guidance on the soft-delete pattern. If generated entities use `IsDeleted` flags, a global query filter must be set at the context level. Add this to the developer guide.
+- [x] **3.2.4** No guidance on the soft-delete pattern. If generated entities use `IsDeleted` flags, a global query filter must be set at the context level. Add this to the developer guide. ✅ *Fixed — soft-delete section added to developer guide with `ISoftDeletable` interface, `OnModelCreating` global query filter, and `IgnoreQueryFilters()` escape hatch.*
 
 ### 3.3 Caching
 - [x] **3.3.1** No `IMemoryCache` registration for local in-process caching. Genesis caching is for distributed cache — `IMemoryCache` should also be registered for sub-millisecond lookups (e.g., hot config like the resolved API key). ✅ *Fixed — `AddMemoryCache()` registered in `Program.cs`; injected into `ForgeApiKeyAuthenticationHandler`.*
@@ -95,7 +95,7 @@
 - [x] **4.2.2** No HTTP health check endpoint (e.g., `/healthz`, `/readyz`) for non-gRPC probes. Kubernetes `livenessProbe` and `readinessProbe` need HTTP endpoints unless the cluster uses gRPC probes, which many do not. Emit both. ✅ *Fixed — `/healthz` and `/readyz` HTTP endpoints emitted with `AllowAnonymous()`.*
 
 ### 4.3 Idempotency
-- [ ] **4.3.1** No idempotency key pattern documented or wired. Mutation RPCs are susceptible to duplicate processing on client retry. Add an `Idempotency-Key` metadata header pattern and deduplication guidance to the developer guide template.
+- [x] **4.3.1** No idempotency key pattern documented or wired. Mutation RPCs are susceptible to duplicate processing on client retry. Add an `Idempotency-Key` metadata header pattern and deduplication guidance to the developer guide template. ✅ *Fixed — Idempotency section (section 7) added to developer guide with full server-side and client-side code examples, rules, and TTL guidance.*
 
 ---
 
@@ -103,7 +103,7 @@
 
 ### 5.1 Tracing
 - [x] **5.1.1** The generated `ServiceImpl` example does not call `activity?.SetStatus(ActivityStatusCode.Error, exception.Message)` in the `catch` block. Failed spans appear as successful in the tracing backend. Fix the example so every generated service starts with correct error span tagging. ✅ *Fixed — `activity?.SetStatus(ActivityStatusCode.Error, ex.Message)` added in the `catch (Exception)` block.*
-- [ ] **5.1.2** No baggage propagation guidance in the developer guide. For distributed tracing across services, `Baggage` (e.g., tenant ID, correlation ID) needs to be explicitly forwarded in outbound calls. Add this to `OBSERVABILITY_PATTERN.md`.
+- [x] **5.1.2** No baggage propagation guidance in the developer guide. For distributed tracing across services, `Baggage` (e.g., tenant ID, correlation ID) needs to be explicitly forwarded in outbound calls. Add this to `OBSERVABILITY_PATTERN.md`. ✅ *Fixed — Baggage Propagation section added to `OBSERVABILITY_PATTERN.md.sbn` with standard baggage keys table and manual propagation example.*
 
 ### 5.2 Logging
 - [x] **5.2.1** No `Logging` section in `appsettings.json` — all generated services use framework defaults (Information level). Emit a `Logging` section with sensible per-namespace defaults, especially to suppress verbose framework SQL logging in production. ✅ *Fixed — `Logging` section with per-namespace defaults emitted in both `appsettings.json.sbn` and `appsettings.Production.json.sbn`.*
@@ -111,7 +111,7 @@
 - [x] **5.2.3** No structured log correlation between the audit event and the OpenTelemetry trace. Add `TraceId` and `SpanId` as standard log properties in the generated middleware, using `LogContext.PushProperty` or the OTEL log bridge. ✅ *Fixed — `{SpanId}` added to audit log message alongside existing `{TraceId}`.*
 
 ### 5.3 Metrics
-- [ ] **5.3.1** No alerting thresholds or SLO definitions documented alongside the metric definitions generated. Add a reference table of generated metric names, expected baselines, and suggested alert thresholds to `OBSERVABILITY_PATTERN.md`.
+- [x] **5.3.1** No alerting thresholds or SLO definitions documented alongside the metric definitions generated. Add a reference table of generated metric names, expected baselines, and suggested alert thresholds to `OBSERVABILITY_PATTERN.md`. ✅ *Fixed — SLO/alerting threshold table added to `OBSERVABILITY_PATTERN.md.sbn` with p99 latency, error rate, GC pressure, and health probe latency alerts.*
 - [x] **5.3.2** The RPC duration histogram max boundary is 5000 ms (5 seconds). Any call slower than 5s falls into the overflow bucket with no granularity. Add a 10000 ms bucket to the generated histogram boundaries. ✅ *Fixed — `10000` bucket added to histogram `Boundaries` array.*
 
 ---
@@ -170,21 +170,21 @@
 
 ## 10. API Design & Proto Contracts
 
-- [ ] **10.1** The generated proto only contains a trivial `Hello` example RPC. The developer guide shows a richer `Get`/`Create`/`Update`/`Delete`/`List` pattern — emit this as commented-out scaffolding in the proto file so teams have a working reference to replace rather than starting from scratch.
-- [ ] **10.2** No proto versioning strategy in the developer guide. There is no guidance on when to cut a `v2`, how to maintain backward compatibility, or how to deprecate fields. Add a versioning section to the guide template.
-- [ ] **10.3** No pagination standardization. The developer guide shows offset pagination (`page` + `page_size`), but cursor-based pagination is more scalable for large datasets. The Forge template should standardize on one approach and enforce it via the guide.
-- [ ] **10.4** No error detail messages using the gRPC rich error model (`google.rpc.Status` + `google.rpc.ErrorInfo`). Only status codes are returned on failure. The rich error model allows structured error payloads that clients can inspect programmatically — add an example to the developer guide.
-- [ ] **10.5** No field-level documentation in the generated proto file. Fields have no comments explaining expected formats, constraints, or examples. Proto comments generate API documentation — the Forge template should emit comment stubs.
+- [x] **10.1** The generated proto only contains a trivial `Hello` example RPC. The developer guide shows a richer `Get`/`Create`/`Update`/`Delete`/`List` pattern — emit this as commented-out scaffolding in the proto file so teams have a working reference to replace rather than starting from scratch. ✅ *Fixed — full CRUD scaffold emitted as commented proto messages in `service.proto.sbn`; includes `ListRequest`/`ListResponse` with cursor-based pagination tokens.*
+- [x] **10.2** No proto versioning strategy in the developer guide. There is no guidance on when to cut a `v2`, how to maintain backward compatibility, or how to deprecate fields. Add a versioning section to the guide template. ✅ *Fixed — Proto Versioning Strategy section added with safe/unsafe change table, when-to-cut-v2 guidance, and `reserved` field deprecation example.*
+- [x] **10.3** No pagination standardization. The developer guide shows offset pagination (`page` + `page_size`), but cursor-based pagination is more scalable for large datasets. The Forge template should standardize on one approach and enforce it via the guide. ✅ *Fixed — Pagination section added standardizing on cursor-based pagination using `page_token` / `next_page_token`; explains why offset does not scale; includes server-side cursor encode/decode example.*
+- [x] **10.4** No error detail messages using the gRPC rich error model (`google.rpc.Status` + `google.rpc.ErrorInfo`). Only status codes are returned on failure. The rich error model allows structured error payloads that clients can inspect programmatically — add an example to the developer guide. ✅ *Fixed — Rich Error Model section added with `BadRequest.FieldViolations` and `ResourceInfo` examples using `Google.Api.CommonProtos`.*
+- [x] **10.5** No field-level documentation in the generated proto file. Fields have no comments explaining expected formats, constraints, or examples. Proto comments generate API documentation — the Forge template should emit comment stubs. ✅ *Fixed — every field in `service.proto.sbn` (active and scaffolded) has a comment stub describing expected format, constraints, and whether the field is required or optional.*
 
 ---
 
 ## 11. Developer Experience & Documentation
 
-- [ ] **11.1** The `PERVAXIS_STANDARDS.md` and `GENESIS_PROVIDERS.md` guide files emitted by Forge are stubs (3-5 lines each) with no concrete examples. They reference "the REST API scaffold" for patterns — but developers may not have that scaffold. Inline the key patterns or link to a shared, accessible internal URL.
-- [ ] **11.2** No local development runbook is generated. What environment variables are needed to run locally? Is there a `docker-compose.yml` template for local dependencies? Emit a `Getting Started in 5 minutes` section in the generated `README.md`.
+- [x] **11.1** The `PERVAXIS_STANDARDS.md` and `GENESIS_PROVIDERS.md` guide files emitted by Forge are stubs (3-5 lines each) with no concrete examples. They reference "the REST API scaffold" for patterns — but developers may not have that scaffold. Inline the key patterns or link to a shared, accessible internal URL. ✅ *Fixed — `PERVAXIS_STANDARDS.md.sbn` expanded with full C# standards (class design, async, null safety, error handling, DI, formatting); `GENESIS_PROVIDERS.md.sbn` expanded with provider injection pattern, caching/file/workflow examples, and test mock pattern; `OBSERVABILITY_PATTERN.md.sbn` expanded with tracing, baggage, metrics, SLO table, and logging rules.*
+- [x] **11.2** No local development runbook is generated. What environment variables are needed to run locally? Is there a `docker-compose.yml` template for local dependencies? Emit a `Getting Started in 5 minutes` section in the generated `README.md`. ✅ *Fixed — `README.md.sbn` expanded with Getting Started in 5 Minutes (env vars, local DB with Docker, LocalStack for AWS, build/run, auth example, project structure, CI job table).*
 - [x] **11.3** The developer guide template contains a cache key example written as a string literal rather than an interpolated string — this will be silently copy-pasted into production code. Fix the guide template. ✅ *Fixed — both cache key occurrences in `FORGE_DEVELOPER_GUIDE.md.sbn` changed to `$"..."` interpolated strings.*
-- [ ] **11.4** No `CHANGELOG.md` or scaffold version history is generated. When the scaffold is regenerated via Forge, teams need to know what changed between scaffold versions to assess migration effort. Emit a version metadata file.
-- [ ] **11.5** No guidance on database migration workflow in CI/CD is included in the generated developer guide. The guide covers local `dotnet ef migrations add` but has no guidance on applying migrations in a production deployment pipeline (pre-deploy job, init container, manual approval gate). Add this to the guide template.
+- [x] **11.4** No `CHANGELOG.md` or scaffold version history is generated. When the scaffold is regenerated via Forge, teams need to know what changed between scaffold versions to assess migration effort. Emit a version metadata file. ✅ *Fixed — `SCAFFOLD_VERSION.md.sbn` emitted with scaffold version, generator version, wired modules, and a step-by-step migration guide.*
+- [x] **11.5** No guidance on database migration workflow in CI/CD is included in the generated developer guide. The guide covers local `dotnet ef migrations add` but has no guidance on applying migrations in a production deployment pipeline (pre-deploy job, init container, manual approval gate). Add this to the guide template. ✅ *Fixed — Migration CI/CD section added to developer guide with ECS task and Kubernetes init container patterns, plus a 5-point migration safety checklist.*
 
 ---
 
