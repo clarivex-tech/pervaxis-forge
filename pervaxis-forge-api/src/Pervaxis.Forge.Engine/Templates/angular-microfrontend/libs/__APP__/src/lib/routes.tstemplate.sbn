@@ -16,6 +16,9 @@
  ************************************************************************
  */
 
-export { {{ model.names.angular_mfe_component_name }} } from './lib/component';
-export { {{ model.names.angular_mfe_component_name }}ApiService } from './lib/api.service';
-export { MFE_ROUTES } from './lib/routes';
+import { Routes } from '@angular/router';
+import { {{ model.names.angular_mfe_component_name }} } from './component';
+
+export const MFE_ROUTES: Routes = [
+  { path: '', component: {{ model.names.angular_mfe_component_name }} }
+];

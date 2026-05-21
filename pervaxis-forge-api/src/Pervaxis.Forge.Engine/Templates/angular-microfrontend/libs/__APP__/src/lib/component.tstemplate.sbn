@@ -1,8 +1,37 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
 import { Component, OnInit } from '@angular/core';
+import { CommonModule } from '@angular/common';
+{{- for m in model.selected_canvas_modules }}
+import { {{ m.import_name }} } from '{{ m.package_name }}';
+{{- end }}
 import { {{ model.names.angular_mfe_component_name }}ApiService } from './api.service';
 
 @Component({
-  selector: '{{ model.manifest.component_prefix }}-{{ model.manifest.service_name }}',
+  selector: '{{ model.manifest.component_prefix }}-{{ model.names.angular_mfe_route_path }}',
+  standalone: true,
+  imports: [
+    CommonModule,
+{{- for m in model.selected_canvas_modules }}
+    {{ m.import_name }},
+{{- end }}
+  ],
   templateUrl: './component.html'
 })
 export class {{ model.names.angular_mfe_component_name }} implements OnInit {

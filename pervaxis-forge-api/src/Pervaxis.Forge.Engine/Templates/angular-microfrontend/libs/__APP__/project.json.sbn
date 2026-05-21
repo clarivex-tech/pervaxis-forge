@@ -1,0 +1,39 @@
+{
+  "name": "{{ model.manifest.service_name }}",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "libs/{{ model.manifest.service_name }}/src",
+  "prefix": "{{ model.manifest.component_prefix }}",
+  "tags": ["product:{{ model.manifest.product }}", "type:mfe"],
+  "targets": {
+    "build": {
+      "executor": "@nx/angular:package",
+      "outputs": ["{workspaceRoot}/dist/libs/{{ model.manifest.service_name }}"],
+      "options": {
+        "project": "libs/{{ model.manifest.service_name }}/ng-package.json"
+      },
+      "configurations": {
+        "production": {
+          "tsConfig": "libs/{{ model.manifest.service_name }}/tsconfig.lib.prod.json"
+        },
+        "development": {
+          "tsConfig": "libs/{{ model.manifest.service_name }}/tsconfig.lib.json"
+        }
+      },
+      "defaultConfiguration": "production"
+    },
+    "test": {
+      "executor": "@nx/jest:jest",
+      "outputs": ["{workspaceRoot}/coverage/libs/{{ model.manifest.service_name }}"],
+      "options": {
+        "jestConfig": "libs/{{ model.manifest.service_name }}/jest.config.ts"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint",
+      "options": {
+        "lintFilePatterns": ["libs/{{ model.manifest.service_name }}/**/*.ts"]
+      }
+    }
+  }
+}
