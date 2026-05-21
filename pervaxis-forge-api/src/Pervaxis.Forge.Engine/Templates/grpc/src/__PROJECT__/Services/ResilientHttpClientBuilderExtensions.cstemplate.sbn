@@ -1,3 +1,21 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
 using System.Net;
 using Microsoft.Extensions.Options;
 using {{ model.names.namespace }}.Models.Configuration;
@@ -30,26 +48,40 @@ public static class ResilientHttpClientBuilderExtensions
         {
             if (!_options.Enabled)
             {
-                return await base.SendAsync(request, cancellationToken);
+                return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
             }
 
-            var attempt = 0;
-            var delay = TimeSpan.FromMilliseconds(Math.Max(1, _options.RetryDelayMilliseconds));
+            // [2.4.3] Only retry idempotent methods to avoid duplicate side-effects on POST/PATCH
+            var isIdempotent = request.Method == HttpMethod.Get
+                || request.Method == HttpMethod.Head
+                || request.Method == HttpMethod.Options
+                || request.Method == HttpMethod.Put
+                || request.Method == HttpMethod.Delete;
+
+            // [2.4.1] Apply per-request timeout using the configured TimeoutSeconds value
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+            using var linkedCts  = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            var attempt  = 0;
+            var delay    = TimeSpan.FromMilliseconds(Math.Max(1, _options.RetryDelayMilliseconds));
             HttpResponseMessage? response = null;
 
             while (attempt <= Math.Max(0, _options.RetryCount))
             {
                 attempt++;
                 response?.Dispose();
-                response = await base.SendAsync(request, cancellationToken);
+                response = await base.SendAsync(request, linkedCts.Token).ConfigureAwait(false);
 
-                if (response.IsSuccessStatusCode || !IsTransient(response.StatusCode) || attempt > _options.RetryCount)
+                if (response.IsSuccessStatusCode
+                    || !IsTransient(response.StatusCode)
+                    || !isIdempotent
+                    || attempt > _options.RetryCount)
                 {
                     return response;
                 }
 
                 var jitteredDelay = TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * delay.TotalMilliseconds);
-                await Task.Delay(jitteredDelay, cancellationToken);
+                await Task.Delay(jitteredDelay, linkedCts.Token).ConfigureAwait(false);
                 delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * 2);
             }
 

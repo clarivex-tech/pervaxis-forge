@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace {{ model.names.namespace }}.Models.Configuration;
 
 public sealed class ForgeResilienceOptions
@@ -6,9 +8,13 @@ public sealed class ForgeResilienceOptions
 
     public bool Enabled { get; init; } = true;
 
+    [Range(0, 10)]
     public int RetryCount { get; init; } = 3;
 
+    [Range(100, 30000)]
     public int RetryDelayMilliseconds { get; init; } = 1000;
 
+    // [2.4.1] TimeoutSeconds is now enforced in ForgeRetryDelegatingHandler via CancellationTokenSource
+    [Range(1, 300)]
     public int TimeoutSeconds { get; init; } = 30;
 }

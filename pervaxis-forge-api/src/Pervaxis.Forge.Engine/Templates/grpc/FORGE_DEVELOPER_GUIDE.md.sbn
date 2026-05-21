@@ -168,16 +168,17 @@ public sealed class {{ model.names.dot_net_class_name }} : I{{ model.names.dot_n
 
     public async Task<YourDomainRecord> GetAsync(string id, CancellationToken ct = default)
     {
-        var cacheKey = "{{ model.names.cache_prefix }}{id}";
-        var cached = await _cache.GetAsync<YourDomainRecord>(cacheKey, ct);
+        // [11.3] Interpolated string — $"..." not a string literal
+        var cacheKey = $"{{ model.names.cache_prefix }}{id}";
+        var cached = await _cache.GetAsync<YourDomainRecord>(cacheKey, ct).ConfigureAwait(false);
         if (cached is not null)
             return cached;
 
-        var entity = await _repository.GetByIdAsync(id, ct)
+        var entity = await _repository.GetByIdAsync(id, ct).ConfigureAwait(false)
             ?? throw new YourDomainNotFoundException(id);
 
         var record = entity.ToDomain();
-        await _cache.SetAsync(cacheKey, record, TimeSpan.FromMinutes(5), ct);
+        await _cache.SetAsync(cacheKey, record, TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
         return record;
     }
 }
@@ -393,8 +394,9 @@ Inject at the **service layer only** — never in `ServiceImpl`.
 
 ```csharp
 // Caching
-await _cache.SetAsync("{{ model.names.cache_prefix }}{id}", record, TimeSpan.FromMinutes(5), ct);
-var cached = await _cache.GetAsync<YourDomainRecord>("{{ model.names.cache_prefix }}{id}", ct);
+// [11.3] Use interpolated strings ($"...") for cache keys — not string literals
+await _cache.SetAsync($"{{ model.names.cache_prefix }}{id}", record, TimeSpan.FromMinutes(5), ct);
+var cached = await _cache.GetAsync<YourDomainRecord>($"{{ model.names.cache_prefix }}{id}", ct);
 
 // Messaging
 await _messaging.PublishAsync(new YourDomainCreatedEvent { RecordId = id }, ct);

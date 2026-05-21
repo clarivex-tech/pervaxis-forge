@@ -23,4 +23,11 @@ namespace {{ model.names.namespace }}.Data;
 public sealed class {{ model.names.dot_net_class_name }}DbContext(
     DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> options) : DbContext(options)
 {
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // [3.2.1] Default schema is set from manifest so tables land in the correct DB schema
+        modelBuilder.HasDefaultSchema("{{ model.names.database_schema }}");
+
+        base.OnModelCreating(modelBuilder);
+    }
 }
