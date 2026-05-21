@@ -1,0 +1,23 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "Forge:Authentication": {
+    "ApiKey": "test-api-key-for-integration-tests-only"
+  },
+  "Forge:Secrets": {
+    "UseSecretsManager": false,
+    "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+  },
+  "Forge:DataClassification": {
+    "DefaultClassification": "internal"
+  }
+{{ if model.manifest.database != null }},
+  "ConnectionStrings": {
+    "Default": "Host=localhost;Port=5432;Database={{ model.names.namespace }}_test;Username=test;Password=test"
+  }
+{{ end }}
+}

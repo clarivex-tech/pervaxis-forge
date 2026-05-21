@@ -1,0 +1,19 @@
+using HotChocolate;
+
+namespace {{ model.names.namespace }}.Services;
+
+// Stamps every GraphQL error with a unique exceptionId in the extensions envelope.
+// Clients can reference this ID in support requests; it also correlates with structured logs.
+public sealed class ForgeErrorFilter : IErrorFilter
+{
+    public IError OnError(IError error)
+    {
+        var exceptionId = Guid.NewGuid().ToString("N");
+
+        var extensions = error.Extensions is { Count: > 0 }
+            ? new Dictionary<string, object?>(error.Extensions) { ["exceptionId"] = exceptionId }
+            : new Dictionary<string, object?> { ["exceptionId"] = exceptionId };
+
+        return error.WithExtensions(extensions);
+    }
+}

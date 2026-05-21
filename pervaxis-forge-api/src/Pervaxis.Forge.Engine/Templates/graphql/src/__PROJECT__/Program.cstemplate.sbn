@@ -16,8 +16,6 @@
  ************************************************************************
  */
 
-using {{ model.names.namespace }}.Extensions;
-using {{ model.names.namespace }}.GraphQL;
 {{- for module in model.selected_modules }}
 using {{ module.package_name }};
 {{- end }}
@@ -25,86 +23,188 @@ using Amazon.Extensions.NETCore.Setup;
 using Amazon.SecretsManager;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
 using System.Diagnostics;
+{{- if model.manifest.database != null && model.manifest.database.engine == "postgresql" }}
+using Microsoft.EntityFrameworkCore;
+{{- end }}
+using {{ model.names.namespace }}.Auth;
+{{- if model.manifest.database != null }}
+using {{ model.names.namespace }}.Data;
+{{- end }}
+using {{ model.names.namespace }}.Extensions;
+using {{ model.names.namespace }}.GraphQL;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
+// --- Forwarded headers — configured first so X-Forwarded-For is available to auth ---
+// Restrict to trusted proxy CIDRs in production to prevent header spoofing
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// --- In-process cache — for hot paths such as resolved API keys ---
+builder.Services.AddMemoryCache();
+
+// --- Options — all validated at startup so misconfiguration fails fast at boot ---
+builder.Services.AddOptions<ForgeAuthenticationOptions>()
+    .BindConfiguration(ForgeAuthenticationOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddOptions<ForgeSecretsOptions>()
+    .BindConfiguration(ForgeSecretsOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddOptions<ForgeDataClassificationOptions>()
+    .BindConfiguration(ForgeDataClassificationOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+// --- AWS ---
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonSecretsManager>();
-{{- for module in model.selected_modules }}
-builder.Services.{{ module.di_extension_name }}(
-    builder.Configuration.GetSection("{{ module.name }}"));
-{{- end }}
 
-builder.Services
-    .AddGraphQLServer()
-    .AddQueryType<Query>()
-    .AddMutationType<Mutation>();
-builder.Services.AddOptions<ForgeAuthenticationOptions>()
-    .BindConfiguration(ForgeAuthenticationOptions.SectionName);
-builder.Services.AddOptions<ForgeSecretsOptions>()
-    .BindConfiguration(ForgeSecretsOptions.SectionName);
-builder.Services.AddOptions<ForgeDataClassificationOptions>()
-    .BindConfiguration(ForgeDataClassificationOptions.SectionName);
+// --- Data redaction ---
 builder.Services.AddSingleton<ForgeDataRedaction>();
+
+// --- Authentication ---
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = "ForgeApiKey";
-    options.DefaultChallengeScheme = "ForgeApiKey";
+    options.DefaultChallengeScheme    = "ForgeApiKey";
 })
     .AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>("ForgeApiKey", _ => { });
+
+// --- Authorization ---
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy("ForgeServiceConsumer", policy => policy
+        .AddAuthenticationSchemes("ForgeApiKey")
+        .RequireAuthenticatedUser());
+
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .AddAuthenticationSchemes("ForgeApiKey")
         .RequireAuthenticatedUser()
         .Build();
 });
 
+// --- GraphQL ---
+builder.Services
+    .AddGraphQLServer()
+    .AddQueryType<Query>()
+    .AddMutationType<Mutation>()
+    .AddProjections()
+    .AddFiltering()
+    .AddSorting()
+    .AddErrorFilter<ForgeErrorFilter>();
+
+// --- Genesis modules ---
+{{- for module in model.selected_modules }}
+builder.Services.{{ module.di_extension_name }}(
+    builder.Configuration.GetSection("{{ module.name }}"));
+{{- end }}
+
+// --- Domain services ---
+builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
+
+// --- Health checks ---
+{{- if model.manifest.database != null && model.manifest.database.engine == "postgresql" }}
+builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>(options =>
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("Default"),
+        npgsql => npgsql.EnableRetryOnFailure(3)));
+builder.Services.AddHealthChecks()
+    .AddDbContextCheck<{{ model.names.dot_net_class_name }}DbContext>("database");
+{{- else }}
+builder.Services.AddHealthChecks();
+{{- end }}
+
+// --- Observability ---
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(resource => resource.AddService(serviceName: "{{ model.names.namespace }}"))
+    .WithTracing(tracing => tracing
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddSource("{{ model.names.namespace }}")
+        .AddOtlpExporter())
+    .WithMetrics(metrics => metrics
+        .AddAspNetCoreInstrumentation()
+        .AddHttpClientInstrumentation()
+        .AddMeter("{{ model.names.namespace }}")
+        .AddOtlpExporter());
+
+// ====================== Pipeline ======================
 var app = builder.Build();
 
-app.UseRouting();
+// ForwardedHeaders MUST run first so real client IP is resolved before auth
+app.UseForwardedHeaders();
+
+// [1.2.1] Auth MUST run before custom middleware so context.User is populated
+// when audit logging executes
+app.UseAuthentication();
+app.UseAuthorization();
+
+// --- Audit logging ---
+// Runs after UseAuthentication so actor correctly reflects the authenticated identity
 app.Use(async (context, next) =>
 {
     var startedAt = Stopwatch.GetTimestamp();
     await next();
 
     var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
-    var actor = context.User.Identity?.IsAuthenticated == true
+    var actor     = context.User.Identity?.IsAuthenticated == true
         ? context.User.Identity?.Name ?? "authenticated-user"
         : "anonymous";
 
+    var path = context.GetEndpoint()?.DisplayName ?? context.Request.Path.Value ?? "/";
+
     app.Logger.LogInformation(
-        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {TraceId}",
+        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {TraceId} {SpanId}",
         "request",
         context.Request.Method,
-        context.Request.Path.Value,
+        path,
         context.Response.StatusCode,
         elapsedMs,
         actor,
-        context.TraceIdentifier);
+        context.TraceIdentifier,
+        System.Diagnostics.Activity.Current?.SpanId.ToHexString() ?? "");
 });
+
+// --- Security headers ---
 app.Use(async (context, next) =>
 {
     context.Response.OnStarting(() =>
     {
         var headers = context.Response.Headers;
         headers["X-Content-Type-Options"] = "nosniff";
-        headers["X-Frame-Options"] = "DENY";
-        headers["Referrer-Policy"] = "no-referrer";
+        headers["X-Frame-Options"]        = "DENY";
+        headers["Referrer-Policy"]        = "strict-origin-when-cross-origin";
+
         if (!app.Environment.IsDevelopment())
         {
             headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
         }
+
         return Task.CompletedTask;
     });
+
     await next();
 });
-app.UseAuthentication();
-app.UseAuthorization();
+
+// --- Endpoints ---
 app.MapGraphQL();
+app.MapHealthChecks("/healthz").AllowAnonymous();
+app.MapHealthChecks("/readyz").AllowAnonymous();
 
 app.Run();
+
+// Exposes Program as a partial class so WebApplicationFactory can reference it in integration tests
+public partial class Program { }
