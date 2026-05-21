@@ -1,0 +1,24 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore": "Warning"
+    }
+  },
+  "Forge:Authentication": {
+    "ApiKey": ""
+  },
+  "Forge:Secrets": {
+    "UseSecretsManager": true,
+    "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+  },
+  "Forge:DataClassification": {
+    "DefaultClassification": "internal"
+  }
+{{ if model.manifest.database != null }},
+  "ConnectionStrings": {
+    "Default": ""
+  }
+{{ end }}
+}

@@ -1,0 +1,26 @@
+{
+  "AllowedHosts": "*",
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Warning"
+    }
+  },
+  "Forge:Authentication": {
+    "ApiKey": ""
+  },
+  "Forge:Secrets": {
+    "UseSecretsManager": false,
+    "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+  },
+  "Forge:DataClassification": {
+    "DefaultClassification": "internal",
+    "SensitiveKeys": ["password", "secret", "token", "apiKey", "email", "phone"]
+  }
+{{ if model.manifest.database != null }},
+  "ConnectionStrings": {
+    "Default": ""
+  }
+{{ end }}
+}

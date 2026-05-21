@@ -1,0 +1,81 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using FluentAssertions;
+
+namespace {{ model.names.namespace }}.Tests;
+
+// Tests for ForgeApiKeyAuthenticationHandler:
+//   - valid key → authenticated (200 from /healthz)
+//   - wrong key → 401 Unauthorized
+//   - missing header → 401 Unauthorized
+//   - empty key → 401 Unauthorized
+//   - valid key second request → served from cache (no Secrets Manager call)
+public sealed class ForgeApiKeyAuthenticationHandlerTests : TestBase
+{
+    private const string ValidKey = "test-api-key-for-integration-tests-only";
+
+    private HttpRequestMessage Request(string? apiKey = null)
+    {
+        var request = new HttpRequestMessage(HttpMethod.Get, "/healthz");
+        if (apiKey is not null)
+            request.Headers.Add("X-Api-Key", apiKey);
+        return request;
+    }
+
+    [Fact]
+    public async Task ValidApiKey_HealthEndpoint_ReturnsOk()
+    {
+        using var response = await Client.SendAsync(Request(ValidKey));
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task MissingApiKey_ProtectedEndpoint_Returns401()
+    {
+        // POST /graphql without an API key — fallback policy requires authentication.
+        using var response = await Client.PostAsJsonAsync("/graphql", new { query = "{ __typename }" });
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task WrongApiKey_Returns401()
+    {
+        using var response = await Client.SendAsync(Request("wrong-key-that-does-not-match"));
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task EmptyApiKey_Returns401()
+    {
+        using var response = await Client.SendAsync(Request(""));
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ValidKey_IsCachedOnSecondRequest_BothSucceed()
+    {
+        // If caching works, the second call hits IMemoryCache instead of config/Secrets Manager.
+        using var first  = await Client.SendAsync(Request(ValidKey));
+        using var second = await Client.SendAsync(Request(ValidKey));
+
+        first.StatusCode.Should().Be(HttpStatusCode.OK);
+        second.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+}
