@@ -7,10 +7,7 @@ syntax = "proto3";
 // field removal). Additive changes (new fields, new RPCs) do not require a version bump.
 option csharp_namespace = "{{ model.names.namespace }}";
 
-{{- $product = model.manifest.product | string.downcase -}}
-{{- $service = model.manifest.service_name | string.downcase -}}
-{{- $service = $service | string.replace "-" "_" -}}
-package {{ $product }}.{{ $service }}.v1;
+package {{ model.manifest.product | string.downcase }}.{{ model.manifest.service_name | string.downcase | string.replace "-" "_" }}.v1;
 
 // [10.1] Hello is kept as the smoke-test RPC. Replace or extend with your domain RPCs.
 // Commented CRUD scaffold below — uncomment and adapt to your domain entity.
