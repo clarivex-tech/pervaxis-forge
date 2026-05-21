@@ -21,72 +21,186 @@ using {{ module.package_name }};
 {{- end }}
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using System.Diagnostics;
+{{- if model.manifest.database != null && model.manifest.database.engine == "postgresql" }}
 using Microsoft.EntityFrameworkCore;
+{{- end }}
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using {{ model.names.namespace }}.Auth;
+{{- if model.manifest.database != null }}
 using {{ model.names.namespace }}.Data;
+{{- end }}
+using {{ model.names.namespace }}.Interceptors;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// --- mTLS / Kestrel TLS configuration (east-west preferred auth) ---
+// [1.1.5] Uncomment and complete this block when the service terminates TLS directly.
+// When a service mesh (e.g., AWS App Mesh / Istio) provides mutual TLS via sidecar,
+// leave this commented out — the mesh handles certificate exchange and peer verification.
+//
+// builder.WebHost.ConfigureKestrel(kestrel =>
+// {
+//     // gRPC over HTTP/2 requires HTTPS. Load your service certificate from the store,
+//     // a PEM file, or AWS ACM Private CA depending on your certificate provisioning strategy.
+//     kestrel.ConfigureHttpsDefaults(https =>
+//     {
+//         // Option A — certificate from file (dev/test)
+//         // https.ServerCertificate = new X509Certificate2(
+//         //     builder.Configuration["Kestrel:Certificates:Default:Path"]!,
+//         //     builder.Configuration["Kestrel:Certificates:Default:Password"]);
+//
+//         // Option B — certificate from AWS Secrets Manager / SSM (production)
+//         // Resolve via your Forge:Secrets provider and pass the PFX bytes here.
+//
+//         // mTLS: require the client to present a valid certificate.
+//         // Set a custom validator if you want to enforce a specific CA or thumbprint.
+//         https.ClientCertificateMode = Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.RequireCertificate;
+//         https.ClientCertificateValidation = (cert, chain, errors) =>
+//         {
+//             // TODO: validate cert.Issuer against your internal CA thumbprint
+//             return errors == System.Net.Security.SslPolicyErrors.None;
+//         };
+//     });
+// });
+
+// --- Forwarded headers — configured first so X-Forwarded-For is available to rate limiter and auth ---
+// [1.5.1] Resolve real client IP from proxy headers rather than using proxy IP for all partitions
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Restrict to trusted proxy CIDRs in production to prevent header spoofing
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
+
+// --- Graceful shutdown timeout — configured before Build so the host picks it up ---
+// [4.1.2] Make shutdown timeout configurable; tune to exceed your longest expected RPC duration
+var shutdownSeconds = builder.Configuration.GetValue("Forge:Shutdown:TimeoutSeconds", 30);
+builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSeconds(shutdownSeconds));
+
+// --- gRPC ---
+// [3.1.1] Message size limits configurable without code changes
+// [3.1.2] KeepAlive prevents NAT/load-balancer idle-connection drops on long-lived streams
+// [3.1.3] Response compression enabled by default
 builder.Services.AddGrpc(options =>
 {
-    options.MaxReceiveMessageSize = 4 * 1024 * 1024;
-    options.MaxSendMessageSize = 4 * 1024 * 1024;
-    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.MaxReceiveMessageSize        = builder.Configuration.GetValue("Forge:Grpc:MaxReceiveMessageSizeBytes", 4 * 1024 * 1024);
+    options.MaxSendMessageSize           = builder.Configuration.GetValue("Forge:Grpc:MaxSendMessageSizeBytes",    4 * 1024 * 1024);
+    options.EnableDetailedErrors         = builder.Environment.IsDevelopment();
+    options.ResponseCompressionLevel     = System.IO.Compression.CompressionLevel.Optimal;
+    options.ResponseCompressionAlgorithm = "gzip";
 });
-builder.Services.AddSingleton<ForgeGrpcInterceptor>();
+builder.WebHost.ConfigureKestrel(kestrel =>
+{
+    // [3.1.2] HTTP/2 keep-alive — tuned via Forge:Grpc:KeepAlive in appsettings.json.
+    // PingDelay:   interval between server-initiated pings — prevents NAT/LB idle-connection drops
+    // PingTimeout: how long to wait for a ping ACK before closing the connection
+    kestrel.Limits.Http2.KeepAlivePingDelay   = TimeSpan.FromMilliseconds(
+        builder.Configuration.GetValue("Forge:Grpc:KeepAlive:TimeMs",    120_000));
+    kestrel.Limits.Http2.KeepAlivePingTimeout = TimeSpan.FromMilliseconds(
+        builder.Configuration.GetValue("Forge:Grpc:KeepAlive:TimeoutMs", 20_000));
+});
 builder.Services.AddGrpcHealthChecks();
-builder.Services.AddOptions<ForgeResilienceOptions>()
-    .BindConfiguration(ForgeResilienceOptions.SectionName);
-builder.Services.AddOptions<ForgeAuthenticationOptions>()
-    .BindConfiguration(ForgeAuthenticationOptions.SectionName);
-builder.Services.AddOptions<ForgeSecretsOptions>()
-    .BindConfiguration(ForgeSecretsOptions.SectionName);
-builder.Services.AddOptions<ForgeDataClassificationOptions>()
-    .BindConfiguration(ForgeDataClassificationOptions.SectionName);
+builder.Services.AddResponseCompression(opts => opts.EnableForHttps = true);
+
+// --- Interceptors & data services ---
+// [2.1.1] ForgeGrpcInterceptor stub is now emitted by the generator
+// [2.1.2] ForgeDataRedaction is now emitted by the generator
+// [1.3.1] ForgeValidationInterceptor validates required fields before the call reaches the service
+builder.Services.AddSingleton<ForgeGrpcInterceptor>();
+builder.Services.AddSingleton<ForgeValidationInterceptor>();
 builder.Services.AddSingleton<ForgeDataRedaction>();
+
+// --- In-process cache — for hot paths such as resolved API keys ---
+// [3.3.1] IMemoryCache registered alongside distributed Genesis caching
+builder.Services.AddMemoryCache();
+
+// --- Options — all validated at startup so misconfiguration fails fast at boot ---
+// [7.5] / [1.6.2] ValidateDataAnnotations + ValidateOnStart on every options registration
+builder.Services.AddOptions<ForgeResilienceOptions>()
+    .BindConfiguration(ForgeResilienceOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddOptions<ForgeAuthenticationOptions>()
+    .BindConfiguration(ForgeAuthenticationOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddOptions<ForgeSecretsOptions>()
+    .BindConfiguration(ForgeSecretsOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddOptions<ForgeDataClassificationOptions>()
+    .BindConfiguration(ForgeDataClassificationOptions.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+
+// --- Authentication ---
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = "ForgeApiKey";
-    options.DefaultChallengeScheme = "ForgeApiKey";
+    options.DefaultChallengeScheme    = "ForgeApiKey";
 })
     .AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>("ForgeApiKey", _ => { });
+
+// --- Authorization ---
+// [1.1.4] Named policy for per-RPC decoration with [Authorize(Policy = "ForgeServiceConsumer")]
 builder.Services.AddAuthorization(options =>
 {
+    options.AddPolicy("ForgeServiceConsumer", policy => policy
+        .AddAuthenticationSchemes("ForgeApiKey")
+        .RequireAuthenticatedUser());
+
     options.FallbackPolicy = new AuthorizationPolicyBuilder()
         .AddAuthenticationSchemes("ForgeApiKey")
         .RequireAuthenticatedUser()
         .Build();
 });
+
+// --- Rate limiting ---
+// [1.5.1] Partition by identity → forwarded IP → direct IP to avoid shared bucket behind proxy
+// [1.5.2] QueueLimit is configurable
 builder.Services.AddRateLimiter(limiterOptions =>
 {
     limiterOptions.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
     limiterOptions.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(context =>
         RateLimitPartition.GetSlidingWindowLimiter(
-            partitionKey: context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous",
+            partitionKey: context.User.Identity?.Name
+                ?? context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+                ?? context.Connection.RemoteIpAddress?.ToString()
+                ?? "anonymous",
             factory: _ => new SlidingWindowRateLimiterOptions
             {
-                PermitLimit = 1000,
-                Window = TimeSpan.FromMinutes(1),
+                PermitLimit       = 1000,
+                Window            = TimeSpan.FromMinutes(1),
                 SegmentsPerWindow = 6,
-                QueueLimit = 0,
+                QueueLimit        = builder.Configuration.GetValue("Forge:RateLimiting:QueueLimit", 0),
                 AutoReplenishment = true,
             }));
 });
+
 {{- if model.manifest.database != null && model.manifest.database.engine == "postgresql" }}
+// --- Data ---
+// [3.2.1] HasDefaultSchema set from manifest so tables land in the correct schema
 builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("Default"),
         npgsql => npgsql.EnableRetryOnFailure(3)));
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<{{ model.names.dot_net_class_name }}DbContext>("database");
+{{- else }}
+builder.Services.AddHealthChecks();
 {{- end }}
+
+// --- Observability ---
+// [5.3.2] Histogram boundary extended to 10000ms for worst-case latency visibility
 builder.Services.AddOpenTelemetry()
     .ConfigureResource(resource => resource.AddService(serviceName: "{{ model.names.namespace }}"))
     .WithTracing(tracing => tracing
@@ -100,54 +214,85 @@ builder.Services.AddOpenTelemetry()
         .AddOtlpExporter()
         .AddView("{{ model.manifest.service_name }}.rpc.duration.ms", new ExplicitBucketHistogramConfiguration
         {
-            Boundaries = new double[] { 1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000 }
+            Boundaries = new double[] { 1, 5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000 }
         })
         .AddMeter("{{ model.names.namespace }}"));
+
+// --- Genesis modules ---
 {{- for module in model.selected_modules }}
 builder.Services.{{ module.di_extension_name }}(
     builder.Configuration.GetSection("{{ module.name }}"));
 {{- end }}
 
+// --- Outbound HTTP resilience ---
 builder.Services.AddHttpClient("forge-outbound")
     .AddForgeResilience();
 
+// ====================== Pipeline ======================
 var app = builder.Build();
+
+// [1.5.1] ForwardedHeaders MUST run first so real client IP is resolved before auth/rate-limiting
+app.UseForwardedHeaders();
+app.UseResponseCompression();
 
 if (app.Environment.IsDevelopment())
 {
     app.MapGrpcReflectionService();
 }
 
+// [1.2.1] CRITICAL FIX — auth MUST run before custom middleware so context.User is populated
+// when audit logging executes; previously auth ran after middleware causing actor = "anonymous"
+app.UseAuthentication();
+app.UseRateLimiter();
+app.UseAuthorization();
+
+// --- Audit logging ---
+// Runs after UseAuthentication so actor correctly reflects the authenticated identity
+// [5.2.2] Uses endpoint display name (route template) rather than raw path to avoid logging PII
+// [5.2.3] TraceId and SpanId included for log/trace correlation
 app.Use(async (context, next) =>
 {
     var startedAt = Stopwatch.GetTimestamp();
     await next();
 
     var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
-    var actor = context.User.Identity?.IsAuthenticated == true
+    var actor     = context.User.Identity?.IsAuthenticated == true
         ? context.User.Identity?.Name ?? "authenticated-user"
         : "anonymous";
 
+    var path = context.GetEndpoint()?.DisplayName ?? context.Request.Path.Value ?? "/";
+
     app.Logger.LogInformation(
-        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {TraceId}",
+        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {TraceId} {SpanId}",
         "request",
         context.Request.Method,
-        context.Request.Path.Value,
+        path,
         context.Response.StatusCode,
         elapsedMs,
         actor,
-        context.TraceIdentifier);
+        context.TraceIdentifier,
+        System.Diagnostics.Activity.Current?.SpanId.ToHexString() ?? "");
 });
 
+// --- Security headers ---
+// [1.4.1] OnStarting fires at response-header flush time. gRPC trailers are sent in a separate
+// DATA+EOS frame after the response headers frame, so trailers do NOT pass through this callback.
+// Security headers are set on the initial headers frame only, which is correct for HTTP/1 clients
+// hitting the health or reflection endpoints. For pure gRPC callers, these headers are no-ops but
+// still safe — they add no overhead and document security posture uniformly.
+// [1.4.2] Added X-Frame-Options and Referrer-Policy
 app.Use(async (context, next) =>
 {
     context.Response.OnStarting(() =>
     {
         var headers = context.Response.Headers;
         headers["X-Content-Type-Options"] = "nosniff";
+        headers["X-Frame-Options"]        = "DENY";
+        headers["Referrer-Policy"]        = "strict-origin-when-cross-origin";
 
         if (!app.Environment.IsDevelopment())
         {
+            // [1.4.3] Only set HSTS when the service terminates TLS directly (not behind a mesh/edge proxy)
             headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
         }
 
@@ -157,16 +302,30 @@ app.Use(async (context, next) =>
     await next();
 });
 
-app.UseAuthentication();
-app.UseRateLimiter();
-app.UseAuthorization();
-app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>().AddInterceptor<ForgeGrpcInterceptor>();
+// --- Endpoints ---
+// [1.3.1] Validation runs first (innermost), then observability interceptor
+app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>()
+   .AddInterceptor<ForgeValidationInterceptor>()
+   .AddInterceptor<ForgeGrpcInterceptor>();
 app.MapGrpcHealthChecksService().AllowAnonymous();
+
+// [4.2.2] HTTP health probe endpoints for Kubernetes liveness/readiness probes
+app.MapHealthChecks("/healthz").AllowAnonymous();
+app.MapHealthChecks("/readyz").AllowAnonymous();
 app.MapGet("/", () => "gRPC service - use a gRPC client to communicate.");
 
+// ====================== Graceful shutdown ======================
+// [4.1.1] / [4.1.2] ShutdownTimeout (set via HostOptions above) controls actual drain duration
 app.Lifetime.ApplicationStopping.Register(() =>
 {
-    app.Logger.LogInformation("Application stopping; drain in-flight gRPC calls before shutdown.");
+    app.Logger.LogInformation(
+        "SIGTERM received — draining in-flight gRPC calls (ShutdownTimeout = {TimeoutSeconds}s). " +
+        "Tune Forge:Shutdown:TimeoutSeconds to exceed your longest expected RPC duration.",
+        shutdownSeconds);
 });
 
 app.Run();
+
+// Exposes Program as a partial class so WebApplicationFactory can reference it in integration tests
+// [6.1.2] Required for TestBase WebApplicationFactory wiring
+public partial class Program { }

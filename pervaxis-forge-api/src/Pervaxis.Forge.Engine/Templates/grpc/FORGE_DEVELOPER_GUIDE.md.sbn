@@ -128,6 +128,147 @@ message ListRequest {
 - Use `int64` for timestamps (Unix milliseconds) — never proto `Timestamp` for Pervaxis services
 - Keep proto messages flat — avoid deep nesting
 
+### Proto Versioning Strategy
+
+<!-- [10.2] When to cut v2, backward compatibility, field deprecation -->
+
+**Never break the existing contract.** gRPC / proto3 allows additive changes without a version bump:
+
+| Change | Safe? |
+|---|---|
+| Add a new field | ✅ Yes — defaults to zero-value on old clients |
+| Add a new RPC | ✅ Yes |
+| Rename a field (keep the number) | ✅ Yes — wire format uses numbers, not names |
+| Remove a field without reserving its number | ⚠️ Risk — number may be reused; always `reserved` |
+| Change a field type | ❌ No — break old clients |
+| Change a field number | ❌ No — wire-format breaking change |
+
+**When to cut a `v2` package:**
+- You need to change a field type or remove required fields.
+- The API contract is significantly restructured (not just extended).
+- A new package prefix (e.g., `package myservice.v2;`) lets old and new clients coexist.
+
+**Deprecating a field:**
+
+```protobuf
+message RecordResponse {
+  string id = 1;
+  string reference = 2;
+  string status = 3;
+  int64 created_at_unix = 4;
+  int64 updated_at_unix = 5;
+  string legacy_code = 6 [deprecated = true];  // kept for wire compat; ignored by new clients
+  reserved 7, 8;                               // never reuse these numbers
+  reserved "old_field_name";                   // never reuse this name
+}
+```
+
+### Pagination
+
+<!-- [10.3] Standardized pagination approach -->
+
+Pervaxis gRPC services standardize on **cursor-based pagination** for all `List` RPCs. Offset pagination (`page` + `page_size`) does not scale past a few thousand rows and produces duplicate/missing results when records are inserted during iteration.
+
+```protobuf
+// Standard List request — use this pattern for all new List RPCs
+message ListRequest {
+  // Maximum number of records to return. Server may return fewer.
+  int32 page_size = 1;  // max: 100, default: 20
+
+  // Opaque cursor from the previous response's next_page_token.
+  // Omit or leave empty to start from the beginning.
+  string page_token = 2;
+}
+
+message ListResponse {
+  repeated RecordResponse records = 1;
+
+  // Opaque cursor for the next page. Empty string means no more pages.
+  string next_page_token = 2;
+
+  // Total count is expensive — omit unless the client genuinely needs it
+  // (e.g., to render a pagination UI). Omitting it keeps List queries O(page_size).
+  // int32 total_count = 3;
+}
+```
+
+**Server-side cursor implementation:**
+
+```csharp
+// Encode the last seen ID as the cursor (base64 for opacity)
+var cursor = records.Count == pageSize
+    ? Convert.ToBase64String(Encoding.UTF8.GetBytes(records.Last().Id))
+    : string.Empty;
+
+return new ListResponse
+{
+    Records = { records.Select(r => r.ToResponse()) },
+    NextPageToken = cursor
+};
+
+// Decode on next call:
+var afterId = string.IsNullOrEmpty(request.PageToken)
+    ? null
+    : Encoding.UTF8.GetString(Convert.FromBase64String(request.PageToken));
+```
+
+### Rich Error Model
+
+<!-- [10.4] google.rpc.Status + ErrorInfo for structured error payloads -->
+
+gRPC's basic `Status(StatusCode.X, "message")` is opaque — clients can only read the status code and a string. For errors that clients need to handle programmatically (validation failures, conflict details, rate limiting), use the **gRPC rich error model**.
+
+Add to proto:
+
+```protobuf
+import "google/rpc/status.proto";
+import "google/rpc/error_details.proto";
+```
+
+Throw structured errors from service methods:
+
+```csharp
+using Google.Rpc;
+using Grpc.Core;
+
+// Validation error — tells the client exactly which fields are wrong
+var badRequest = new BadRequest();
+badRequest.FieldViolations.Add(new BadRequest.Types.FieldViolation
+{
+    Field   = "reference",
+    Description = "Reference must be between 3 and 100 characters."
+});
+
+var richStatus = new Google.Rpc.Status
+{
+    Code    = (int)Code.InvalidArgument,
+    Message = "Validation failed.",
+    Details = { Any.Pack(badRequest) }
+};
+
+throw richStatus.ToRpcException();
+
+// Resource not found with debug info:
+var notFound = new ResourceInfo
+{
+    ResourceType = "YourDomainRecord",
+    ResourceName = request.Id,
+    Description  = "Record does not exist or you do not have access."
+};
+throw new Google.Rpc.Status
+{
+    Code    = (int)Code.NotFound,
+    Message = "Resource not found.",
+    Details = { Any.Pack(notFound) }
+}.ToRpcException();
+```
+
+Add the NuGet package to the csproj (already in `Directory.Packages.props` for future versions):
+
+```xml
+<PackageReference Include="Google.Api.CommonProtos" />
+```
+
 ---
 
 ## 4. Implementing Your Service
@@ -168,16 +309,17 @@ public sealed class {{ model.names.dot_net_class_name }} : I{{ model.names.dot_n
 
     public async Task<YourDomainRecord> GetAsync(string id, CancellationToken ct = default)
     {
-        var cacheKey = "{{ model.names.cache_prefix }}{id}";
-        var cached = await _cache.GetAsync<YourDomainRecord>(cacheKey, ct);
+        // [11.3] Interpolated string — $"..." not a string literal
+        var cacheKey = $"{{ model.names.cache_prefix }}{id}";
+        var cached = await _cache.GetAsync<YourDomainRecord>(cacheKey, ct).ConfigureAwait(false);
         if (cached is not null)
             return cached;
 
-        var entity = await _repository.GetByIdAsync(id, ct)
+        var entity = await _repository.GetByIdAsync(id, ct).ConfigureAwait(false)
             ?? throw new YourDomainNotFoundException(id);
 
         var record = entity.ToDomain();
-        await _cache.SetAsync(cacheKey, record, TimeSpan.FromMinutes(5), ct);
+        await _cache.SetAsync(cacheKey, record, TimeSpan.FromMinutes(5), ct).ConfigureAwait(false);
         return record;
     }
 }
@@ -373,6 +515,72 @@ public sealed class YourDomainDbContext : DbContext
 }
 ```
 
+### Connection Pooling
+
+<!-- [3.2.2] Configure Npgsql connection pool for high-throughput gRPC services -->
+
+Npgsql maintains a connection pool per connection string. Tune these via the connection string or `NpgsqlDataSourceBuilder`:
+
+```csharp
+// In Program.cs or NpgsqlDataSourceBuilder configuration:
+builder.Services.AddDbContextPool<YourDomainDbContext>(options =>
+    options.UseNpgsql(
+        connectionString,
+        npgsql =>
+        {
+            npgsql.EnableRetryOnFailure(3);
+            // Connection Lifetime: recycle connections periodically to avoid stale TCP
+            // sessions after network topology changes. 300s is a safe default.
+            // Tune MinPoolSize / MaxPoolSize in the connection string:
+            // "...;Minimum Pool Size=2;Maximum Pool Size=50;Connection Lifetime=300"
+        }));
+```
+
+**Connection string parameters (recommended starting point):**
+
+| Parameter | Default | Guidance |
+|---|---|---|
+| `Minimum Pool Size` | 0 | Set to 2–5 to keep warm connections ready under low traffic |
+| `Maximum Pool Size` | 100 | For gRPC, start at 20–50; monitor `npgsql.pool.connections` metric |
+| `Connection Lifetime` | 0 (unlimited) | Set 300–600 seconds to prevent stale connections after failover |
+| `Connection Idle Lifetime` | 300 | Lower under low traffic to free server-side connections |
+| `Keepalive` | 0 (disabled) | Set 30 to prevent firewall/LB idle-connection drops |
+
+### Soft Delete
+
+<!-- [3.2.4] Global query filter for soft-delete pattern -->
+
+If entities use an `IsDeleted` flag, set a global query filter in `OnModelCreating` so queries automatically exclude deleted records. **Without this, every LINQ query must explicitly filter `IsDeleted == false`.**
+
+```csharp
+public interface ISoftDeletable
+{
+    bool IsDeleted { get; set; }
+    DateTimeOffset? DeletedAt { get; set; }
+}
+
+// In OnModelCreating — apply globally so no query ever sees deleted rows by default
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    base.OnModelCreating(modelBuilder);
+    modelBuilder.HasDefaultSchema("{{ model.names.database_schema }}");
+
+    foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+    {
+        if (typeof(ISoftDeletable).IsAssignableFrom(entityType.ClrType))
+        {
+            var parameter = Expression.Parameter(entityType.ClrType, "e");
+            var body = Expression.Equal(
+                Expression.Property(parameter, nameof(ISoftDeletable.IsDeleted)),
+                Expression.Constant(false));
+            modelBuilder.Entity(entityType.ClrType).HasQueryFilter(Expression.Lambda(body, parameter));
+        }
+    }
+}
+```
+
+To query deleted records when needed: `_dbContext.Records.IgnoreQueryFilters().Where(...)`.
+
 ### Migrations
 
 ```powershell
@@ -380,9 +588,104 @@ dotnet ef migrations add InitialCreate --project src/{{ model.names.namespace }}
 dotnet ef database update --project src/{{ model.names.namespace }}
 ```
 
+### Migrations in CI/CD
+
+<!-- [11.5] Guidance on applying migrations in production deployment pipelines -->
+
+**Do not call `database update` inside the application on startup** — it creates race conditions when multiple replicas start simultaneously.
+
+**Recommended pattern: pre-deploy migration job**
+
+```yaml
+# In your deployment pipeline (GitHub Actions / AWS CodePipeline):
+
+# Option A — ECS task (run-before-deploy):
+- name: Apply migrations
+  run: |
+    dotnet ef database update \
+      --project src/{{ model.names.namespace }} \
+      --connection "${{ secrets.DB_CONNECTION_STRING }}"
+
+# Option B — Kubernetes init container:
+# Add to the pod spec:
+#   initContainers:
+#   - name: migrate
+#     image: <your-service-image>
+#     command: ["dotnet", "ef", "database", "update"]
+#     env:
+#     - name: ConnectionStrings__Default
+#       valueFrom:
+#         secretKeyRef:
+#           name: db-secret
+#           key: connection-string
+```
+
+**Migration checklist before deploying:**
+1. Migrations must be idempotent (EF Core handles this via the `__EFMigrationsHistory` table).
+2. Additive migrations (add column, add table) are safe for rolling deploys.
+3. Destructive migrations (drop column, rename) require a two-phase deploy: deprecate → deploy v1 → remove → deploy v2.
+4. Add a manual approval gate in your pipeline before applying destructive migrations in production.
+5. Always apply migrations in a transaction — Npgsql wraps DDL by default for PostgreSQL.
+
 ---
 
-## 7. Using Genesis Modules
+## 7. Idempotency
+
+<!-- [4.3.1] Idempotency key pattern for mutation RPCs -->
+
+Mutation RPCs (`Create`, `Update`, `Delete`) are susceptible to duplicate processing if a client retries after a timeout without knowing whether the first attempt succeeded.
+
+**Pattern: `Idempotency-Key` metadata header**
+
+```protobuf
+// Client sends an idempotency key as gRPC metadata:
+// "idempotency-key" → a client-generated UUID per logical operation attempt
+```
+
+```csharp
+// In ServiceImpl.cs — read and dedup on the key:
+public override async Task<RecordResponse> Create(CreateRequest request, ServerCallContext context)
+{
+    var idempotencyKey = context.RequestHeaders
+        .GetValue("idempotency-key");   // null if client did not send one
+
+    if (idempotencyKey is not null)
+    {
+        // Check if we've already processed this key (cache or DB)
+        var cached = await _cache.GetAsync<RecordResponse>($"idem:{idempotencyKey}", ct);
+        if (cached is not null)
+            return cached;  // Return the same result as the first attempt
+    }
+
+    var record = await _service.CreateAsync(request.ToDomain(), context.CancellationToken);
+    var response = record.ToResponse();
+
+    if (idempotencyKey is not null)
+    {
+        // Cache the result for 24h (or until the client's retry window expires)
+        await _cache.SetAsync($"idem:{idempotencyKey}", response, TimeSpan.FromHours(24), ct);
+    }
+
+    return response;
+}
+```
+
+**Client-side usage (gRPC C# client):**
+
+```csharp
+var headers = new Metadata { { "idempotency-key", Guid.NewGuid().ToString() } };
+var response = await client.CreateAsync(request, headers);
+```
+
+**Rules:**
+- The key is owned by the caller — generate it once per logical attempt, not per network retry.
+- Store the key and its result atomically (use a DB transaction or Redis `SET NX`).
+- Return the cached result with the same response as the original, including the same record ID.
+- TTL should exceed the client's maximum retry window.
+
+---
+
+## 8. Using Genesis Modules
 
 Wired modules for this service:
 {{ for module in model.selected_modules }}
@@ -393,8 +696,9 @@ Inject at the **service layer only** — never in `ServiceImpl`.
 
 ```csharp
 // Caching
-await _cache.SetAsync("{{ model.names.cache_prefix }}{id}", record, TimeSpan.FromMinutes(5), ct);
-var cached = await _cache.GetAsync<YourDomainRecord>("{{ model.names.cache_prefix }}{id}", ct);
+// [11.3] Use interpolated strings ($"...") for cache keys — not string literals
+await _cache.SetAsync($"{{ model.names.cache_prefix }}{id}", record, TimeSpan.FromMinutes(5), ct);
+var cached = await _cache.GetAsync<YourDomainRecord>($"{{ model.names.cache_prefix }}{id}", ct);
 
 // Messaging
 await _messaging.PublishAsync(new YourDomainCreatedEvent { RecordId = id }, ct);

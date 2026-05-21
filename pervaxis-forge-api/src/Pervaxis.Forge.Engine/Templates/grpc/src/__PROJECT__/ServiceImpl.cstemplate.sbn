@@ -40,16 +40,25 @@ public sealed class {{ model.names.dot_net_class_name }}Impl : {{ model.names.do
 
         try
         {
-            await Task.Delay(TimeSpan.Zero, context.CancellationToken);
+            // Replace Task.Delay with your domain logic
+            await Task.Delay(TimeSpan.Zero, context.CancellationToken).ConfigureAwait(false);
 
             return new HelloReply
             {
                 Message = $"Hello {request.Name} from {{ model.names.dot_net_class_name }}"
             };
         }
-        catch
+        catch (OperationCanceledException)
         {
+            // [1.3.2] Cancellation is not an error — do not increment error counters or mark span as failed
+            result = "cancelled";
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // [5.1.1] Mark span as error so failed calls are visible in the tracing backend
             result = "error";
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             throw;
         }
         finally

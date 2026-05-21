@@ -1,0 +1,16 @@
+{
+  "stryker-config": {
+    "project": "{{ model.names.project_file }}",
+    "test-projects": [
+      "tests/{{ model.names.namespace }}.Tests/{{ model.names.namespace }}.Tests.csproj"
+    ],
+    "reporters": ["html", "progress"],
+    "thresholds": {
+      "high": 80,
+      "low": 60,
+      "break": 50
+    },
+    "mutation-level": "Standard",
+    "output-path": "mutation-report"
+  }
+}

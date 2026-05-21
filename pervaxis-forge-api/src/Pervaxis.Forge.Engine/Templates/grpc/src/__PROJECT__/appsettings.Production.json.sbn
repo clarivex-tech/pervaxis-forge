@@ -1,4 +1,11 @@
 {
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore": "Warning"
+    }
+  },
   "Forge:Authentication": {
     "ApiKey": ""
   },
@@ -8,7 +15,11 @@
     "RetryDelayMilliseconds": 1000,
     "TimeoutSeconds": 30
   },
+  "Forge:Shutdown": {
+    "TimeoutSeconds": 30
+  },
   "Forge:Secrets": {
+    "UseSecretsManager": true,
     "ApiKeySecretKey": "Forge:Authentication:ApiKey"
   },
   "Forge:DataClassification": {

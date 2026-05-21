@@ -1,0 +1,13 @@
+# [8.4] Exclude files that should never enter the Docker build context
+.git
+.github
+.claude
+.vs
+.idea
+tests
+**/*.user
+**/*.suo
+**/bin
+**/obj
+**/.angular
+**/.nx

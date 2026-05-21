@@ -5,11 +5,13 @@ on:
     branches: [main, develop]
     paths:
       - 'src/**'
+      - 'tests/**'
       - '.github/workflows/build-test.yml'
   push:
     branches: [main, develop]
     paths:
       - 'src/**'
+      - 'tests/**'
       - '.github/workflows/build-test.yml'
 
 defaults:
@@ -26,20 +28,125 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.x"
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - run: dotnet restore "{{ model.names.project_file }}"
+      # [9.2.1] Enforce consistent code formatting
+      - name: Check formatting
+        run: dotnet format "{{ model.names.project_file }}" --verify-no-changes
 
-      - run: dotnet build "{{ model.names.project_file }}" --no-restore --configuration Release
+      - name: Restore
+        run: dotnet restore "{{ model.names.project_file }}"
 
-      - run: dotnet test "../../tests/{{ model.names.namespace }}.Tests/{{ model.names.namespace }}.Tests.csproj" --no-build --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:Threshold=90 /p:ThresholdType=line /p:ThresholdStat=total
+      - name: Build
+        run: dotnet build "{{ model.names.project_file }}" --no-restore --configuration Release
+
+      # [9.1.1] Fail the build if any dependency has a known vulnerability
+      - name: Check for vulnerable dependencies
+        run: dotnet list "{{ model.names.project_file }}" package --vulnerable --include-transitive 2>&1 | tee /tmp/vuln-report.txt && ! grep -q "has the following vulnerable packages" /tmp/vuln-report.txt
+
+      # [9.2.3] Build test project explicitly before running — it lives in a different directory
+      - name: Build tests
+        working-directory: tests/{{ model.names.namespace }}.Tests
+        run: dotnet build "{{ model.names.namespace }}.Tests.csproj" --configuration Release
+
+      # [9.2.3] Run tests without --no-build since build above covers it
+      - name: Test
+        working-directory: tests/{{ model.names.namespace }}.Tests
+        run: |
+          dotnet test "{{ model.names.namespace }}.Tests.csproj" \
+            --no-build \
+            --configuration Release \
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=cobertura \
+            /p:CoverletOutput=../../coverage/ \
+            /p:Threshold=90 \
+            /p:ThresholdType=line \
+            /p:ThresholdStat=total
+
+      # [9.2.2] Upload coverage report as artifact for review
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/coverage.cobertura.xml
+          retention-days: 30
+
+      # [9.2.4] Generate SBOM for compliance and supply chain audit
+      - name: Generate SBOM
+        working-directory: src/{{ model.names.namespace }}
+        run: |
+          dotnet tool install --global CycloneDX --version 4.*
+          dotnet CycloneDX "{{ model.names.project_file }}" --output ../../sbom --json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom/bom.json
+          retention-days: 90
+
+  # [9.1.2] Secrets scanning — catches committed credentials before they reach the repo
+  secrets-scan:
+    name: Secrets Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # [9.1.3] SAST — static analysis for security vulnerabilities in .NET code
+  codeql:
+    name: SAST (CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+      - name: Build for CodeQL
+        working-directory: src/{{ model.names.namespace }}
+        run: dotnet build "{{ model.names.project_file }}" --configuration Release
+      - uses: github/codeql-action/analyze@v3
+
+  # [9.1.4] Container image scanning — detects OS and library CVEs in the built image
+  trivy:
+    name: Container Scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t ${{ github.repository }}:${{ github.sha }} .
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          image-ref: ${{ github.repository }}:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+      - name: Upload Trivy results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif

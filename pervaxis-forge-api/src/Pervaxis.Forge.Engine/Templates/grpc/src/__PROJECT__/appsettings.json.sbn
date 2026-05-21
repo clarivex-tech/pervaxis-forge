@@ -1,6 +1,35 @@
 {
+  "AllowedHosts": "*",
+  "Kestrel": {
+    "Endpoints": {
+      "Grpc": {
+        "Url": "https://localhost:7001",
+        "Protocols": "Http2"
+      },
+      "Http": {
+        "Url": "http://localhost:8080",
+        "Protocols": "Http1"
+      }
+    }
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Warning"
+    }
+  },
   "Forge:Authentication": {
     "ApiKey": ""
+  },
+  "Forge:Grpc": {
+    "MaxReceiveMessageSizeBytes": 4194304,
+    "MaxSendMessageSizeBytes": 4194304,
+    "KeepAlive": {
+      "TimeMs": 120000,
+      "TimeoutMs": 20000,
+      "PermitWithoutCalls": false
+    }
   },
   "Forge:Resilience": {
     "Enabled": true,
@@ -8,7 +37,14 @@
     "RetryDelayMilliseconds": 1000,
     "TimeoutSeconds": 30
   },
+  "Forge:RateLimiting": {
+    "QueueLimit": 0
+  },
+  "Forge:Shutdown": {
+    "TimeoutSeconds": 30
+  },
   "Forge:Secrets": {
+    "UseSecretsManager": false,
     "ApiKeySecretKey": "Forge:Authentication:ApiKey"
   },
   "Forge:DataClassification": {

@@ -1,3 +1,21 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
 using System.Net;
 using Microsoft.Extensions.Options;
 using {{ model.names.namespace }}.Models.Configuration;
@@ -21,6 +39,16 @@ public static class ResilientHttpClientBuilderExtensions
     {
         private readonly ForgeResilienceOptions _options;
 
+        // [2.4.2] Circuit breaker state — shared across all requests through this handler instance.
+        // State transitions: Closed (normal) → Open (tripping) → HalfOpen (probing) → Closed (recovered).
+        private CircuitState _circuitState = CircuitState.Closed;
+        private int          _consecutiveFailures;
+        private DateTime     _openedAt;
+
+        // Trip after this many consecutive transient failures; reset probe after this window.
+        private const int    CircuitBreakerThreshold  = 5;
+        private static readonly TimeSpan CircuitOpenDuration = TimeSpan.FromSeconds(30);
+
         public ForgeRetryDelegatingHandler(ForgeResilienceOptions options)
         {
             _options = options;
@@ -30,30 +58,83 @@ public static class ResilientHttpClientBuilderExtensions
         {
             if (!_options.Enabled)
             {
-                return await base.SendAsync(request, cancellationToken);
+                return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
             }
 
-            var attempt = 0;
-            var delay = TimeSpan.FromMilliseconds(Math.Max(1, _options.RetryDelayMilliseconds));
+            // [2.4.2] Reject immediately when the circuit is open and the probe window has not elapsed.
+            if (_circuitState == CircuitState.Open)
+            {
+                if (DateTime.UtcNow - _openedAt < CircuitOpenDuration)
+                    throw new HttpRequestException("Circuit breaker is open — downstream service is unavailable.");
+
+                // Probe window elapsed — allow one request through (HalfOpen).
+                _circuitState = CircuitState.HalfOpen;
+            }
+
+            // [2.4.3] Only retry idempotent methods to avoid duplicate side-effects on POST/PATCH
+            var isIdempotent = request.Method == HttpMethod.Get
+                || request.Method == HttpMethod.Head
+                || request.Method == HttpMethod.Options
+                || request.Method == HttpMethod.Put
+                || request.Method == HttpMethod.Delete;
+
+            // [2.4.1] Apply per-request timeout using the configured TimeoutSeconds value
+            using var timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(_options.TimeoutSeconds));
+            using var linkedCts  = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
+
+            var attempt  = 0;
+            var delay    = TimeSpan.FromMilliseconds(Math.Max(1, _options.RetryDelayMilliseconds));
             HttpResponseMessage? response = null;
 
             while (attempt <= Math.Max(0, _options.RetryCount))
             {
                 attempt++;
                 response?.Dispose();
-                response = await base.SendAsync(request, cancellationToken);
 
-                if (response.IsSuccessStatusCode || !IsTransient(response.StatusCode) || attempt > _options.RetryCount)
+                try
                 {
+                    response = await base.SendAsync(request, linkedCts.Token).ConfigureAwait(false);
+                }
+                catch (Exception) when (!linkedCts.IsCancellationRequested)
+                {
+                    RecordFailure();
+                    throw;
+                }
+
+                if (response.IsSuccessStatusCode)
+                {
+                    RecordSuccess();
+                    return response;
+                }
+
+                if (!IsTransient(response.StatusCode) || !isIdempotent || attempt > _options.RetryCount)
+                {
+                    RecordFailure();
                     return response;
                 }
 
                 var jitteredDelay = TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * delay.TotalMilliseconds);
-                await Task.Delay(jitteredDelay, cancellationToken);
+                await Task.Delay(jitteredDelay, linkedCts.Token).ConfigureAwait(false);
                 delay = TimeSpan.FromMilliseconds(delay.TotalMilliseconds * 2);
             }
 
             return response!;
+        }
+
+        private void RecordSuccess()
+        {
+            _consecutiveFailures = 0;
+            _circuitState        = CircuitState.Closed;
+        }
+
+        private void RecordFailure()
+        {
+            _consecutiveFailures++;
+            if (_consecutiveFailures >= CircuitBreakerThreshold && _circuitState != CircuitState.Open)
+            {
+                _circuitState = CircuitState.Open;
+                _openedAt     = DateTime.UtcNow;
+            }
         }
 
         private static bool IsTransient(HttpStatusCode statusCode) =>
@@ -63,5 +144,7 @@ public static class ResilientHttpClientBuilderExtensions
                 or HttpStatusCode.BadGateway
                 or HttpStatusCode.ServiceUnavailable
                 or HttpStatusCode.GatewayTimeout;
+
+        private enum CircuitState { Closed, Open, HalfOpen }
     }
 }

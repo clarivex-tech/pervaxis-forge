@@ -16,8 +16,50 @@
  ************************************************************************
  */
 
+using Grpc.Net.Client;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+
 namespace {{ model.names.namespace }}.Tests;
 
-public abstract class TestBase
+// [6.1.2] WebApplicationFactory base class — overrides DI registrations and
+// provides a pre-wired gRPC channel so every test class can focus on assertions.
+public abstract class TestBase : IAsyncLifetime
 {
+    private WebApplicationFactory<Program> _factory = null!;
+
+    protected HttpClient Client { get; private set; } = null!;
+    protected GrpcChannel Channel { get; private set; } = null!;
+
+    public Task InitializeAsync()
+    {
+        _factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(host =>
+            {
+                // [6.2.2] Load appsettings.Test.json — sets UseSecretsManager=false, test API key, etc.
+                host.UseEnvironment("Test");
+                host.ConfigureAppConfiguration((_, config) =>
+                    config.AddJsonFile("appsettings.Test.json", optional: false, reloadOnChange: false));
+                host.ConfigureServices(services =>
+                {
+                    // Override AWS and external dependencies for testing
+                    ConfigureTestServices(services);
+                });
+            });
+
+        Client  = _factory.CreateClient();
+        Channel = GrpcChannel.ForAddress(Client.BaseAddress!, new GrpcChannelOptions { HttpClient = Client });
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync()
+    {
+        Channel.Dispose();
+        Client.Dispose();
+        await _factory.DisposeAsync().ConfigureAwait(false);
+    }
+
+    // Override in derived test classes to swap in mocks
+    protected virtual void ConfigureTestServices(IServiceCollection services) { }
 }
