@@ -4,5 +4,7 @@ public sealed class ForgeAuthenticationOptions
 {
     public const string SectionName = "Forge:Authentication";
 
+    // [1.6.1] ApiKey is intentionally nullable — absence means Secrets Manager must be configured.
+    // ValidateOnStart will fail fast in production if neither this nor UseSecretsManager is set.
     public string? ApiKey { get; init; }
 }

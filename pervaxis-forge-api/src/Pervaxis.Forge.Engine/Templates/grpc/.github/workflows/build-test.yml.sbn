@@ -5,11 +5,13 @@ on:
     branches: [main, develop]
     paths:
       - 'src/**'
+      - 'tests/**'
       - '.github/workflows/build-test.yml'
   push:
     branches: [main, develop]
     paths:
       - 'src/**'
+      - 'tests/**'
       - '.github/workflows/build-test.yml'
 
 defaults:
@@ -26,20 +28,56 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.x"
 
-      - uses: actions/cache@v5
+      - uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - run: dotnet restore "{{ model.names.project_file }}"
+      # [9.2.1] Enforce consistent code formatting
+      - name: Check formatting
+        run: dotnet format "{{ model.names.project_file }}" --verify-no-changes
 
-      - run: dotnet build "{{ model.names.project_file }}" --no-restore --configuration Release
+      - name: Restore
+        run: dotnet restore "{{ model.names.project_file }}"
 
-      - run: dotnet test "../../tests/{{ model.names.namespace }}.Tests/{{ model.names.namespace }}.Tests.csproj" --no-build --configuration Release /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura /p:Threshold=90 /p:ThresholdType=line /p:ThresholdStat=total
+      - name: Build
+        run: dotnet build "{{ model.names.project_file }}" --no-restore --configuration Release
+
+      # [9.1.1] Fail the build if any dependency has a known vulnerability
+      - name: Check for vulnerable dependencies
+        run: dotnet list "{{ model.names.project_file }}" package --vulnerable --include-transitive 2>&1 | tee /tmp/vuln-report.txt && ! grep -q "has the following vulnerable packages" /tmp/vuln-report.txt
+
+      # [9.2.3] Build test project explicitly before running — it lives in a different directory
+      - name: Build tests
+        working-directory: tests/{{ model.names.namespace }}.Tests
+        run: dotnet build "{{ model.names.namespace }}.Tests.csproj" --configuration Release
+
+      # [9.2.3] Run tests without --no-build since build above covers it
+      - name: Test
+        working-directory: tests/{{ model.names.namespace }}.Tests
+        run: |
+          dotnet test "{{ model.names.namespace }}.Tests.csproj" \
+            --no-build \
+            --configuration Release \
+            /p:CollectCoverage=true \
+            /p:CoverletOutputFormat=cobertura \
+            /p:CoverletOutput=../../coverage/ \
+            /p:Threshold=90 \
+            /p:ThresholdType=line \
+            /p:ThresholdStat=total
+
+      # [9.2.2] Upload coverage report as artifact for review
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/coverage.cobertura.xml
+          retention-days: 30

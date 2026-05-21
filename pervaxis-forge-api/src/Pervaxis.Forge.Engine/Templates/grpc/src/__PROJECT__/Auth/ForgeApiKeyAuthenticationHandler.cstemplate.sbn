@@ -1,3 +1,21 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Encodings.Web;
@@ -5,6 +23,7 @@ using System.Text.Json;
 using Amazon.SecretsManager;
 using Amazon.SecretsManager.Model;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using {{ model.names.namespace }}.Models.Configuration;
 
@@ -13,7 +32,11 @@ namespace {{ model.names.namespace }}.Auth;
 public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
     private const string ApiKeyHeaderName = "X-Api-Key";
+    private const string ResolvedKeyCacheKey = "forge:auth:resolved-api-key";
+    private static readonly TimeSpan KeyCacheTtl = TimeSpan.FromMinutes(5);
+
     private readonly IAmazonSecretsManager _secretsManager;
+    private readonly IMemoryCache _cache;
     private readonly IOptionsMonitor<ForgeAuthenticationOptions> _authenticationOptions;
     private readonly IOptionsMonitor<ForgeSecretsOptions> _secretsOptions;
 
@@ -22,11 +45,13 @@ public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         ILoggerFactory logger,
         UrlEncoder encoder,
         IAmazonSecretsManager secretsManager,
+        IMemoryCache cache,
         IOptionsMonitor<ForgeAuthenticationOptions> authenticationOptions,
         IOptionsMonitor<ForgeSecretsOptions> secretsOptions)
         : base(options, logger, encoder)
     {
         _secretsManager = secretsManager;
+        _cache = cache;
         _authenticationOptions = authenticationOptions;
         _secretsOptions = secretsOptions;
     }
@@ -39,30 +64,41 @@ public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<Aut
             return AuthenticateResult.NoResult();
         }
 
-        var expectedKey = await ResolveApiKeyAsync();
+        // [1.1.1] Resolved key is cached to avoid an AWS Secrets Manager call on every RPC
+        var expectedKey = await ResolveApiKeyAsync().ConfigureAwait(false);
         if (!IsApiKeyMatch(providedKey.ToString(), expectedKey))
         {
             return AuthenticateResult.Fail("Invalid API key.");
         }
 
+        // [1.1.3] ClientId claim is derived from the X-Api-Key header value hash so each key
+        // gets a distinct, stable identity without exposing the raw key in claims or logs.
+        var clientId = ComputeClientId(providedKey.ToString());
         var claims = new[]
         {
-            new Claim(ClaimTypes.NameIdentifier, "forge-api-client"),
-            new Claim(ClaimTypes.Name, "Forge API Client"),
+            new Claim(ClaimTypes.NameIdentifier, clientId),
+            new Claim(ClaimTypes.Name, clientId),
         };
 
-        var identity = new ClaimsIdentity(claims, Scheme.Name);
+        var identity  = new ClaimsIdentity(claims, Scheme.Name);
         var principal = new ClaimsPrincipal(identity);
-        var ticket = new AuthenticationTicket(principal, Scheme.Name);
+        var ticket    = new AuthenticationTicket(principal, Scheme.Name);
         return AuthenticateResult.Success(ticket);
     }
 
     private async Task<string?> ResolveApiKeyAsync()
     {
+        // Check direct config value first (dev/local override)
         var directKey = _authenticationOptions.CurrentValue.ApiKey;
         if (!string.IsNullOrWhiteSpace(directKey))
         {
             return directKey;
+        }
+
+        // [1.1.1] Use IMemoryCache to avoid hitting Secrets Manager on every request
+        if (_cache.TryGetValue(ResolvedKeyCacheKey, out string? cachedKey))
+        {
+            return cachedKey;
         }
 
         var secrets = _secretsOptions.CurrentValue;
@@ -74,7 +110,7 @@ public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         var response = await _secretsManager.GetSecretValueAsync(new GetSecretValueRequest
         {
             SecretId = secrets.SecretId,
-        });
+        }).ConfigureAwait(false);
 
         if (string.IsNullOrWhiteSpace(response.SecretString))
         {
@@ -82,9 +118,16 @@ public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         }
 
         using var document = JsonDocument.Parse(response.SecretString);
-        return document.RootElement.TryGetProperty(secrets.ApiKeySecretKey, out var value)
+        var resolved = document.RootElement.TryGetProperty(secrets.ApiKeySecretKey, out var value)
             ? value.GetString()
             : null;
+
+        if (resolved is not null)
+        {
+            _cache.Set(ResolvedKeyCacheKey, resolved, KeyCacheTtl);
+        }
+
+        return resolved;
     }
 
     private static bool IsApiKeyMatch(string providedKey, string? expectedKey)
@@ -97,7 +140,16 @@ public sealed class ForgeApiKeyAuthenticationHandler : AuthenticationHandler<Aut
         var providedBytes = System.Text.Encoding.UTF8.GetBytes(providedKey);
         var expectedBytes = System.Text.Encoding.UTF8.GetBytes(expectedKey);
 
+        // [1.1.2] FixedTimeEquals is only safe against timing attacks when lengths match.
+        // Length comparison is intentionally done first; for variable-length keys, consider
+        // normalising to a fixed HMAC digest before comparing.
         return providedBytes.Length == expectedBytes.Length &&
                CryptographicOperations.FixedTimeEquals(providedBytes, expectedBytes);
+    }
+
+    private static string ComputeClientId(string apiKey)
+    {
+        var hash = SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(apiKey));
+        return $"api-client-{Convert.ToHexString(hash)[..12].ToLowerInvariant()}";
     }
 }

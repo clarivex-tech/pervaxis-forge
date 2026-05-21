@@ -1,5 +1,11 @@
+# [8.2] Pin to a specific patch version to prevent silent breaking updates
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+
+# [8.1] Run as non-root for principle of least privilege
+RUN adduser --disabled-password --gecos "" appuser
+
 WORKDIR /app
+# [8.5] Expose the port that Kestrel actually listens on (matches appsettings.json Kestrel config)
 EXPOSE 8080
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
@@ -17,4 +23,13 @@ RUN dotnet publish "{{ model.names.project_file }}" -c $BUILD_CONFIGURATION -o /
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+
+# [8.1] Switch to non-root user before running the process
+RUN chown -R appuser /app
+USER appuser
+
+# [8.3] Built-in health check so container orchestrators can detect unhealthy containers
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD curl -f http://localhost:8080/healthz || exit 1
+
 ENTRYPOINT ["dotnet", "{{ model.names.namespace }}.dll"]
