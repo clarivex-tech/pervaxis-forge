@@ -158,8 +158,17 @@ public static class NamingConvention
         ArgumentException.ThrowIfNullOrWhiteSpace(product);
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-        var route = GetFirstSegment(name).ToLowerInvariant();
-        var pascalName = ToPascalCase(name);
+        var firstSegment = GetFirstSegment(name);
+        var route = firstSegment.ToLowerInvariant();
+        var apiBaseRoute = $"/api/v1/{firstSegment}";
+
+        // Strip "product-" prefix before PascalCasing so "mat" + "mat-mfe" → "MatMfeComponent"
+        // rather than the double-prefixed "MatMatMfeComponent".
+        var productPrefix = product.ToLowerInvariant() + "-";
+        var nameForComponent = name.StartsWith(productPrefix, StringComparison.OrdinalIgnoreCase)
+            ? name[productPrefix.Length..]
+            : name;
+        var pascalName = ToPascalCase(nameForComponent);
 
         return new DerivedNames
         {
@@ -172,7 +181,7 @@ public static class NamingConvention
             ProjectFile = string.Empty,
             TestProjectName = string.Empty,
             SolutionFile = string.Empty,
-            ApiBaseRoute = string.Empty,
+            ApiBaseRoute = apiBaseRoute,
             DatabaseSchema = string.Empty,
             SqsPrefix = string.Empty,
             CachePrefix = string.Empty,
