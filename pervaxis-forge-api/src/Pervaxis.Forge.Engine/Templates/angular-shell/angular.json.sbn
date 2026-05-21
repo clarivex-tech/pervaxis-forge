@@ -11,20 +11,23 @@
           "style": "scss"
         }
       },
-      "root": "",
-      "sourceRoot": "src",
+      "root": "apps/{{ model.manifest.service_name }}",
+      "sourceRoot": "apps/{{ model.manifest.service_name }}/src",
       "prefix": "{{ model.manifest.component_prefix }}",
       "architect": {
         "build": {
           "builder": "@angular-devkit/build-angular:application",
           "options": {
             "outputPath": "dist/{{ model.manifest.service_name }}",
-            "index": "src/index.html",
-            "browser": "src/main.ts",
+            "index": "apps/{{ model.manifest.service_name }}/src/index.html",
+            "browser": "apps/{{ model.manifest.service_name }}/src/main.ts",
             "polyfills": ["zone.js"],
-            "tsConfig": "tsconfig.app.json",
-            "assets": ["src/favicon.ico", "src/assets"],
-            "styles": ["src/styles.scss"],
+            "tsConfig": "apps/{{ model.manifest.service_name }}/tsconfig.app.json",
+            "assets": [
+              "apps/{{ model.manifest.service_name }}/src/favicon.ico",
+              "apps/{{ model.manifest.service_name }}/src/assets"
+            ],
+            "styles": ["apps/{{ model.manifest.service_name }}/src/styles.scss"],
             "scripts": []
           },
           "configurations": {
@@ -55,9 +58,12 @@
           "builder": "@angular-devkit/build-angular:karma",
           "options": {
             "polyfills": ["zone.js", "zone.js/testing"],
-            "tsConfig": "tsconfig.spec.json",
-            "assets": ["src/favicon.ico", "src/assets"],
-            "styles": ["src/styles.scss"],
+            "tsConfig": "apps/{{ model.manifest.service_name }}/tsconfig.spec.json",
+            "assets": [
+              "apps/{{ model.manifest.service_name }}/src/favicon.ico",
+              "apps/{{ model.manifest.service_name }}/src/assets"
+            ],
+            "styles": ["apps/{{ model.manifest.service_name }}/src/styles.scss"],
             "scripts": []
           }
         }
