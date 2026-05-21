@@ -1,0 +1,91 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using FluentAssertions;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection;
+using System.Threading.RateLimiting;
+
+namespace {{ model.names.namespace }}.Tests;
+
+// [6.1.5] Verifies that the rate limiter returns HTTP 429 when the permit limit is exceeded.
+// The test overrides the rate limiter with a very tight window (1 permit) so we can reliably
+// hit the limit without firing thousands of real requests.
+public sealed class ForgeRateLimiterTests : IAsyncLifetime
+{
+    private WebApplicationFactory<Program> _factory = null!;
+    private HttpClient _client = null!;
+
+    public Task InitializeAsync()
+    {
+        _factory = new WebApplicationFactory<Program>()
+            .WithWebHostBuilder(host =>
+            {
+                host.UseEnvironment("Test");
+                host.ConfigureAppConfiguration((_, config) =>
+                    config.AddJsonFile("appsettings.Test.json", optional: false, reloadOnChange: false));
+                host.ConfigureServices(services =>
+                {
+                    // Replace the global rate limiter with a 1-permit limiter so the second request is rejected.
+                    services.AddRateLimiter(opts =>
+                    {
+                        opts.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+                        opts.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(_ =>
+                            RateLimitPartition.GetFixedWindowLimiter(
+                                partitionKey: "test",
+                                factory: _ => new FixedWindowRateLimiterOptions
+                                {
+                                    PermitLimit       = 1,
+                                    Window            = TimeSpan.FromMinutes(1),
+                                    QueueLimit        = 0,
+                                    AutoReplenishment = false,
+                                }));
+                    });
+                });
+            });
+
+        _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync()
+    {
+        _client.Dispose();
+        await _factory.DisposeAsync().ConfigureAwait(false);
+    }
+
+    [Fact]
+    public async Task SecondRequest_WhenLimitExceeded_Returns429()
+    {
+        const string apiKey = "test-api-key-for-integration-tests-only";
+
+        using var first = new HttpRequestMessage(HttpMethod.Get, "/healthz");
+        first.Headers.Add("X-Api-Key", apiKey);
+
+        using var second = new HttpRequestMessage(HttpMethod.Get, "/healthz");
+        second.Headers.Add("X-Api-Key", apiKey);
+
+        using var firstResponse  = await _client.SendAsync(first);
+        using var secondResponse = await _client.SendAsync(second);
+
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.TooManyRequests);
+    }
+}

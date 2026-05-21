@@ -81,3 +81,72 @@ jobs:
           name: coverage-report
           path: coverage/coverage.cobertura.xml
           retention-days: 30
+
+      # [9.2.4] Generate SBOM for compliance and supply chain audit
+      - name: Generate SBOM
+        working-directory: src/{{ model.names.namespace }}
+        run: |
+          dotnet tool install --global CycloneDX --version 4.*
+          dotnet CycloneDX "{{ model.names.project_file }}" --output ../../sbom --json
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom/bom.json
+          retention-days: 90
+
+  # [9.1.2] Secrets scanning — catches committed credentials before they reach the repo
+  secrets-scan:
+    name: Secrets Scan (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # [9.1.3] SAST — static analysis for security vulnerabilities in .NET code
+  codeql:
+    name: SAST (CodeQL)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.x"
+      - name: Build for CodeQL
+        working-directory: src/{{ model.names.namespace }}
+        run: dotnet build "{{ model.names.project_file }}" --configuration Release
+      - uses: github/codeql-action/analyze@v3
+
+  # [9.1.4] Container image scanning — detects OS and library CVEs in the built image
+  trivy:
+    name: Container Scan (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t ${{ github.repository }}:${{ github.sha }} .
+      - name: Scan image with Trivy
+        uses: aquasecurity/trivy-action@v0.28.0
+        with:
+          image-ref: ${{ github.repository }}:${{ github.sha }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+      - name: Upload Trivy results
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif

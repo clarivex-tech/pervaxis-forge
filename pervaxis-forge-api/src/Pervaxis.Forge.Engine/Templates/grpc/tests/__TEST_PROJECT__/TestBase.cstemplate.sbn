@@ -18,6 +18,7 @@
 
 using Grpc.Net.Client;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace {{ model.names.namespace }}.Tests;
@@ -36,6 +37,10 @@ public abstract class TestBase : IAsyncLifetime
         _factory = new WebApplicationFactory<Program>()
             .WithWebHostBuilder(host =>
             {
+                // [6.2.2] Load appsettings.Test.json — sets UseSecretsManager=false, test API key, etc.
+                host.UseEnvironment("Test");
+                host.ConfigureAppConfiguration((_, config) =>
+                    config.AddJsonFile("appsettings.Test.json", optional: false, reloadOnChange: false));
                 host.ConfigureServices(services =>
                 {
                     // Override AWS and external dependencies for testing

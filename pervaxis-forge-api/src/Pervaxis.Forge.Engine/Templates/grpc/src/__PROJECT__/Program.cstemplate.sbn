@@ -34,11 +34,42 @@ using {{ model.names.namespace }}.Auth;
 {{- if model.manifest.database != null }}
 using {{ model.names.namespace }}.Data;
 {{- end }}
+using {{ model.names.namespace }}.Interceptors;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// --- mTLS / Kestrel TLS configuration (east-west preferred auth) ---
+// [1.1.5] Uncomment and complete this block when the service terminates TLS directly.
+// When a service mesh (e.g., AWS App Mesh / Istio) provides mutual TLS via sidecar,
+// leave this commented out — the mesh handles certificate exchange and peer verification.
+//
+// builder.WebHost.ConfigureKestrel(kestrel =>
+// {
+//     // gRPC over HTTP/2 requires HTTPS. Load your service certificate from the store,
+//     // a PEM file, or AWS ACM Private CA depending on your certificate provisioning strategy.
+//     kestrel.ConfigureHttpsDefaults(https =>
+//     {
+//         // Option A — certificate from file (dev/test)
+//         // https.ServerCertificate = new X509Certificate2(
+//         //     builder.Configuration["Kestrel:Certificates:Default:Path"]!,
+//         //     builder.Configuration["Kestrel:Certificates:Default:Password"]);
+//
+//         // Option B — certificate from AWS Secrets Manager / SSM (production)
+//         // Resolve via your Forge:Secrets provider and pass the PFX bytes here.
+//
+//         // mTLS: require the client to present a valid certificate.
+//         // Set a custom validator if you want to enforce a specific CA or thumbprint.
+//         https.ClientCertificateMode = Microsoft.AspNetCore.Server.Kestrel.Https.ClientCertificateMode.RequireCertificate;
+//         https.ClientCertificateValidation = (cert, chain, errors) =>
+//         {
+//             // TODO: validate cert.Issuer against your internal CA thumbprint
+//             return errors == System.Net.Security.SslPolicyErrors.None;
+//         };
+//     });
+// });
 
 // --- Forwarded headers — configured first so X-Forwarded-For is available to rate limiter and auth ---
 // [1.5.1] Resolve real client IP from proxy headers rather than using proxy IP for all partitions
@@ -57,6 +88,7 @@ builder.Services.Configure<HostOptions>(o => o.ShutdownTimeout = TimeSpan.FromSe
 
 // --- gRPC ---
 // [3.1.1] Message size limits configurable without code changes
+// [3.1.2] KeepAlive prevents NAT/load-balancer idle-connection drops on long-lived streams
 // [3.1.3] Response compression enabled by default
 builder.Services.AddGrpc(options =>
 {
@@ -66,13 +98,25 @@ builder.Services.AddGrpc(options =>
     options.ResponseCompressionLevel     = System.IO.Compression.CompressionLevel.Optimal;
     options.ResponseCompressionAlgorithm = "gzip";
 });
+builder.WebHost.ConfigureKestrel(kestrel =>
+{
+    // [3.1.2] HTTP/2 keep-alive — tuned via Forge:Grpc:KeepAlive in appsettings.json.
+    // PingDelay:   interval between server-initiated pings — prevents NAT/LB idle-connection drops
+    // PingTimeout: how long to wait for a ping ACK before closing the connection
+    kestrel.Limits.Http2.KeepAlivePingDelay   = TimeSpan.FromMilliseconds(
+        builder.Configuration.GetValue("Forge:Grpc:KeepAlive:TimeMs",    120_000));
+    kestrel.Limits.Http2.KeepAlivePingTimeout = TimeSpan.FromMilliseconds(
+        builder.Configuration.GetValue("Forge:Grpc:KeepAlive:TimeoutMs", 20_000));
+});
 builder.Services.AddGrpcHealthChecks();
 builder.Services.AddResponseCompression(opts => opts.EnableForHttps = true);
 
 // --- Interceptors & data services ---
 // [2.1.1] ForgeGrpcInterceptor stub is now emitted by the generator
 // [2.1.2] ForgeDataRedaction is now emitted by the generator
+// [1.3.1] ForgeValidationInterceptor validates required fields before the call reaches the service
 builder.Services.AddSingleton<ForgeGrpcInterceptor>();
+builder.Services.AddSingleton<ForgeValidationInterceptor>();
 builder.Services.AddSingleton<ForgeDataRedaction>();
 
 // --- In-process cache — for hot paths such as resolved API keys ---
@@ -231,6 +275,11 @@ app.Use(async (context, next) =>
 });
 
 // --- Security headers ---
+// [1.4.1] OnStarting fires at response-header flush time. gRPC trailers are sent in a separate
+// DATA+EOS frame after the response headers frame, so trailers do NOT pass through this callback.
+// Security headers are set on the initial headers frame only, which is correct for HTTP/1 clients
+// hitting the health or reflection endpoints. For pure gRPC callers, these headers are no-ops but
+// still safe — they add no overhead and document security posture uniformly.
 // [1.4.2] Added X-Frame-Options and Referrer-Policy
 app.Use(async (context, next) =>
 {
@@ -254,7 +303,10 @@ app.Use(async (context, next) =>
 });
 
 // --- Endpoints ---
-app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>().AddInterceptor<ForgeGrpcInterceptor>();
+// [1.3.1] Validation runs first (innermost), then observability interceptor
+app.MapGrpcService<{{ model.names.dot_net_class_name }}Impl>()
+   .AddInterceptor<ForgeValidationInterceptor>()
+   .AddInterceptor<ForgeGrpcInterceptor>();
 app.MapGrpcHealthChecksService().AllowAnonymous();
 
 // [4.2.2] HTTP health probe endpoints for Kubernetes liveness/readiness probes

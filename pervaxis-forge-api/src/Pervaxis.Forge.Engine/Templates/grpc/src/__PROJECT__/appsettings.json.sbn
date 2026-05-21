@@ -24,7 +24,12 @@
   },
   "Forge:Grpc": {
     "MaxReceiveMessageSizeBytes": 4194304,
-    "MaxSendMessageSizeBytes": 4194304
+    "MaxSendMessageSizeBytes": 4194304,
+    "KeepAlive": {
+      "TimeMs": 120000,
+      "TimeoutMs": 20000,
+      "PermitWithoutCalls": false
+    }
   },
   "Forge:Resilience": {
     "Enabled": true,

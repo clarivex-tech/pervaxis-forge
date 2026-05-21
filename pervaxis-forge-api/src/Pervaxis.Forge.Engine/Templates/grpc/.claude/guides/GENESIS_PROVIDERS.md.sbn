@@ -1,5 +1,115 @@
-# Genesis Provider Usage
+# Genesis Provider Usage — {{ model.names.namespace }}
 
-Use the Genesis provider abstractions for infrastructure concerns such as caching, messaging, storage, search, notifications, workflows, AI, and reporting.
+Genesis providers abstract AWS infrastructure so vertical services stay portable and testable. This service has the following modules wired:
 
-Follow the same DI and configuration patterns used in the REST API scaffold.
+{{ for module in model.selected_modules }}
+- **{{ module.name }}** → `{{ module.package_name }}`
+{{ end }}
+
+---
+
+## Registration Pattern
+
+All Genesis modules are registered in `Program.cs` — **never** register them again in vertical code:
+
+```csharp
+// Already in Program.cs — do not duplicate
+{{ for module in model.selected_modules }}
+builder.Services.{{ module.di_extension_name }}(builder.Configuration.GetSection("{{ module.name }}"));
+{{ end }}
+```
+
+## Injection Pattern
+
+Inject Genesis interfaces at the **service layer only** — never in `ServiceImpl` or `Program.cs`:
+
+```csharp
+public sealed class YourDomainService : IYourDomainService
+{
+    private readonly ICache _cache;               // Genesis.Caching
+    private readonly IFileStorage _fileStorage;   // Genesis.FileStorage
+    private readonly IWorkflow _workflow;         // Genesis.Workflow
+
+    public YourDomainService(ICache cache, IFileStorage fileStorage, IWorkflow workflow)
+    {
+        _cache       = cache;
+        _fileStorage = fileStorage;
+        _workflow    = workflow;
+    }
+}
+```
+
+---
+
+## Caching (Genesis.Caching.AWS)
+
+```csharp
+// Get with null return on miss
+var record = await _cache.GetAsync<YourDomainRecord>($"{{ model.names.cache_prefix }}{id}", ct)
+    .ConfigureAwait(false);
+
+// Set with TTL
+await _cache.SetAsync($"{{ model.names.cache_prefix }}{id}", record, TimeSpan.FromMinutes(5), ct)
+    .ConfigureAwait(false);
+
+// Delete on mutation
+await _cache.RemoveAsync($"{{ model.names.cache_prefix }}{id}", ct).ConfigureAwait(false);
+```
+
+**Cache key convention:** `{{ model.names.cache_prefix }}{entity-type}:{id}` — always use the interpolated prefix, never a string literal.
+
+**TTL guidance:**
+- Read-heavy reference data → 5–30 minutes
+- User-facing frequently-changing data → 30–60 seconds
+- Always invalidate on write
+
+---
+
+## File Storage (Genesis.FileStorage.AWS)
+
+```csharp
+// Upload
+var key = $"{{ model.names.namespace | string.downcase }}/{id}/document.pdf";
+await _fileStorage.UploadAsync(key, stream, contentType: "application/pdf", ct)
+    .ConfigureAwait(false);
+
+// Generate a pre-signed download URL (valid for 15 minutes)
+var url = await _fileStorage.GetPresignedUrlAsync(key, TimeSpan.FromMinutes(15), ct)
+    .ConfigureAwait(false);
+
+// Delete
+await _fileStorage.DeleteAsync(key, ct).ConfigureAwait(false);
+```
+
+---
+
+## Workflow (Genesis.Workflow.AWS)
+
+```csharp
+// Start a Step Functions workflow execution
+var executionArn = await _workflow.StartExecutionAsync(
+    stateMachineArn: configuration["Workflow:StateMachineArn"],
+    input: new { RecordId = id, Action = "process" },
+    ct).ConfigureAwait(false);
+
+// Check status
+var status = await _workflow.GetExecutionStatusAsync(executionArn, ct).ConfigureAwait(false);
+```
+
+---
+
+## Testing with Genesis Mocks
+
+In `TestBase.ConfigureTestServices`, replace Genesis providers with mocks to avoid AWS calls in tests:
+
+```csharp
+protected override void ConfigureTestServices(IServiceCollection services)
+{
+    var cacheMock = new Mock<ICache>();
+    cacheMock.Setup(c => c.GetAsync<YourDomainRecord>(It.IsAny<string>(), default))
+             .ReturnsAsync((YourDomainRecord?)null);
+
+    services.AddSingleton(cacheMock.Object);
+    // Repeat for IFileStorage, IWorkflow as needed
+}
+```
