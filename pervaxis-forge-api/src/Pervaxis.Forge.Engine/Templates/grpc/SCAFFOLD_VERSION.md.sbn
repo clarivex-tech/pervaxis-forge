@@ -12,7 +12,7 @@
 | **Namespace** | `{{ model.names.namespace }}` |
 | **Scaffold template** | `grpc` |
 | **Scaffold version** | `{{ model.scaffold_version ?? "1.0.0" }}` |
-| **Generated at** | `{{ model.current_year }}-{{ model.current_month | string.pad_left 2 "0" }}-{{ model.current_day | string.pad_left 2 "0" }}` |
+| **Generated at** | `{{ model.current_year }}-{{ model.current_month }}-{{ model.current_day }}` |
 | **Forge generator version** | `{{ model.forge_version ?? "unknown" }}` |
 | **Target framework** | `net10.0` |
 | **Cloud provider** | `{{ model.manifest.cloud }}` |
