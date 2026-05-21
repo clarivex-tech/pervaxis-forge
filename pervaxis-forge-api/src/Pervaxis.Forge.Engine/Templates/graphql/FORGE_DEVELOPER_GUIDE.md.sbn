@@ -354,6 +354,8 @@ See `.claude/guides/GENESIS_PROVIDERS.md` for complete usage for all 8 providers
 
 ## 8. Observability
 
+The OpenTelemetry pipeline (tracing + metrics + OTLP export) is already wired in `Program.cs`. You only need to instrument your service methods:
+
 ```csharp
 private static readonly ActivitySource ActivitySource = new("{{ model.names.namespace }}");
 private static readonly Meter Meter = new("{{ model.names.namespace }}");
@@ -368,11 +370,103 @@ _logger.LogInformation("Fetching record {RecordId}", id);
 Ops.Add(1, new TagList { { "operation", "get" }, { "result", "success" } });
 ```
 
+The OTLP endpoint is configured via the standard `OTEL_EXPORTER_OTLP_ENDPOINT` environment variable. In development, set it to `http://localhost:4317` to send traces to a local Jaeger or Grafana Tempo instance.
+
+`correlationId` / `traceparent` propagation to downstream gRPC or REST calls is automatic when you use `IHttpClientFactory` — the OTel `HttpClient` instrumentation injects the W3C `traceparent` header on every outbound request.
+
 Never log PII. Always use structured log properties.
 
 ---
 
-## 9. Testing
+## 9. TenantId — Multi-Tenant Resolvers
+
+The auth handler emits an optional `"tenant_id"` claim when the caller includes an `X-Tenant-Id` header. Resolvers that must scope data to a tenant should extract this claim:
+
+```csharp
+public async Task<YourDomainPayload> GetRecordAsync(
+    string id,
+    [Service] I{{ model.names.dot_net_class_name }} service,
+    IHttpContextAccessor httpContextAccessor,
+    CancellationToken cancellationToken)
+{
+    var tenantId = httpContextAccessor.HttpContext?
+        .User.FindFirstValue("tenant_id")
+        ?? throw new GraphQLException(
+            ErrorBuilder.New()
+                .SetMessage("X-Tenant-Id header is required.")
+                .SetCode("TENANT_REQUIRED")
+                .Build());
+
+    return await service.GetAsync(id, tenantId, cancellationToken);
+}
+```
+
+Register `IHttpContextAccessor` by adding `services.AddHttpContextAccessor()` to `ServiceCollectionExtensions.cs`.
+
+If your service does not yet enforce tenancy, document it explicitly and add a ticket — do not silently skip the check.
+
+---
+
+## 10. N+1 Prevention — DataLoader
+
+`[UsePaging]`, `[UseFiltering]`, and `[UseSorting]` are registered in `Program.cs` and safe to use on resolvers. For related-entity loading, use a DataLoader to batch database calls:
+
+```csharp
+// Data/YourRelatedEntityDataLoader.cs
+public sealed class YourRelatedEntityDataLoader : BatchDataLoader<string, YourRelatedEntity>
+{
+    private readonly IYourDomainRepository _repository;
+
+    public YourRelatedEntityDataLoader(
+        IYourDomainRepository repository,
+        IBatchScheduler batchScheduler,
+        DataLoaderOptions options)
+        : base(batchScheduler, options)
+    {
+        _repository = repository;
+    }
+
+    protected override async Task<IReadOnlyDictionary<string, YourRelatedEntity>> LoadBatchAsync(
+        IReadOnlyList<string> keys,
+        CancellationToken cancellationToken)
+    {
+        var entities = await _repository.GetByIdsAsync(keys, cancellationToken);
+        return entities.ToDictionary(e => e.Id);
+    }
+}
+```
+
+Inject the DataLoader into a resolver via `[DataLoader]` or the `[Service]` attribute. Register `services.AddScoped<YourRelatedEntityDataLoader>()` in `ServiceCollectionExtensions.cs`.
+
+---
+
+## 11. Input Validation
+
+HotChocolate does **not** run `[Required]` / `[StringLength]` DataAnnotations automatically. Validate inputs explicitly in the resolver before passing to the service:
+
+```csharp
+public async Task<YourDomainMutationPayload> CreateRecordAsync(
+    YourDomainInput input,
+    [Service] I{{ model.names.dot_net_class_name }} service,
+    CancellationToken cancellationToken)
+{
+    if (string.IsNullOrWhiteSpace(input.Reference))
+    {
+        return new YourDomainMutationPayload
+        {
+            Errors = [new UserError { Message = "Reference is required.", Code = "VALIDATION_ERROR" }]
+        };
+    }
+
+    // ... delegate to service
+}
+```
+
+For complex validation, use FluentValidation: add `PackageReference Include="FluentValidation"` to `Directory.Packages.props` and raise a Pervaxis platform ticket to wire a validation middleware globally.
+
+---
+
+## 13. Testing
 
 ### Unit test — service logic
 
@@ -439,7 +533,7 @@ public sealed class {{ model.names.dot_net_class_name }}ResolverTests : TestBase
 
 ---
 
-## 10. Adding a New Feature — Step-by-Step
+## 14. Adding a New Feature — Step-by-Step
 
 ```
 1. Define domain exceptions  →  Exceptions/YourDomainXxxException.cs
@@ -455,7 +549,7 @@ public sealed class {{ model.names.dot_net_class_name }}ResolverTests : TestBase
 
 ---
 
-## 11. What NOT To Do
+## 15. What NOT To Do
 
 | Don't | Do instead |
 |---|---|
@@ -471,7 +565,7 @@ public sealed class {{ model.names.dot_net_class_name }}ResolverTests : TestBase
 
 ---
 
-## 12. Quick Reference
+## 16. Quick Reference
 
 | Topic | Guide |
 |---|---|
