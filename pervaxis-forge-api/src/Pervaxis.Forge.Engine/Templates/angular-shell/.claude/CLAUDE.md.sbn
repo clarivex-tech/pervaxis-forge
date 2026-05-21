@@ -40,9 +40,9 @@ Every `.ts` file must start with this exact license header:
 
 ## Canvas Modules Wired
 
-{{ for module in model.selected_canvas_modules }}
+{{- for module in model.selected_canvas_modules }}
 - **{{ module.name }}** → `{{ module.package_name }}`
-{{ end }}
+{{- end }}
 
 ---
 
