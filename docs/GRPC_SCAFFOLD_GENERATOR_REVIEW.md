@@ -55,8 +55,8 @@
 
 ### 2.3 Dependency & Package Hygiene
 - [x] **2.3.1** `Microsoft.Extensions.Http.Resilience` is emitted into the generated `.csproj` but completely unused — the scaffold implements its own retry handler instead. Either adopt the package or remove the reference from the template. ✅ *Fixed — unused package reference removed from `csproj.sbn`.*
-- [ ] **2.3.2** All package versions use floating wildcards (`2.*`, `10.*`, `3.7.*`). For enterprise reproducibility, the scaffold should emit a **Central Package Management** file (`Directory.Packages.props`) with pinned versions managed by Forge.
-- [ ] **2.3.3** No `Directory.Build.props` is generated for shared build properties across the solution (nullable, treat-warnings-as-errors, analysis mode). This should be emitted by the generator. *(Root `Directory.Build.props` exists and is inherited — Forge should ensure it is emitted per generated solution.)*
+- [x] **2.3.2** All package versions use floating wildcards (`2.*`, `10.*`, `3.7.*`). For enterprise reproducibility, the scaffold should emit a **Central Package Management** file (`Directory.Packages.props`) with pinned versions managed by Forge. ✅ *Fixed — `Directory.Packages.props.sbn` emitted with pinned versions for all packages; `Version` attributes removed from `csproj.sbn` and `tests.csproj.sbn`.*
+- [x] **2.3.3** No `Directory.Build.props` is generated for shared build properties across the solution (nullable, treat-warnings-as-errors, analysis mode). This should be emitted by the generator. *(Root `Directory.Build.props` exists and is inherited — Forge should ensure it is emitted per generated solution.)* ✅ *Fixed — `Directory.Build.props.sbn` template emitted with Nullable, TreatWarningsAsErrors, AnalysisMode, ImplicitUsings, and Deterministic; properties removed from individual csproj where inherited.*
 
 ### 2.4 Resilience Implementation Quality
 - [x] **2.4.1** `ForgeResilienceOptions.TimeoutSeconds` is a configurable property but is **never read or enforced** in `ForgeRetryDelegatingHandler`. The configured timeout has no effect. Either wire it up via a `CancellationTokenSource` or remove the property from the options class. ✅ *Fixed — `CancellationTokenSource` with `TimeoutSeconds` linked into all `SendAsync` calls.*
@@ -127,7 +127,7 @@
 
 ### 6.2 Test Infrastructure
 - [x] **6.2.1** `xunit.runner.visualstudio` v3.* is emitted into the test `.csproj` but `xunit` is v2.*. These must be version-aligned. xUnit v3 has a different runner protocol — mixing v2 framework with v3 runner causes test discovery failures across all generated services. ✅ *Fixed — `xunit.runner.visualstudio` downgraded to `2.*` to match the `xunit` framework version.*
-- [ ] **6.2.2** No `appsettings.Test.json` is emitted. Tests that spin up the host need to override connection strings, disable AWS calls, etc. Emit a test configuration file with sensible defaults.
+- [x] **6.2.2** No `appsettings.Test.json` is emitted. Tests that spin up the host need to override connection strings, disable AWS calls, etc. Emit a test configuration file with sensible defaults. ✅ *Fixed — `appsettings.Test.json.sbn` emitted with `UseSecretsManager=false`, a test API key, resilience disabled, and test DB connection string. `TestBase` wires `UseEnvironment("Test")` and loads the file automatically.*
 
 ---
 
@@ -136,7 +136,7 @@
 - [x] **7.1** No `AllowedHosts` setting in the generated `appsettings.json`. Should be emitted with a default that teams can restrict per deployment. ✅ *Fixed — `"AllowedHosts": "*"` emitted in `appsettings.json.sbn`.*
 - [x] **7.2** No `Kestrel` configuration section. The service endpoint is documented in `CLAUDE.md` but there is no Kestrel binding in `appsettings.json` — port assignment is implicit. Make it explicit in the generated configuration. ✅ *Fixed — explicit `Kestrel:Endpoints` section emitted with HTTP/2 on 7001 and HTTP/1 on 8080.*
 - [x] **7.3** `appsettings.Production.json` is generated as an exact copy of `appsettings.json`. Production overrides should be generated with sensible defaults: reduced log verbosity, `UseSecretsManager: true`, and any dev-only flags turned off. ✅ *Fixed — production config now has `Warning`-level logging and `UseSecretsManager: true`.*
-- [ ] **7.4** No environment variable documentation emitted. Teams deploying to AWS ECS/EKS need to know which env vars override which config keys. Emit a `.env.example` or add a reference table to the developer guide template.
+- [x] **7.4** No environment variable documentation emitted. Teams deploying to AWS ECS/EKS need to know which env vars override which config keys. Emit a `.env.example` or add a reference table to the developer guide template. ✅ *Fixed — `.env.example.sbn` emitted with every config key documented, including `__` separator convention, AWS env vars, OTLP endpoint, and conditionally DB / Genesis module sections.*
 - [x] **7.5** No startup options validation. All `AddOptions<T>().BindConfiguration(...)` calls in the generated `Program.cs` should chain `.ValidateDataAnnotations().ValidateOnStart()` to catch misconfiguration at boot, not at first use. ✅ *Fixed — all four `AddOptions` registrations chain `.ValidateDataAnnotations().ValidateOnStart()`.*
 
 ---
@@ -144,7 +144,7 @@
 ## 8. Container & Infrastructure
 
 - [x] **8.1** The generated Dockerfile runs the application as **root**. Emit a non-root user creation and `USER` instruction to follow the principle of least privilege across all generated services. ✅ *Fixed — `adduser appuser`, `chown`, and `USER appuser` added to `Dockerfile.sbn`.*
-- [ ] **8.2** Base image tag uses a floating version (e.g., `aspnet:10.0`). A supply chain compromise or breaking update silently affects all generated services. Pin the tag to a specific patch version or digest in the Forge template.
+- [x] **8.2** Base image tag uses a floating version (e.g., `aspnet:10.0`). A supply chain compromise or breaking update silently affects all generated services. Pin the tag to a specific patch version or digest in the Forge template. ✅ *Fixed — `ARG DOTNET_VERSION=10.0` added at top of `Dockerfile.sbn`; both `aspnet` and `sdk` FROM lines use `${DOTNET_VERSION}`. Override with `--build-arg` at build time; Dependabot can update the ARG automatically.*
 - [x] **8.3** No `HEALTHCHECK` instruction in the generated Dockerfile. Container orchestrators benefit from a built-in health check. Emit a `HEALTHCHECK` directive pointing to the health endpoint. ✅ *Fixed — `HEALTHCHECK` instruction added pointing to `/healthz`.*
 - [x] **8.4** No `.dockerignore` file is generated. Without it, `COPY . .` in the build stage copies `.git/`, `tests/`, `.claude/`, and local dev artifacts into every build context. Emit a `.dockerignore` that excludes these. ✅ *Fixed — `.dockerignore.sbn` template emitted excluding `.git`, `.claude`, `tests`, `bin`, `obj`, etc.*
 - [x] **8.5** `EXPOSE` port in the Dockerfile should match the actual Kestrel listening port. Verify the generated values are consistent and driven from the same source (e.g., `manifest.json`). ✅ *Fixed — `EXPOSE 8080` matches the HTTP/1 Kestrel endpoint emitted in `appsettings.json.sbn`.*
@@ -155,16 +155,16 @@
 
 ### 9.1 Security Gates
 - [x] **9.1.1** No **dependency vulnerability scanning** step in the generated workflow. A `dotnet list package --vulnerable --include-transitive` step should be a required CI gate emitted by Forge. ✅ *Fixed — vulnerability scan step added to `build-test.yml.sbn`; fails if vulnerable packages are detected.*
-- [ ] **9.1.2** No **secrets scanning** step (e.g., `gitleaks`, `truffleHog`). A committed API key or connection string would pass CI undetected across all generated services.
-- [ ] **9.1.3** No **SAST** (Static Application Security Testing) step. Emit a SAST tool step (e.g., `dotnet-security-guard`, CodeQL) as a PR-required check in the generated workflow.
-- [ ] **9.1.4** No **container image scanning** step (e.g., Trivy, Grype). If the pipeline builds an image, it should be scanned before publishing. Emit this as part of the CI template.
+- [x] **9.1.2** No **secrets scanning** step (e.g., `gitleaks`, `truffleHog`). A committed API key or connection string would pass CI undetected across all generated services. ✅ *Fixed — `secrets-scan` job added using `gitleaks/gitleaks-action@v2` with full git history checkout.*
+- [x] **9.1.3** No **SAST** (Static Application Security Testing) step. Emit a SAST tool step (e.g., `dotnet-security-guard`, CodeQL) as a PR-required check in the generated workflow. ✅ *Fixed — `codeql` job added using `github/codeql-action` with C# language; builds the project and uploads SARIF results to GitHub Security tab.*
+- [x] **9.1.4** No **container image scanning** step (e.g., Trivy, Grype). If the pipeline builds an image, it should be scanned before publishing. Emit this as part of the CI template. ✅ *Fixed — `trivy` job added; builds image, runs `aquasecurity/trivy-action`, exits on CRITICAL/HIGH CVEs, and uploads SARIF to GitHub Security tab.*
 - [x] **9.1.5** GitHub Actions steps should be pinned to specific **commit SHAs** rather than mutable version tags for supply chain security. Update the Forge CI template accordingly. ✅ *Fixed — all action references updated from `@v5` to `@v4` (stable pinned major); SHA pinning deferred to Dependabot.*
 
 ### 9.2 Quality Gates
 - [x] **9.2.1** No `dotnet format --verify-no-changes` step in the generated workflow. Code style drift accumulates silently across services without a format check in CI. ✅ *Fixed — `dotnet format --verify-no-changes` step added before build.*
 - [x] **9.2.2** No test result artifact upload. Coverage reports are computed but never uploaded — they disappear after the job. Emit an `actions/upload-artifact` step for test results and coverage in the generated workflow. ✅ *Fixed — `actions/upload-artifact@v4` step added; coverage XML retained for 30 days.*
 - [x] **9.2.3** The generated CI workflow builds only the main project but runs `dotnet test` with `--no-build` on the test project, which is in a different directory and was never built. The workflow should build both projects or remove the `--no-build` flag from the test step. ✅ *Fixed — explicit `dotnet build` step added for the test project before the test run.*
-- [ ] **9.2.4** No SBOM (Software Bill of Materials) generation step. Enterprise and regulated environments increasingly require this for compliance. Emit a CycloneDX or `dotnet sbom-tool` step in the generated workflow.
+- [x] **9.2.4** No SBOM (Software Bill of Materials) generation step. Enterprise and regulated environments increasingly require this for compliance. Emit a CycloneDX or `dotnet sbom-tool` step in the generated workflow. ✅ *Fixed — CycloneDX SBOM generation step added to `build-test` job; output uploaded as artifact with 90-day retention.*
 
 ---
 

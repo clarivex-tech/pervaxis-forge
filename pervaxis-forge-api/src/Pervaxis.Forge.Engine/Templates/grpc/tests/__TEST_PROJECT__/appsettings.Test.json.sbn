@@ -1,0 +1,41 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Warning",
+      "Microsoft.AspNetCore": "Warning",
+      "Microsoft.EntityFrameworkCore.Database.Command": "Warning"
+    }
+  },
+  "Forge:Authentication": {
+    "ApiKey": "test-api-key-for-integration-tests-only"
+  },
+  "Forge:Resilience": {
+    "Enabled": false,
+    "RetryCount": 0,
+    "RetryDelayMilliseconds": 100,
+    "TimeoutSeconds": 5
+  },
+  "Forge:Secrets": {
+    "UseSecretsManager": false,
+    "ApiKeySecretKey": "Forge:Authentication:ApiKey"
+  },
+  "Forge:Grpc": {
+    "MaxReceiveMessageSizeBytes": 4194304,
+    "MaxSendMessageSizeBytes": 4194304
+  },
+  "Forge:RateLimiting": {
+    "QueueLimit": 0
+  },
+  "Forge:Shutdown": {
+    "TimeoutSeconds": 5
+  },
+  "Forge:DataClassification": {
+    "DefaultLevel": "internal",
+    "RedactionToken": "[REDACTED]"
+  }
+{{ if model.manifest.database != null }},
+  "ConnectionStrings": {
+    "Default": "Host=localhost;Port=5432;Database={{ model.names.namespace }}_test;Username=test;Password=test"
+  }
+{{ end }}
+}

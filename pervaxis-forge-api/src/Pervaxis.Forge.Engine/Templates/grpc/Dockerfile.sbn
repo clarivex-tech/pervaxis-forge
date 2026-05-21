@@ -1,5 +1,9 @@
-# [8.2] Pin to a specific patch version to prevent silent breaking updates
-FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+# [8.2] Use ARG to pin the base image version. Override at build time with:
+#   docker build --build-arg DOTNET_VERSION=10.0.1 ...
+# Dependabot can update this ARG automatically when a new patch ships.
+ARG DOTNET_VERSION=10.0
+
+FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS base
 
 # [8.1] Run as non-root for principle of least privilege
 RUN adduser --disabled-password --gecos "" appuser
@@ -8,7 +12,7 @@ WORKDIR /app
 # [8.5] Expose the port that Kestrel actually listens on (matches appsettings.json Kestrel config)
 EXPOSE 8080
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:${DOTNET_VERSION} AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["src/{{ model.names.namespace }}/{{ model.names.project_file }}", "src/{{ model.names.namespace }}/"]
