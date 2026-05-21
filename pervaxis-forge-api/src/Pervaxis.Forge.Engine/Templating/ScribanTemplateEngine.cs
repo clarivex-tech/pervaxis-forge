@@ -38,6 +38,8 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                 ["manifest"] = model.Manifest,
                 ["cloud_provider"] = model.CloudProvider,
                 ["current_year"] = model.CurrentYear,
+                ["current_month"] = DateTime.UtcNow.ToString("MM"),
+                ["current_day"] = DateTime.UtcNow.ToString("dd"),
                 ["selected_modules"] = model.SelectedModules.Select(m => new Scriban.Runtime.ScriptObject
                 {
                     ["name"] = m.Name,

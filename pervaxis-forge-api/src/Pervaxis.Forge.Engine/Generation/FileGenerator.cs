@@ -23,6 +23,12 @@ public sealed class FileGenerator
 
         foreach (var resourceName in resourceNames)
         {
+            // Skip Data/ templates when no database is configured in the manifest.
+            // Without this guard the DbContext is emitted with EF Core imports but the
+            // EF Core packages are not in the csproj, causing a compile error.
+            if (model.Manifest.Database is null && resourceName.Contains("/Data/", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var template = await templateLoader.LoadAsync(resourceName, cancellationToken);
             var rendered = templateEngine.Render(template, model);
             var relativeSuffix = TemplateLoader.GetRelativeSuffix(resourceName, templateRoot);

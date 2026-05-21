@@ -15,18 +15,18 @@
 | **Generated at** | `{{ model.current_year }}-{{ model.current_month }}-{{ model.current_day }}` |
 | **Forge generator version** | `{{ model.forge_version ?? "unknown" }}` |
 | **Target framework** | `net10.0` |
-| **Cloud provider** | `{{ model.manifest.cloud }}` |
+| **Cloud provider** | `{{ model.manifest.cloud_provider }}` |
 | **Database** | `{{ model.manifest.database != null ? model.manifest.database.engine : "none" }}` |
 
 ## Wired Genesis Modules
 
-{{ if model.selected_modules | array.size > 0 }}
-{{ for module in model.selected_modules }}
+{{- if model.selected_modules | array.size > 0 }}
+{{- for module in model.selected_modules }}
 - `{{ module.package_name }}` @ `{{ module.version ?? "2.0.0" }}`
-{{ end }}
-{{ else }}
+{{- end }}
+{{- else }}
 None
-{{ end }}
+{{- end }}
 
 ## Migration Guide
 
