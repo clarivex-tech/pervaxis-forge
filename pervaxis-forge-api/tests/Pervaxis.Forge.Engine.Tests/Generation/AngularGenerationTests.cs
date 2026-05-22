@@ -91,6 +91,66 @@ public class AngularGenerationTests
     }
 
     [Fact]
+    public async Task GenerateAsync_AngularMfeRemote_WithCanvasModules_ReturnsZip()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "mat",
+            VerticalSlug = "matrimony",
+            ServiceName = "intake-profile",
+            ServiceType = ServiceType.AngularMfeRemote,
+            ComponentPrefix = "mat",
+            CloudProvider = "AWS",
+            CanvasModules = ["Dashboard"],
+        };
+
+        var zipBytes = await generator.GenerateAsync(manifest, "AWS");
+
+        using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        archive.Entries.Select(e => e.FullName).Should().Contain("libs/intake-profile/src/lib/component.ts");
+    }
+
+    [Fact]
+    public async Task GenerateAsync_Monolithic_ReturnsZip()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "clarivolt",
+            VerticalSlug = "clarivolt",
+            ServiceName = "claims-web",
+            ServiceType = ServiceType.Monolithic,
+            ComponentPrefix = "clv",
+            CloudProvider = "AWS",
+            UiTargets = ["web", "mobile"],
+        };
+
+        var zipBytes = await generator.GenerateAsync(manifest, "AWS");
+
+        using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        archive.Entries.Select(e => e.FullName).Should().Contain("manifest.json");
+    }
+
+    [Fact]
+    public async Task GenerateAsync_Ionic_ReturnsZip()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "clarivolt",
+            VerticalSlug = "clarivolt",
+            ServiceName = "claims-mobile",
+            ServiceType = ServiceType.Ionic,
+            ComponentPrefix = "clv",
+            CloudProvider = "AWS",
+            UiTargets = ["mobile"],
+        };
+
+        var zipBytes = await generator.GenerateAsync(manifest, "AWS");
+
+        using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        archive.Entries.Select(e => e.FullName).Should().Contain("manifest.json");
+    }
+
+    [Fact]
     public void Validate_RejectsAngularShellNotEndingWithShell()
     {
         var manifest = new ForgeManifest
@@ -168,5 +228,65 @@ public class AngularGenerationTests
 
         result.IsValid.Should().BeTrue();
         result.Errors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_AcceptsMonolithicWithWebAndMobileTargets()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "clarivolt",
+            VerticalSlug = "clarivolt",
+            ServiceName = "claims-web",
+            ServiceType = ServiceType.Monolithic,
+            ComponentPrefix = "CLV",
+            CloudProvider = "AWS",
+            UiTargets = ["web", "mobile"],
+        };
+
+        var result = validator.Validate(manifest);
+
+        result.IsValid.Should().BeTrue();
+        result.Errors.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Validate_RejectsAngularShellWithUiTargets()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "clarivolt",
+            VerticalSlug = "clarivolt",
+            ServiceName = "claims-shell",
+            ServiceType = ServiceType.AngularShell,
+            ComponentPrefix = "CLV",
+            CloudProvider = "AWS",
+            UiTargets = ["web"],
+        };
+
+        var result = validator.Validate(manifest);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(error => error.Contains("must not include uiTargets"));
+    }
+
+    [Fact]
+    public void Validate_RejectsIonicWithoutMobileTarget()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "clarivolt",
+            VerticalSlug = "clarivolt",
+            ServiceName = "claims-mobile",
+            ServiceType = ServiceType.Ionic,
+            ComponentPrefix = "CLV",
+            CloudProvider = "AWS",
+            UiTargets = ["web"],
+        };
+
+        var result = validator.Validate(manifest);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(error => error.Contains("Ionic requests must use uiTargets"));
     }
 }

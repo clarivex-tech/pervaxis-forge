@@ -30,9 +30,22 @@ internal static class GenerationEndpoints
             .WithTags("Generation")
             .AllowAnonymous();
 
+        app.MapGet("/api/v1/capabilities", GetCapabilities)
+            .WithName("GetCapabilities")
+            .WithSummary("Get Forge UI and backend generation capabilities")
+            .Produces<CapabilitiesResponse>();
+
         group.MapPost("/", GenerateSingle)
             .WithName("GenerateService")
             .WithSummary("Generate a single service within an enrolled vertical")
+            .Produces(StatusCodes.Status200OK)
+            .ProducesValidationProblem()
+            .ProducesProblem(StatusCodes.Status404NotFound)
+            .ProducesProblem(StatusCodes.Status422UnprocessableEntity);
+
+        group.MapPost("/zip", GenerateZip)
+            .WithName("GenerateServiceZip")
+            .WithSummary("Generate a single service ZIP within an enrolled vertical")
             .Produces(StatusCodes.Status200OK)
             .ProducesValidationProblem()
             .ProducesProblem(StatusCodes.Status404NotFound)
@@ -83,13 +96,8 @@ internal static class GenerationEndpoints
         try
         {
             var generatedBy = ResolveGeneratedBy(httpContext);
-            var (zip, result) = await generationService.GenerateAsync(request, generatedBy, ct);
-            httpContext.Response.Headers["X-Generation-Service-Name"] = result.ServiceName;
-            httpContext.Response.Headers["X-Generation-Vertical"] = result.VerticalSlug;
-            httpContext.Response.Headers["X-Generation-Timestamp"] = result.GeneratedAt.ToString("O");
-            if (result.GitHubRepoUrl is not null)
-                httpContext.Response.Headers["X-Generation-GitHub-Url"] = result.GitHubRepoUrl;
-            return Results.File(zip, "application/zip", $"{request.Name}-scaffold.zip");
+            var result = await generationService.GenerateAsync(request, generatedBy, ct);
+            return Results.Ok(result);
         }
         catch (KeyNotFoundException ex)
         {
@@ -107,11 +115,8 @@ internal static class GenerationEndpoints
     {
         try
         {
-            var (zip, result) = await generationService.GenerateBatchAsync(request, ct);
-            httpContext.Response.Headers["X-Generation-Total"] = result.TotalServices.ToString();
-            httpContext.Response.Headers["X-Generation-Succeeded"] = result.SucceededCount.ToString();
-            httpContext.Response.Headers["X-Generation-Failed"] = result.FailedCount.ToString();
-            return Results.File(zip, "application/zip", $"{request.VerticalSlug}-batch-scaffold.zip");
+            var result = await generationService.GenerateBatchAsync(request, ct);
+            return Results.Ok(result);
         }
         catch (KeyNotFoundException ex)
         {
@@ -121,6 +126,54 @@ internal static class GenerationEndpoints
         {
             return Results.UnprocessableEntity(new { errors = new[] { ex.Message } });
         }
+    }
+
+    private static async Task<IResult> GenerateZip(GenerationRequest request, IGenerationService generationService, HttpContext httpContext, CancellationToken ct = default)
+    {
+        try
+        {
+            var zip = await generationService.GenerateZipAsync(request, ct);
+            return Results.File(zip, "application/zip", $"{request.Name}-scaffold.zip");
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return Results.NotFound(new { errors = new[] { ex.Message } });
+        }
+        catch (InvalidOperationException ex)
+        {
+            if (ex.Message.Contains("already exists", StringComparison.OrdinalIgnoreCase))
+                return Results.Conflict(new { errors = new[] { ex.Message } });
+            return Results.UnprocessableEntity(new { errors = new[] { ex.Message } });
+        }
+    }
+
+    private static IResult GetCapabilities()
+    {
+        return Results.Ok(new CapabilitiesResponse
+        {
+            UiTargets =
+            [
+                new UiTargetCapability
+                {
+                    Key = "web",
+                    Label = "Monolithic Web App",
+                    ServiceTypes = ["Monolithic"]
+                },
+                new UiTargetCapability
+                {
+                    Key = "mobile",
+                    Label = "Ionic Mobile App",
+                    ServiceTypes = ["Ionic"]
+                },
+                new UiTargetCapability
+                {
+                    Key = "mfe",
+                    Label = "Microfrontend",
+                    ServiceTypes = ["AngularShell", "AngularMfe"]
+                }
+            ],
+            BackendTargets = ["RestApi", "GraphQL", "Grpc"]
+        });
     }
 
     private static async Task<IResult> ValidateManifest(GenerationRequest request, IGenerationService generationService, CancellationToken ct = default)

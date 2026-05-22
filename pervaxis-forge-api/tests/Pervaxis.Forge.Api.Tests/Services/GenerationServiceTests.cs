@@ -79,6 +79,40 @@ public sealed class GenerationServiceTests
         regenerated.GeneratedBy.Should().Be("forge-api");
     }
 
+    [Fact]
+    public async Task GenerateAsync_ReturnsArtifactStatusAndFiles()
+    {
+        await using var fixture = await TestDb.CreateAsync();
+
+        var service = CreateService(fixture.Db);
+        var request = CreateRequest("clarivolt", "claims-web");
+        request = request with { Type = "Monolithic", GenesisModules = [], UiTargets = ["web", "mobile"] };
+
+        var result = await service.GenerateAsync(request, "api-user");
+
+        result.Artifacts.Should().HaveCount(2);
+        result.Artifacts.Should().Contain(artifact => artifact.Target == "web" && artifact.Status == "Succeeded");
+        result.Artifacts.Should().Contain(artifact => artifact.Target == "mobile" && artifact.Status == "Succeeded");
+        result.Artifacts[0].Files.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task GenerateZipAsync_ReturnsZipBytes()
+    {
+        await using var fixture = await TestDb.CreateAsync();
+
+        var service = CreateService(fixture.Db);
+        var request = CreateRequest("clarivolt", "claims-web") with
+        {
+            Type = "Monolithic",
+            UiTargets = ["web", "mobile"]
+        };
+
+        var zip = await service.GenerateZipAsync(request);
+
+        zip.Should().NotBeEmpty();
+    }
+
     private static GenerationService CreateService(ForgeDbContext db)
     {
         var verticalService = new Mock<IVerticalService>();

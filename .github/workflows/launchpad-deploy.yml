@@ -2,7 +2,7 @@ name: Launchpad Deploy
 
 on:
   push:
-    branches: [main, develop]
+    branches: [develop, main]
     paths:
       - 'pervaxis-forge-launchpad/**'
       - '.github/workflows/launchpad-*.yml'
@@ -13,9 +13,13 @@ defaults:
     working-directory: pervaxis-forge-launchpad
 
 jobs:
-  build:
-    name: Build Artifact
+  # ─────────────────────────────────────────────
+  # ACCP — triggered on push to develop
+  # ─────────────────────────────────────────────
+  deploy-accp:
+    name: Deploy to ACCP
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/develop'
 
     steps:
       - uses: actions/checkout@v4
@@ -30,11 +34,67 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
+      - name: Build (accp)
+        run: npx nx build launchpad --configuration=accp
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Sync to S3 (accp)
+        run: |
+          aws s3 sync dist/apps/launchpad s3://forge-launchpad-accp \
+            --delete \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront (accp)
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CF_DISTRIBUTION_ID_ACCP }} \
+            --paths "/*"
+
+  # ─────────────────────────────────────────────
+  # PROD — triggered on push to main
+  # ─────────────────────────────────────────────
+  deploy-prod:
+    name: Deploy to PROD
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+          cache-dependency-path: pervaxis-forge-launchpad/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (production)
         run: npx nx build launchpad --configuration=production
 
-      - name: Upload launchpad dist artifact
-        uses: actions/upload-artifact@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: launchpad-dist
-          path: pervaxis-forge-launchpad/dist/apps/launchpad
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Sync to S3 (prod)
+        run: |
+          aws s3 sync dist/apps/launchpad s3://forge-launchpad-prod \
+            --delete \
+            --cache-control "no-cache, no-store, must-revalidate"
+
+      - name: Invalidate CloudFront (prod)
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ secrets.CF_DISTRIBUTION_ID_PROD }} \
+            --paths "/*"

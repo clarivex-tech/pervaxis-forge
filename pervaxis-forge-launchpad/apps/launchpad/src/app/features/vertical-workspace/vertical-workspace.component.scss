@@ -257,3 +257,85 @@
 	width: 16px;
 	height: 16px;
 }
+
+.services-section {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+
+	.section-header {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+
+		h2 {
+			margin: 0;
+			font-size: 18px;
+			font-weight: 600;
+			color: #1a1a1a;
+		}
+
+		.empty-message {
+			margin: 0;
+			font-size: 13px;
+			color: rgba(0, 0, 0, 0.54);
+		}
+	}
+}
+
+.services-table {
+	width: 100%;
+	border-collapse: collapse;
+
+	th {
+		background-color: #fafafa;
+		border-bottom: 2px solid #e0e0e0;
+		font-weight: 600;
+		font-size: 12px;
+		text-transform: uppercase;
+		letter-spacing: 0.5px;
+		color: rgba(0, 0, 0, 0.67);
+		padding: 12px;
+		text-align: left;
+	}
+
+	td {
+		padding: 12px;
+		border-bottom: 1px solid #f0f0f0;
+		font-size: 13px;
+	}
+
+	tr {
+		&:hover {
+			background-color: #fafafa;
+		}
+
+		&:last-child td {
+			border-bottom: none;
+		}
+	}
+}
+
+.service-name-cell {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+
+	.service-name {
+		font-weight: 500;
+		color: #1a1a1a;
+	}
+
+	.github-link {
+		display: inline-flex;
+		align-items: center;
+		color: #4f378a;
+		text-decoration: none;
+
+		.github-icon {
+			font-size: 14px;
+			width: 14px;
+			height: 14px;
+		}
+	}
+}

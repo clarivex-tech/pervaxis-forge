@@ -8,6 +8,9 @@ public enum ServiceType
     Library = 4,
     AngularShell = 5,
     AngularMfe = 6,
+    AngularMfeRemote = 6,
     GraphQL = 7,
     Grpc = 8,
+    Monolithic = 9,
+    Ionic = 10,
 }
