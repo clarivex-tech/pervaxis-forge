@@ -41,7 +41,7 @@ import { VerticalSummaryResponse } from '@core/models/vertical.model';
 
 type BuildTypeOption = {
 	label: string;
-	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe';
+	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfeRemote' | 'Monolithic';
 	category: 'Backend Service' | 'Frontend App';
 	live: boolean;
 	note: string;
@@ -1148,7 +1148,8 @@ export class GenerationWizardComponent {
 
 	isCanvasTypeSelected(): boolean {
 		return this.form.controls.type.value === 'AngularShell' ||
-			this.form.controls.type.value === 'AngularMfe';
+			this.form.controls.type.value === 'AngularMfeRemote' ||
+			this.form.controls.type.value === 'Monolithic';
 	}
 
 	selectArchitecture(value: AngularArchitectureType): void {
@@ -1173,11 +1174,11 @@ export class GenerationWizardComponent {
 			this.form.controls.type.setValue('AngularShell');
 			this.syncCanvasModulesToType('AngularShell');
 		} else if (arch === 'MfeRemote') {
-			this.form.controls.type.setValue('AngularMfe');
-			this.syncCanvasModulesToType('AngularMfe');
+			this.form.controls.type.setValue('AngularMfeRemote');
+			this.syncCanvasModulesToType('AngularMfeRemote');
 		} else {
-			this.form.controls.type.setValue('AngularShell');
-			this.syncCanvasModulesToType('AngularShell');
+			this.form.controls.type.setValue('Monolithic');
+			this.syncCanvasModulesToType('Monolithic');
 		}
 	}
 
@@ -1204,8 +1205,12 @@ export class GenerationWizardComponent {
 			return 'Kebab-case only, and the name must end with -shell.';
 		}
 
-		if (this.form.controls.type.value === 'AngularMfe') {
+		if (this.form.controls.type.value === 'AngularMfeRemote') {
 			return 'Kebab-case only, and the name must not end with -shell or -service.';
+		}
+
+		if (this.form.controls.type.value === 'Monolithic') {
+			return 'Kebab-case only, e.g. customer-portal';
 		}
 
 		return 'Kebab-case only, e.g. intake-service';
@@ -1216,8 +1221,12 @@ export class GenerationWizardComponent {
 			return 'Step 4: Canvas Modules (Shell)';
 		}
 
-		if (this.form.controls.type.value === 'AngularMfe') {
+		if (this.form.controls.type.value === 'AngularMfeRemote') {
 			return 'Step 4: Canvas Modules (Micro Frontend)';
+		}
+
+		if (this.form.controls.type.value === 'Monolithic') {
+			return 'Step 4: Canvas Modules (Monolithic App)';
 		}
 
 		return 'Step 4: Genesis Modules (Backend only)';
@@ -1446,7 +1455,7 @@ export class GenerationWizardComponent {
 			return null;
 		}
 
-		if (value.type === 'AngularMfe' && (serviceName.endsWith('-shell') || serviceName.endsWith('-service'))) {
+		if (value.type === 'AngularMfeRemote' && (serviceName.endsWith('-shell') || serviceName.endsWith('-service'))) {
 			this.validationError.set('Micro Frontend (MFE) names must not end with -shell or -service.');
 			return null;
 		}
@@ -1468,6 +1477,8 @@ export class GenerationWizardComponent {
 			mysql: 'MySQL',
 		};
 
+		const uiTargets = this.buildUiTargets();
+
 		return {
 			verticalSlug,
 			name: serviceName,
@@ -1475,6 +1486,7 @@ export class GenerationWizardComponent {
 			description: value.description.trim(),
 			version: value.version.trim(),
 			type: value.type,
+			...(uiTargets.length > 0 ? { uiTargets } : {}),
 			genesisModules,
 			canvasModules,
 			database: hasDatabase
@@ -1485,6 +1497,24 @@ export class GenerationWizardComponent {
 				: null,
 			createGitHubRepo: value.createGitHubRepo,
 		};
+	}
+
+	private buildUiTargets(): ('web' | 'mobile')[] {
+		if (this.form.controls.type.value !== 'Monolithic') {
+			return [];
+		}
+
+		const uiTarget = this.selectedUiTarget();
+		switch (uiTarget) {
+			case 'WebOnly':
+				return ['web'];
+			case 'MobileOnly':
+				return ['mobile'];
+			case 'WebMobile':
+				return ['web', 'mobile'];
+			default:
+				return [];
+		}
 	}
 
 	private loadVerticals(preferredSlug: string): void {
@@ -1603,11 +1633,11 @@ export class GenerationWizardComponent {
 	}
 
 	private allowedCanvasModuleNamesForCurrentType(): string[] {
-		if (this.form.controls.type.value === 'AngularShell') {
+		if (this.form.controls.type.value === 'AngularShell' || this.form.controls.type.value === 'Monolithic') {
 			return [...SHELL_PRESELECTED_CANVAS_MODULES, ...SHARED_CANVAS_MODULES];
 		}
 
-		if (this.form.controls.type.value === 'AngularMfe') {
+		if (this.form.controls.type.value === 'AngularMfeRemote') {
 			return [...SHARED_CANVAS_MODULES, ...MFE_ONLY_CANVAS_MODULES];
 		}
 
@@ -1615,7 +1645,7 @@ export class GenerationWizardComponent {
 	}
 
 	private syncCanvasModulesToType(type: BuildTypeOption['value']): void {
-		if (type !== 'AngularShell' && type !== 'AngularMfe') {
+		if (type !== 'AngularShell' && type !== 'AngularMfeRemote' && type !== 'Monolithic') {
 			this.clearCanvasModules();
 			return;
 		}

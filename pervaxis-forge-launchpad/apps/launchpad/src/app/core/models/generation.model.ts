@@ -62,7 +62,8 @@ export interface GenerationRequest {
 	displayName: string;
 	description: string;
 	version: string;
-	type: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe';
+	type: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfeRemote' | 'Monolithic';
+	uiTargets?: ('web' | 'mobile')[];
 	genesisModules: string[];
 	canvasModules?: string[];
 	database: GenerationDatabaseConfig | null;
