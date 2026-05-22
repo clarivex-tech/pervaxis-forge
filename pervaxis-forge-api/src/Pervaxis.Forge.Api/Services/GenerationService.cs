@@ -117,7 +117,6 @@ public sealed class GenerationService : IGenerationService
             throw new KeyNotFoundException($"Vertical '{request.VerticalSlug}' not found or inactive");
 
         var manifest = BuildManifest(request, vertical);
-        await EnsureServiceNameAvailableAsync(vertical.Id, manifest.ServiceName, ct);
         return await printGenerator.GenerateAsync(manifest, vertical.CloudProvider, ct);
     }
 
