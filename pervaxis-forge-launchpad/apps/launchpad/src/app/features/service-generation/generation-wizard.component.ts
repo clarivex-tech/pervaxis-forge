@@ -49,6 +49,21 @@ type BuildTypeOption = {
 
 type ServiceCategory = BuildTypeOption['category'];
 
+type AngularArchitectureType = 'Monolithic' | 'MfeShell' | 'MfeRemote';
+type AngularUiTarget = 'WebOnly' | 'MobileOnly' | 'WebMobile';
+
+type AngularArchitectureOption = {
+	label: string;
+	value: AngularArchitectureType;
+	description: string;
+};
+
+type AngularUiOption = {
+	label: string;
+	value: AngularUiTarget;
+	description: string;
+};
+
 const SHELL_PRESELECTED_CANVAS_MODULES = ['Shell', 'Layout', 'Navigation', 'Auth', 'Workspace'] as const;
 const SHARED_CANVAS_MODULES = ['Settings', 'Profile', 'Notifications', 'Search'] as const;
 const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', 'Support'] as const;
@@ -163,6 +178,48 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 							</div>
 						</div>
 					</div>
+				</section>
+
+				<section class="full-width step-section" *ngIf="isCanvasTypeSelected()">
+					<h3>Architecture Type</h3>
+					<p class="step-description">Select app architecture:</p>
+					<div class="architecture-options">
+						@for (option of angularArchitectureOptions; track option.value) {
+							<button
+								type="button"
+								class="architecture-option"
+								[class.selected]="selectedArchitecture() === option.value"
+								(click)="selectArchitecture(option.value)"
+							>
+								<span class="option-label">{{ option.label }}</span>
+								<small>{{ option.description }}</small>
+							</button>
+						}
+					</div>
+				</section>
+
+				<section class="full-width step-section" *ngIf="isCanvasTypeSelected()">
+					<h3>User Interfaces</h3>
+					<p class="step-description">Which user interfaces do you need?</p>
+					<div class="architecture-options">
+						@for (option of angularUiOptions; track option.value) {
+							<button
+								type="button"
+								class="architecture-option"
+								[class.selected]="selectedUiTarget() === option.value"
+								(click)="selectUiTarget(option.value)"
+							>
+								<span class="option-label">{{ option.label }}</span>
+								<small>{{ option.description }}</small>
+							</button>
+						}
+					</div>
+				</section>
+
+				<section class="full-width angular-preview" *ngIf="isCanvasTypeSelected() && selectedArchitecture() && selectedUiTarget()">
+					<p class="angular-preview-text">
+						Generating: <strong>[{{ selectedArchitectureLabel() }}]</strong> + <strong>[{{ selectedUiTargetLabel() }}]</strong>
+					</p>
 				</section>
 
 				<section class="full-width step-section">
@@ -339,6 +396,14 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 						<div class="review-item">
 							<span class="review-label">Build Type</span>
 							<span class="review-value">{{ selectedBuildTypeLabel() }}</span>
+						</div>
+						<div class="review-item" *ngIf="isCanvasTypeSelected()">
+							<span class="review-label">Architecture</span>
+							<span class="review-value">{{ selectedArchitectureLabel() || 'Not selected' }}</span>
+						</div>
+						<div class="review-item" *ngIf="isCanvasTypeSelected()">
+							<span class="review-label">UI Target</span>
+							<span class="review-value">{{ selectedUiTargetLabel() || 'Not selected' }}</span>
 						</div>
 						<div class="review-item">
 							<span class="review-label">Service Name</span>
@@ -616,6 +681,68 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				letter-spacing: 0.05em;
 			}
 
+			.step-description {
+				font-size: 0.85rem;
+				color: #4b5563;
+				margin: 0.25rem 0 0.75rem;
+			}
+
+			.architecture-options {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 0.75rem;
+			}
+
+			.architecture-option {
+				display: flex;
+				flex-direction: column;
+				gap: 0.25rem;
+				padding: 0.85rem 1rem;
+				border: 1px solid #d1d5db;
+				border-radius: 0.5rem;
+				background: #fff;
+				cursor: pointer;
+				text-align: left;
+				transition: all 0.15s ease;
+			}
+
+			.architecture-option:hover {
+				border-color: #6b7280;
+				background: #f9fafb;
+			}
+
+			.architecture-option.selected {
+				border-color: #2563eb;
+				background: #dbeafe;
+			}
+
+			.architecture-option .option-label {
+				font-weight: 600;
+				font-size: 0.875rem;
+			}
+
+			.architecture-option small {
+				font-size: 0.75rem;
+				color: #6b7280;
+			}
+
+			.architecture-option.selected small {
+				color: #1e40af;
+			}
+
+			.angular-preview {
+				border: 1px solid #d0d7de;
+				border-radius: 0.5rem;
+				padding: 0.75rem 1rem;
+				background: #f0fdf4;
+			}
+
+			.angular-preview-text {
+				margin: 0;
+				font-size: 0.875rem;
+				color: #166534;
+			}
+
 			.module-grid {
 				display: grid;
 				grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -787,6 +914,10 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				.queue-builder-grid {
 					grid-template-columns: 1fr;
 				}
+
+				.architecture-options {
+					grid-template-columns: 1fr;
+				}
 			}
 		`,
 	],
@@ -843,6 +974,21 @@ export class GenerationWizardComponent {
 	readonly frontendTypeOptions = this.buildTypeOptions.filter(
 		(option) => option.category === 'Frontend App'
 	);
+
+	readonly angularArchitectureOptions: AngularArchitectureOption[] = [
+		{ label: 'Monolithic', value: 'Monolithic', description: 'Single standalone application' },
+		{ label: 'MFE Shell', value: 'MfeShell', description: 'Host container that dynamically loads feature modules' },
+		{ label: 'MFE Remote', value: 'MfeRemote', description: 'Feature module loaded by a shell host' },
+	];
+
+	readonly angularUiOptions: AngularUiOption[] = [
+		{ label: 'Web only', value: 'WebOnly', description: 'Angular 21.2.9' },
+		{ label: 'Mobile only', value: 'MobileOnly', description: 'Ionic/Capacitor' },
+		{ label: 'Web + Mobile', value: 'WebMobile', description: 'Both Angular and Ionic with shared domain logic' },
+	];
+
+	readonly selectedArchitecture = signal<AngularArchitectureType | null>(null);
+	readonly selectedUiTarget = signal<AngularUiTarget | null>(null);
 
 	readonly form = this.fb.nonNullable.group({
 		verticalSlug: ['', Validators.required],
@@ -950,6 +1096,8 @@ export class GenerationWizardComponent {
 			this.syncCanvasModulesToType(type);
 		} else {
 			this.clearCanvasModules();
+			this.selectedArchitecture.set(null);
+			this.selectedUiTarget.set(null);
 		}
 	}
 
@@ -1010,7 +1158,42 @@ export class GenerationWizardComponent {
 			this.form.controls.type.value === 'AngularMfe';
 	}
 
+	selectArchitecture(value: AngularArchitectureType): void {
+		this.selectedArchitecture.set(value);
+		this.syncFrontendTypeFromArchitecture(value);
+	}
+
+	selectUiTarget(value: AngularUiTarget): void {
+		this.selectedUiTarget.set(value);
+	}
+
+	selectedArchitectureLabel(): string {
+		return this.angularArchitectureOptions.find((o) => o.value === this.selectedArchitecture())?.label ?? '';
+	}
+
+	selectedUiTargetLabel(): string {
+		return this.angularUiOptions.find((o) => o.value === this.selectedUiTarget())?.label ?? '';
+	}
+
+	private syncFrontendTypeFromArchitecture(arch: AngularArchitectureType): void {
+		if (arch === 'MfeShell') {
+			this.form.controls.type.setValue('AngularShell');
+			this.syncCanvasModulesToType('AngularShell');
+		} else if (arch === 'MfeRemote') {
+			this.form.controls.type.setValue('AngularMfe');
+			this.syncCanvasModulesToType('AngularMfe');
+		} else {
+			this.form.controls.type.setValue('AngularShell');
+			this.syncCanvasModulesToType('AngularShell');
+		}
+	}
+
 	canGenerate(): boolean {
+		if (this.isCanvasTypeSelected()) {
+			if (!this.selectedArchitecture() || !this.selectedUiTarget()) {
+				return false;
+			}
+		}
 		return this.validationPreview()?.isValid === true;
 	}
 
