@@ -62,7 +62,7 @@ export interface GenerationRequest {
 	displayName: string;
 	description: string;
 	version: string;
-	type: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfeRemote' | 'Monolithic';
+	type: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe' | 'Monolithic' | 'Ionic';
 	uiTargets?: ('web' | 'mobile')[];
 	genesisModules: string[];
 	canvasModules?: string[];
