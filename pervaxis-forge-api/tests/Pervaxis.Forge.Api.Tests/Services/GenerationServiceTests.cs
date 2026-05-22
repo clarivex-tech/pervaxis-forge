@@ -114,6 +114,24 @@ public sealed class GenerationServiceTests
     }
 
     [Fact]
+    public async Task GenerateZipAsync_AllowsDuplicateServiceNames()
+    {
+        await using var fixture = await TestDb.CreateAsync();
+        fixture.SeedVerticalWithGeneratedService("clarivolt", "claims-web");
+
+        var service = CreateService(fixture.Db);
+        var request = CreateRequest("clarivolt", "claims-web") with
+        {
+            Type = "Monolithic",
+            UiTargets = ["web"],
+        };
+
+        var zip = await service.GenerateZipAsync(request);
+
+        zip.Should().NotBeEmpty();
+    }
+
+    [Fact]
     public async Task GenerateAsync_CreatesInitialCommitBeforeBranchProtection()
     {
         await using var fixture = await TestDb.CreateAsync();
