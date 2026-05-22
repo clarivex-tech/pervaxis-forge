@@ -251,6 +251,26 @@ public class AngularGenerationTests
     }
 
     [Fact]
+    public void Validate_AcceptsMonolithicWithWebOnlyTarget()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "clarivolt",
+            VerticalSlug = "clarivolt",
+            ServiceName = "claims-web",
+            ServiceType = ServiceType.Monolithic,
+            ComponentPrefix = "CLV",
+            CloudProvider = "AWS",
+            UiTargets = ["web"],
+        };
+
+        var result = validator.Validate(manifest);
+
+        result.IsValid.Should().BeTrue();
+        result.Errors.Should().BeEmpty();
+    }
+
+    [Fact]
     public void Validate_RejectsAngularShellWithUiTargets()
     {
         var manifest = new ForgeManifest
