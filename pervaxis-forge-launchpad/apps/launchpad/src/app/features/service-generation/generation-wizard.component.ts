@@ -1595,7 +1595,7 @@ export class GenerationWizardComponent {
 					schema: value.databaseSchema.trim(),
 				}
 				: null,
-			createGitHubRepo: value.createGitHubRepo,
+			createGitHubRepo: false, // TODO: re-enable once GitHub integration is verified on accp
 		};
 	}
 
