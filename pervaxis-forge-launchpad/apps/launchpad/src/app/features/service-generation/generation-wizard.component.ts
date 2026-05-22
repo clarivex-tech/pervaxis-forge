@@ -953,18 +953,11 @@ export class GenerationWizardComponent {
 			note: 'Live now',
 		},
 		{
-			label: 'Shell App',
+			label: 'Angular App',
 			value: 'AngularShell',
 			category: 'Frontend App',
 			live: true,
-			note: 'Live now',
-		},
-		{
-			label: 'Micro Frontend (MFE)',
-			value: 'AngularMfe',
-			category: 'Frontend App',
-			live: true,
-			note: 'Live now',
+			note: 'Configure architecture below',
 		},
 	];
 
