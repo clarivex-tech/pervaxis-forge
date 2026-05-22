@@ -1081,8 +1081,8 @@ export class GenerationWizardComponent {
 		databaseEngine: [''],
 		databaseSchema: [''],
 		deployInfrastructure: [false],
-		pushToGitHub: [true],
-		createGitHubRepo: [true],
+		pushToGitHub: [false],
+		createGitHubRepo: [false],
 	});
 
 	readonly verticals = signal<VerticalSummaryResponse[]>([]);
@@ -1595,7 +1595,7 @@ export class GenerationWizardComponent {
 					schema: value.databaseSchema.trim(),
 				}
 				: null,
-			createGitHubRepo: false, // TODO: re-enable once GitHub integration is verified on accp
+			createGitHubRepo: value.createGitHubRepo,
 		};
 	}
 
