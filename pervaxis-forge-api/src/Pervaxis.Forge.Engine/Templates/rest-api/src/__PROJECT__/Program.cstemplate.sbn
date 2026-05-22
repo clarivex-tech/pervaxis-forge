@@ -109,10 +109,12 @@ builder.Services.AddAuthorization(options =>
         .RequireAuthenticatedUser()
         .Build();
 });
+{{- if model.manifest.database != null }}
 builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("{{ model.names.dot_net_class_name }}Db"),
         npgsql => npgsql.EnableRetryOnFailure(3)));
+{{- end }}
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
