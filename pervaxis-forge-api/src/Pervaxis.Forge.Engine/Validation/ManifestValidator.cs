@@ -34,11 +34,30 @@ public sealed class ManifestValidator
         if (manifest.ServiceType == ServiceType.AngularShell && !manifest.ServiceName.EndsWith("-shell", StringComparison.OrdinalIgnoreCase))
             errors.Add("Angular Shell apps must end with -shell (e.g. claims-shell).");
 
-        if (manifest.ServiceType == ServiceType.AngularMfe && manifest.ServiceName.EndsWith("-shell", StringComparison.OrdinalIgnoreCase))
+        if ((manifest.ServiceType == ServiceType.AngularMfe || manifest.ServiceType == ServiceType.AngularMfeRemote) && manifest.ServiceName.EndsWith("-shell", StringComparison.OrdinalIgnoreCase))
             errors.Add("Angular MFE names must not end with -shell.");
 
-        if (manifest.ServiceType == ServiceType.AngularMfe && manifest.ServiceName.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
+        if ((manifest.ServiceType == ServiceType.AngularMfe || manifest.ServiceType == ServiceType.AngularMfeRemote) && manifest.ServiceName.EndsWith("-service", StringComparison.OrdinalIgnoreCase))
             errors.Add("Angular MFE names must not end with -service.");
+
+        if ((manifest.ServiceType == ServiceType.AngularShell || manifest.ServiceType == ServiceType.AngularMfe || manifest.ServiceType == ServiceType.AngularMfeRemote) && manifest.UiTargets.Count > 0)
+            errors.Add("Angular Shell and Angular MFE requests must not include uiTargets.");
+
+        if (manifest.ServiceType == ServiceType.Monolithic)
+        {
+            if (manifest.UiTargets.Count == 0)
+                errors.Add("Monolithic requests must include uiTargets.");
+            else if (!manifest.UiTargets.SequenceEqual(["web", "mobile"]))
+                errors.Add("Monolithic requests must use uiTargets [\"web\", \"mobile\"].");
+        }
+
+        if (manifest.ServiceType == ServiceType.Ionic)
+        {
+            if (manifest.UiTargets.Count == 0)
+                errors.Add("Ionic requests must include uiTargets.");
+            else if (!manifest.UiTargets.SequenceEqual(["mobile"]))
+                errors.Add("Ionic requests must use uiTargets [\"mobile\"].");
+        }
 
         if (string.IsNullOrWhiteSpace(manifest.Product))
             errors.Add("Product is required.");

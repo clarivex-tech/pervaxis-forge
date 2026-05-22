@@ -49,7 +49,7 @@ public sealed class GenerationService : IGenerationService
         this.gitHubService = gitHubService;
     }
 
-    public async Task<(byte[] Zip, GenerationResult Result)> GenerateAsync(GenerationRequest request, string generatedBy, CancellationToken ct = default)
+    public async Task<GenerationResult> GenerateAsync(GenerationRequest request, string generatedBy, CancellationToken ct = default)
     {
         var vertical = await verticalService.GetAsync(request.VerticalSlug, ct);
         if (vertical == null)
@@ -58,6 +58,7 @@ public sealed class GenerationService : IGenerationService
         var manifest = BuildManifest(request, vertical);
         await EnsureServiceNameAvailableAsync(vertical.Id, manifest.ServiceName, ct);
         var zipBytes = await printGenerator.GenerateAsync(manifest, vertical.CloudProvider, ct);
+        var artifacts = BuildArtifacts(manifest, zipBytes, null);
 
         var verticalEntity = await db.Verticals
             .Include(v => v.SourceControlConfig)
@@ -99,25 +100,34 @@ public sealed class GenerationService : IGenerationService
         await WriteGenerationLogAsync(vertical.Id, manifest, 1, gitHubReposCreated, ct);
         await WriteGeneratedServiceAsync(vertical.Id, manifest, generatedBy, ct);
 
-        var result = new GenerationResult
+        return new GenerationResult
         {
             ServiceName = request.Name,
             VerticalSlug = request.VerticalSlug,
             GitHubRepoUrl = gitHubRepoUrl,
-            GeneratedAt = DateTimeOffset.UtcNow
+            GeneratedAt = DateTimeOffset.UtcNow,
+            Artifacts = artifacts
         };
-
-        return (zipBytes, result);
     }
 
-    public async Task<(byte[] Zip, BatchGenerationResult Result)> GenerateBatchAsync(BatchGenerationRequest request, CancellationToken ct = default)
+    public async Task<byte[]> GenerateZipAsync(GenerationRequest request, CancellationToken ct = default)
+    {
+        var vertical = await verticalService.GetAsync(request.VerticalSlug, ct);
+        if (vertical == null)
+            throw new KeyNotFoundException($"Vertical '{request.VerticalSlug}' not found or inactive");
+
+        var manifest = BuildManifest(request, vertical);
+        await EnsureServiceNameAvailableAsync(vertical.Id, manifest.ServiceName, ct);
+        return await printGenerator.GenerateAsync(manifest, vertical.CloudProvider, ct);
+    }
+
+    public async Task<BatchGenerationResult> GenerateBatchAsync(BatchGenerationRequest request, CancellationToken ct = default)
     {
         var vertical = await verticalService.GetAsync(request.VerticalSlug, ct);
         if (vertical == null)
             throw new KeyNotFoundException($"Vertical '{request.VerticalSlug}' not found or inactive");
 
         var results = new List<GenerationResult>();
-        var serviceZips = new List<(string Name, byte[] Data)>();
         var succeededCount = 0;
 
         foreach (var serviceSpec in request.Services)
@@ -132,6 +142,7 @@ public sealed class GenerationService : IGenerationService
                     Description = serviceSpec.Description,
                     Version = serviceSpec.Version,
                     Type = serviceSpec.Type,
+                    UiTargets = serviceSpec.UiTargets,
                     GenesisModules = serviceSpec.GenesisModules,
                     Database = serviceSpec.Database,
                     Queues = serviceSpec.Queues,
@@ -142,12 +153,12 @@ public sealed class GenerationService : IGenerationService
                 await EnsureServiceNameAvailableAsync(vertical.Id, manifest.ServiceName, ct);
                 var zipBytes = await printGenerator.GenerateAsync(manifest, vertical.CloudProvider, ct);
 
-                serviceZips.Add((serviceSpec.Name, zipBytes));
                 results.Add(new GenerationResult
                 {
                     ServiceName = serviceSpec.Name,
                     VerticalSlug = request.VerticalSlug,
-                    GeneratedAt = DateTimeOffset.UtcNow
+                    GeneratedAt = DateTimeOffset.UtcNow,
+                    Artifacts = BuildArtifacts(manifest, zipBytes, null)
                 });
 
                 succeededCount++;
@@ -157,8 +168,6 @@ public sealed class GenerationService : IGenerationService
                 continue;
             }
         }
-
-        var combinedZip = CreateCombinedZip(serviceZips);
 
         await WriteGenerationLogAsync(vertical.Id, new ForgeManifest
         {
@@ -170,7 +179,7 @@ public sealed class GenerationService : IGenerationService
             CloudProvider = vertical.CloudProvider
         }, succeededCount, false, ct);
 
-        var batchResult = new BatchGenerationResult
+        return new BatchGenerationResult
         {
             VerticalSlug = request.VerticalSlug,
             Results = results.AsReadOnly(),
@@ -179,8 +188,6 @@ public sealed class GenerationService : IGenerationService
             FailedCount = request.Services.Count - succeededCount,
             GeneratedAt = DateTimeOffset.UtcNow
         };
-
-        return (combinedZip, batchResult);
     }
 
     public async Task<ValidationPreviewResult> ValidateAsync(GenerationRequest request, CancellationToken ct = default)
@@ -211,7 +218,7 @@ public sealed class GenerationService : IGenerationService
                 @namespace = derivedNames.AngularShellComponentName;
                 projectName = derivedNames.AngularShellRoutePath;
             }
-            else if (manifest.ServiceType == ServiceType.AngularMfe)
+            else if (manifest.ServiceType == ServiceType.AngularMfe || manifest.ServiceType == ServiceType.AngularMfeRemote)
             {
                 var derivedNames = NamingConvention.DeriveAngularMfeNames(manifest.Product, manifest.ServiceName);
                 @namespace = derivedNames.AngularMfeComponentName;
@@ -305,9 +312,13 @@ public sealed class GenerationService : IGenerationService
         "restapi" => ServiceType.RestApi,
         "angularshell" => ServiceType.AngularShell,
         "angularmfe" => ServiceType.AngularMfe,
+        "angularmfremote" => ServiceType.AngularMfeRemote,
+        "angularmferemote" => ServiceType.AngularMfeRemote,
         "graphql" => ServiceType.GraphQL,
         "grpc" => ServiceType.Grpc,
-        _ => throw new InvalidOperationException($"Unsupported service type: '{type}'. Valid values: RestApi, AngularShell, AngularMfe, GraphQL, Grpc.")
+        "monolithic" => ServiceType.Monolithic,
+        "ionic" => ServiceType.Ionic,
+        _ => throw new InvalidOperationException($"Unsupported service type: '{type}'. Valid values: RestApi, AngularShell, AngularMfe, AngularMfeRemote, Monolithic, Ionic, GraphQL, Grpc.")
     };
 
     private static ForgeManifest BuildManifest(GenerationRequest request, VerticalResponse vertical)
@@ -317,7 +328,10 @@ public sealed class GenerationService : IGenerationService
             || serviceType == ServiceType.GraphQL
             || serviceType == ServiceType.Grpc;
         var isAngular = serviceType == ServiceType.AngularShell
-            || serviceType == ServiceType.AngularMfe;
+            || serviceType == ServiceType.AngularMfe
+            || serviceType == ServiceType.AngularMfeRemote
+            || serviceType == ServiceType.Monolithic
+            || serviceType == ServiceType.Ionic;
 
         var manifest = new ForgeManifest
         {
@@ -327,6 +341,7 @@ public sealed class GenerationService : IGenerationService
             ServiceType = serviceType,
             ComponentPrefix = vertical.ComponentPrefix,
             CloudProvider = vertical.CloudProvider,
+            UiTargets = request.UiTargets,
             GenesisModules = isBackend ? request.GenesisModules : [],
             CanvasModules = isAngular ? request.CanvasModules : [],
             Metadata = new ManifestMetadata
@@ -349,24 +364,6 @@ public sealed class GenerationService : IGenerationService
         }
 
         return manifest;
-    }
-
-    private static byte[] CreateCombinedZip(List<(string Name, byte[] Data)> serviceZips)
-    {
-        var memoryStream = new MemoryStream();
-        using (var archive = new ZipArchive(memoryStream, ZipArchiveMode.Create, leaveOpen: true))
-        {
-            foreach (var (name, data) in serviceZips)
-            {
-                var entry = archive.CreateEntry($"{name}.zip");
-                using (var entryStream = entry.Open())
-                {
-                    entryStream.Write(data, 0, data.Length);
-                }
-            }
-        }
-
-        return memoryStream.ToArray();
     }
 
     private async Task WriteGenerationLogAsync(Guid verticalId, ForgeManifest manifest, int serviceCount, bool gitHubReposCreated, CancellationToken ct = default)
@@ -413,5 +410,21 @@ public sealed class GenerationService : IGenerationService
         var exists = await db.GeneratedServices.AnyAsync(s => s.VerticalId == verticalId && s.ServiceName == serviceName, ct);
         if (exists)
             throw new InvalidOperationException($"Service name '{serviceName}' already exists for this vertical.");
+    }
+
+    private static IReadOnlyList<GenerationArtifactResponse> BuildArtifacts(ForgeManifest manifest, byte[] zipBytes, string? error)
+    {
+        using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        var targets = manifest.UiTargets.Count > 0 ? manifest.UiTargets : ["backend"];
+
+        return targets.Select(target => new GenerationArtifactResponse
+        {
+            Target = target,
+            ServiceType = manifest.ServiceType.ToString(),
+            Status = string.IsNullOrWhiteSpace(error) ? "Succeeded" : "Failed",
+            Path = $"{manifest.ServiceName}/{target}",
+            Files = archive.Entries.Select(entry => entry.FullName).ToList(),
+            Error = error
+        }).ToList();
     }
 }

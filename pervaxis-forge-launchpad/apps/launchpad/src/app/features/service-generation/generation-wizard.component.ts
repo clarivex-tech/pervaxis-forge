@@ -36,7 +36,7 @@ import {
 } from '@core/api/generation-api.service';
 import { IVerticalApiService, VERTICAL_API_SERVICE } from '@core/api/vertical-api.service';
 import { MODULES_API_SERVICE, IModulesApiService } from '@core/api/modules-api.service';
-import { CanvasModule, GenerationRequest, GenesisModule, ValidationPreviewResult } from '@core/models/generation.model';
+import { CanvasModule, GenerationArtifact, GenerationRequest, GenesisModule, ValidationPreviewResult } from '@core/models/generation.model';
 import { VerticalSummaryResponse } from '@core/models/vertical.model';
 
 type BuildTypeOption = {
@@ -494,6 +494,23 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 							</a>
 						</p>
 					}
+					@if (generationArtifacts().length > 0) {
+						<div class="artifacts-list">
+							<h4>Artifacts</h4>
+							@for (artifact of generationArtifacts(); track artifact.target) {
+								<div class="artifact-item" [class.artifact-failed]="artifact.status === 'Failed'">
+									<span class="artifact-target">{{ artifact.target }}</span>
+									<span class="artifact-type">{{ artifact.serviceType }}</span>
+									<span class="artifact-status" [class.status-success]="artifact.status === 'Succeeded'" [class.status-failed]="artifact.status === 'Failed'">
+										{{ artifact.status }}
+									</span>
+									@if (artifact.error) {
+										<small class="artifact-error">{{ artifact.error }}</small>
+									}
+								</div>
+							}
+						</div>
+					}
 				</section>
 			}
 
@@ -888,6 +905,73 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				background: #f0fdfa;
 			}
 
+			.artifacts-list {
+				margin-top: 0.75rem;
+				border-top: 1px solid #d0d7de;
+				padding-top: 0.75rem;
+			}
+
+			.artifacts-list h4 {
+				margin: 0 0 0.5rem;
+				font-size: 0.85rem;
+				text-transform: uppercase;
+				letter-spacing: 0.03em;
+				color: #374151;
+			}
+
+			.artifact-item {
+				display: flex;
+				align-items: center;
+				gap: 0.75rem;
+				padding: 0.5rem 0.75rem;
+				border: 1px solid #e5e7eb;
+				border-radius: 0.375rem;
+				margin-bottom: 0.4rem;
+				background: #fff;
+			}
+
+			.artifact-item.artifact-failed {
+				border-color: #fca5a5;
+				background: #fef2f2;
+			}
+
+			.artifact-target {
+				font-weight: 600;
+				font-size: 0.85rem;
+				min-width: 5rem;
+			}
+
+			.artifact-type {
+				font-size: 0.8rem;
+				color: #6b7280;
+			}
+
+			.artifact-status {
+				margin-left: auto;
+				font-size: 0.75rem;
+				font-weight: 600;
+				padding: 0.15rem 0.5rem;
+				border-radius: 999px;
+			}
+
+			.artifact-status.status-success {
+				background: #d1fae5;
+				color: #065f46;
+			}
+
+			.artifact-status.status-failed {
+				background: #fee2e2;
+				color: #991b1b;
+			}
+
+			.artifact-error {
+				display: block;
+				width: 100%;
+				color: #991b1b;
+				font-size: 0.75rem;
+				margin-top: 0.25rem;
+			}
+
 			.error {
 				color: #b3261e;
 				margin-top: 0.75rem;
@@ -1032,6 +1116,7 @@ export class GenerationWizardComponent {
 	readonly generationGitHubUrl = signal<string | null>(null);
 	readonly generatedZipFileName = signal<string | null>(null);
 	readonly generatedAt = signal<string | null>(null);
+	readonly generationArtifacts = signal<GenerationArtifact[]>([]);
 
 	constructor() {
 		const routeSlug = this.route.snapshot.paramMap.get('slug')?.trim() ?? '';
@@ -1067,6 +1152,7 @@ export class GenerationWizardComponent {
 			this.generationGitHubUrl.set(null);
 			this.generatedZipFileName.set(null);
 			this.generatedAt.set(null);
+			this.generationArtifacts.set([]);
 		});
 	}
 
@@ -1373,12 +1459,24 @@ export class GenerationWizardComponent {
 		this.generationError.set(null);
 
 		this.generationApiService.generateService(request).subscribe({
-			next: (response) => {
-				this.downloadZip(response.zipBlob, response.fileName);
-				this.generatedZipFileName.set(response.fileName);
-				this.generatedAt.set(response.generationTimestamp ?? new Date().toISOString());
-				this.generationGitHubUrl.set(response.gitHubRepoUrl);
-				this.isGenerating.set(false);
+			next: (metadata) => {
+				this.generatedAt.set(metadata.generatedAt);
+				this.generationGitHubUrl.set(metadata.gitHubRepoUrl);
+				this.generationArtifacts.set(metadata.artifacts);
+				this.generatedZipFileName.set(`${metadata.serviceName}-scaffold.zip`);
+
+				// Auto-download the ZIP
+				this.generationApiService.downloadServiceZip(request).subscribe({
+					next: (zipResult) => {
+						this.downloadZip(zipResult.zipBlob, zipResult.fileName);
+						this.isGenerating.set(false);
+					},
+					error: () => {
+						// Metadata succeeded but ZIP download failed — still show results
+						this.generationError.set('Generation succeeded but ZIP download failed. You can retry the download.');
+						this.isGenerating.set(false);
+					},
+				});
 			},
 			error: (error) => {
 				this.handleGenerationError(error);

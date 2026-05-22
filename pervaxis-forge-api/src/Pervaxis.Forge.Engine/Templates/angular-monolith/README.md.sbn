@@ -1,0 +1,3 @@
+# {{ model.manifest.service_name }}
+
+Angular monolith scaffold for {{ model.manifest.product }}.

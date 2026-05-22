@@ -88,6 +88,23 @@ export interface GenerationExecutionResult {
 	generationTimestamp: string | null;
 }
 
+export interface GenerationArtifact {
+	target: string;
+	serviceType: string;
+	status: 'Succeeded' | 'Failed';
+	path: string;
+	files: string[];
+	error: string | null;
+}
+
+export interface GenerationMetadataResult {
+	serviceName: string;
+	verticalSlug: string;
+	gitHubRepoUrl: string | null;
+	generatedAt: string;
+	artifacts: GenerationArtifact[];
+}
+
 export interface ServiceGenerationRequest {
 	name: string;
 	type: 'BFF' | 'MFE';

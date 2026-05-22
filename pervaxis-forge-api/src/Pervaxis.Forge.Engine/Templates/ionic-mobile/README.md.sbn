@@ -1,0 +1,3 @@
+# {{ model.manifest.service_name }}
+
+Ionic mobile scaffold for {{ model.manifest.product }}.
