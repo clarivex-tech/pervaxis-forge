@@ -114,6 +114,77 @@ public sealed class GenerationServiceTests
     }
 
     [Fact]
+    public async Task GenerateAsync_CreatesInitialCommitBeforeBranchProtection()
+    {
+        await using var fixture = await TestDb.CreateAsync();
+
+        fixture.Db.Verticals.Add(new Vertical
+        {
+            Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+            Slug = "clarivolt",
+            DisplayName = "Clarivolt",
+            Description = "Vertical for test coverage",
+            OwnerTeam = "Platform",
+            OwnerEmail = "team@clarivex.tech",
+            ComponentPrefix = "clv",
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            SourceControlConfig = new VerticalSourceControlConfig
+            {
+                Platform = "GitHub",
+                GitHubOrg = "clarivex-tech",
+                AccessToken = "ghp_test",
+                DefaultVisibility = "Private",
+                DefaultBranchProtection = true
+            }
+        });
+        await fixture.Db.SaveChangesAsync();
+
+        var verticalService = new Mock<IVerticalService>();
+        verticalService.Setup(v => v.GetAsync("clarivolt", It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new VerticalResponse
+            {
+                Id = Guid.Parse("11111111-1111-1111-1111-111111111111"),
+                Slug = "clarivolt",
+                DisplayName = "Clarivolt",
+                CloudProvider = "AWS",
+                SourceControl = "GitHub",
+                GitHubOrg = "clarivex-tech",
+                Environments = ["test"],
+                EnrolledAt = DateTimeOffset.UtcNow,
+                ComponentPrefix = "clv"
+            });
+
+        var gitHubService = new Mock<IGitHubService>(MockBehavior.Strict);
+        gitHubService.Setup(s => s.CreateRepositoryAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), true, It.IsAny<CancellationToken>()))
+            .ReturnsAsync("https://github.com/clarivex-tech/intake-service-shell-d");
+        gitHubService.Setup(s => s.PushInitialCommitAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        gitHubService.Setup(s => s.ConfigureBranchProtectionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var service = new GenerationService(
+            fixture.Db,
+            verticalService.Object,
+            new PrintGenerator(),
+            gitHubService.Object);
+
+        var request = CreateRequest("clarivolt", "intake-service-shell-d") with
+        {
+            Type = "AngularMfe",
+            CreateGitHubRepo = true,
+            CanvasModules = ["Settings", "Profile"]
+        };
+
+        var result = await service.GenerateAsync(request, "api-user");
+
+        result.GitHubRepoUrl.Should().Be("https://github.com/clarivex-tech/intake-service-shell-d");
+        gitHubService.Verify(s => s.PushInitialCommitAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        gitHubService.Verify(s => s.ConfigureBranchProtectionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
     public async Task ValidateAsync_TreatsMissingCollectionsAsEmpty()
     {
         await using var fixture = await TestDb.CreateAsync();
