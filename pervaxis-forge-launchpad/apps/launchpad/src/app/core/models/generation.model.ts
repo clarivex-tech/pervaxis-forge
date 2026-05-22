@@ -62,7 +62,8 @@ export interface GenerationRequest {
 	displayName: string;
 	description: string;
 	version: string;
-	type: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe';
+	type: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfeRemote' | 'Monolithic';
+	uiTargets?: ('web' | 'mobile')[];
 	genesisModules: string[];
 	canvasModules?: string[];
 	database: GenerationDatabaseConfig | null;
@@ -85,6 +86,23 @@ export interface GenerationExecutionResult {
 	generatedServiceName: string | null;
 	generatedVertical: string | null;
 	generationTimestamp: string | null;
+}
+
+export interface GenerationArtifact {
+	target: string;
+	serviceType: string;
+	status: 'Succeeded' | 'Failed';
+	path: string;
+	files: string[];
+	error: string | null;
+}
+
+export interface GenerationMetadataResult {
+	serviceName: string;
+	verticalSlug: string;
+	gitHubRepoUrl: string | null;
+	generatedAt: string;
+	artifacts: GenerationArtifact[];
 }
 
 export interface ServiceGenerationRequest {
@@ -139,4 +157,13 @@ export interface GenerationAuditEntry {
 
 export interface RecentGenerationsResponse {
 	generations: GenerationAuditEntry[];
+}
+
+export interface GeneratedServiceRecord {
+	id: string;
+	serviceName: string;
+	serviceType: string;
+	cloudProvider: string;
+	generatedAt: string;
+	generatedBy: string;
 }

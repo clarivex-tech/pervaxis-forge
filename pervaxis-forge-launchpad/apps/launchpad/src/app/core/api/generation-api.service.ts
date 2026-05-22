@@ -24,18 +24,23 @@ import { environment } from '@env/environment';
 import {
 	BatchGenerationRequest,
 	GenerationExecutionResult,
+	GenerationMetadataResult,
 	GenerationRequest,
 	GenerationAuditEntry,
+	GeneratedServiceRecord,
 	RecentGenerationsResponse,
 	ValidationPreviewResult,
 } from '../models/generation.model';
 
 export interface IGenerationApiService {
 	validateManifest(request: GenerationRequest): Observable<ValidationPreviewResult>;
-	generateService(request: GenerationRequest): Observable<GenerationExecutionResult>;
+	generateService(request: GenerationRequest): Observable<GenerationMetadataResult>;
+	downloadServiceZip(request: GenerationRequest): Observable<GenerationExecutionResult>;
 	generateBatch(request: BatchGenerationRequest): Observable<GenerationAuditEntry>;
 	getRecentGenerations(verticalSlug: string, limit?: number): Observable<RecentGenerationsResponse>;
 	getGenerationAudit(verticalSlug: string, generationId: string): Observable<GenerationAuditEntry>;
+	listGeneratedServices(verticalSlug: string): Observable<GeneratedServiceRecord[]>;
+	regenerateService(verticalSlug: string, serviceId: string): Observable<GenerationExecutionResult>;
 }
 
 export const GENERATION_API_SERVICE = new InjectionToken<IGenerationApiService>(
@@ -53,9 +58,13 @@ export class GenerationApiService implements IGenerationApiService {
 		return this.http.post<ValidationPreviewResult>(`${this.baseUrl}/validate`, request);
 	}
 
-	generateService(request: GenerationRequest): Observable<GenerationExecutionResult> {
+	generateService(request: GenerationRequest): Observable<GenerationMetadataResult> {
+		return this.http.post<GenerationMetadataResult>(`${this.baseUrl}`, request);
+	}
+
+	downloadServiceZip(request: GenerationRequest): Observable<GenerationExecutionResult> {
 		return this.http
-			.post(`${this.baseUrl}`, request, {
+			.post(`${this.baseUrl}/zip`, request, {
 				observe: 'response',
 				responseType: 'blob',
 			})
@@ -63,16 +72,15 @@ export class GenerationApiService implements IGenerationApiService {
 				map((response) => {
 					const contentDisposition = response.headers.get('content-disposition') ?? '';
 					const fileNameMatch = /filename="?([^\";]+)"?/i.exec(contentDisposition);
-					const headerServiceName = response.headers.get('X-Generation-Service-Name');
-					const fileName = fileNameMatch?.[1] ?? `${headerServiceName ?? request.name}-scaffold.zip`;
+					const fileName = fileNameMatch?.[1] ?? `${request.name}-scaffold.zip`;
 
 					return {
 						zipBlob: response.body ?? new Blob(),
 						fileName,
-						gitHubRepoUrl: response.headers.get('X-Generation-GitHub-Url'),
-						generatedServiceName: headerServiceName,
-						generatedVertical: response.headers.get('X-Generation-Vertical'),
-						generationTimestamp: response.headers.get('X-Generation-Timestamp'),
+						gitHubRepoUrl: null,
+						generatedServiceName: request.name,
+						generatedVertical: request.verticalSlug,
+						generationTimestamp: new Date().toISOString(),
 					};
 				})
 			);
@@ -90,5 +98,36 @@ export class GenerationApiService implements IGenerationApiService {
 
 	getGenerationAudit(verticalSlug: string, generationId: string): Observable<GenerationAuditEntry> {
 		return this.http.get<GenerationAuditEntry>(`${this.baseUrl}/audit/${verticalSlug}/${generationId}`);
+	}
+
+	listGeneratedServices(verticalSlug: string): Observable<GeneratedServiceRecord[]> {
+		return this.http.get<GeneratedServiceRecord[]>(
+			`${environment.apiBaseUrl}/verticals/${verticalSlug}/services`
+		);
+	}
+
+	regenerateService(verticalSlug: string, serviceId: string): Observable<GenerationExecutionResult> {
+		return this.http
+			.post(
+				`${environment.apiBaseUrl}/verticals/${verticalSlug}/services/${serviceId}/regenerate`,
+				{},
+				{ observe: 'response', responseType: 'blob' }
+			)
+			.pipe(
+				map((response) => {
+					const contentDisposition = response.headers.get('content-disposition') ?? '';
+					const fileNameMatch = /filename="?([^\";]+)"?/i.exec(contentDisposition);
+					const fileName = fileNameMatch?.[1] ?? `service-${serviceId}-regenerated.zip`;
+
+					return {
+						zipBlob: response.body ?? new Blob(),
+						fileName,
+						gitHubRepoUrl: null,
+						generatedServiceName: response.headers.get('X-Generation-Service-Name'),
+						generatedVertical: response.headers.get('X-Generation-Vertical'),
+						generationTimestamp: response.headers.get('X-Generation-Timestamp'),
+					};
+				})
+			);
 	}
 }

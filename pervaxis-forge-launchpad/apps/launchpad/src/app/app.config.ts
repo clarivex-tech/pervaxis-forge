@@ -24,6 +24,7 @@ import { importProvidersFrom } from '@angular/core';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { environment } from '@env/environment';
+import { apiKeyInterceptor } from '@core/http/interceptors/api-key.interceptor';
 import { errorInterceptor } from '@core/http/interceptors/error.interceptor';
 import { loadingInterceptor } from '@core/http/interceptors/loading.interceptor';
 import { requestLoggingInterceptor } from '@core/http/interceptors/request-logging.interceptor';
@@ -39,7 +40,7 @@ export const appConfig: ApplicationConfig = {
 	providers: [
 		provideRouter(appRoutes),
 		provideHttpClient(
-			withInterceptors([requestLoggingInterceptor, loadingInterceptor, errorInterceptor])
+			withInterceptors([apiKeyInterceptor, requestLoggingInterceptor, loadingInterceptor, errorInterceptor])
 		),
 		provideAnimations(),
 		importProvidersFrom(MatSnackBarModule),

@@ -36,18 +36,33 @@ import {
 } from '@core/api/generation-api.service';
 import { IVerticalApiService, VERTICAL_API_SERVICE } from '@core/api/vertical-api.service';
 import { MODULES_API_SERVICE, IModulesApiService } from '@core/api/modules-api.service';
-import { CanvasModule, GenerationRequest, GenesisModule, ValidationPreviewResult } from '@core/models/generation.model';
+import { CanvasModule, GenerationArtifact, GenerationRequest, GenesisModule, ValidationPreviewResult } from '@core/models/generation.model';
 import { VerticalSummaryResponse } from '@core/models/vertical.model';
 
 type BuildTypeOption = {
 	label: string;
-	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe';
+	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfeRemote' | 'Monolithic';
 	category: 'Backend Service' | 'Frontend App';
 	live: boolean;
 	note: string;
 };
 
 type ServiceCategory = BuildTypeOption['category'];
+
+type AngularArchitectureType = 'Monolithic' | 'MfeShell' | 'MfeRemote';
+type AngularUiTarget = 'WebOnly' | 'MobileOnly' | 'WebMobile';
+
+type AngularArchitectureOption = {
+	label: string;
+	value: AngularArchitectureType;
+	description: string;
+};
+
+type AngularUiOption = {
+	label: string;
+	value: AngularUiTarget;
+	description: string;
+};
 
 const SHELL_PRESELECTED_CANVAS_MODULES = ['Shell', 'Layout', 'Navigation', 'Auth', 'Workspace'] as const;
 const SHARED_CANVAS_MODULES = ['Settings', 'Profile', 'Notifications', 'Search'] as const;
@@ -163,6 +178,48 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 							</div>
 						</div>
 					</div>
+				</section>
+
+				<section class="full-width step-section" *ngIf="isCanvasTypeSelected()">
+					<h3>Architecture Type</h3>
+					<p class="step-description">Select app architecture:</p>
+					<div class="architecture-options">
+						@for (option of angularArchitectureOptions; track option.value) {
+							<button
+								type="button"
+								class="architecture-option"
+								[class.selected]="selectedArchitecture() === option.value"
+								(click)="selectArchitecture(option.value)"
+							>
+								<span class="option-label">{{ option.label }}</span>
+								<small>{{ option.description }}</small>
+							</button>
+						}
+					</div>
+				</section>
+
+				<section class="full-width step-section" *ngIf="isCanvasTypeSelected()">
+					<h3>User Interfaces</h3>
+					<p class="step-description">Which user interfaces do you need?</p>
+					<div class="architecture-options">
+						@for (option of angularUiOptions; track option.value) {
+							<button
+								type="button"
+								class="architecture-option"
+								[class.selected]="selectedUiTarget() === option.value"
+								(click)="selectUiTarget(option.value)"
+							>
+								<span class="option-label">{{ option.label }}</span>
+								<small>{{ option.description }}</small>
+							</button>
+						}
+					</div>
+				</section>
+
+				<section class="full-width angular-preview" *ngIf="isCanvasTypeSelected() && selectedArchitecture() && selectedUiTarget()">
+					<p class="angular-preview-text">
+						Generating: <strong>[{{ selectedArchitectureLabel() }}]</strong> + <strong>[{{ selectedUiTargetLabel() }}]</strong>
+					</p>
 				</section>
 
 				<section class="full-width step-section">
@@ -340,6 +397,14 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 							<span class="review-label">Build Type</span>
 							<span class="review-value">{{ selectedBuildTypeLabel() }}</span>
 						</div>
+						<div class="review-item" *ngIf="isCanvasTypeSelected()">
+							<span class="review-label">Architecture</span>
+							<span class="review-value">{{ selectedArchitectureLabel() || 'Not selected' }}</span>
+						</div>
+						<div class="review-item" *ngIf="isCanvasTypeSelected()">
+							<span class="review-label">UI Target</span>
+							<span class="review-value">{{ selectedUiTargetLabel() || 'Not selected' }}</span>
+						</div>
 						<div class="review-item">
 							<span class="review-label">Service Name</span>
 							<span class="review-value">{{ form.controls.name.value || 'N/A' }}</span>
@@ -428,6 +493,23 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 								{{ generationGitHubUrl() }}
 							</a>
 						</p>
+					}
+					@if (generationArtifacts().length > 0) {
+						<div class="artifacts-list">
+							<h4>Artifacts</h4>
+							@for (artifact of generationArtifacts(); track artifact.target) {
+								<div class="artifact-item" [class.artifact-failed]="artifact.status === 'Failed'">
+									<span class="artifact-target">{{ artifact.target }}</span>
+									<span class="artifact-type">{{ artifact.serviceType }}</span>
+									<span class="artifact-status" [class.status-success]="artifact.status === 'Succeeded'" [class.status-failed]="artifact.status === 'Failed'">
+										{{ artifact.status }}
+									</span>
+									@if (artifact.error) {
+										<small class="artifact-error">{{ artifact.error }}</small>
+									}
+								</div>
+							}
+						</div>
 					}
 				</section>
 			}
@@ -616,6 +698,68 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				letter-spacing: 0.05em;
 			}
 
+			.step-description {
+				font-size: 0.85rem;
+				color: #4b5563;
+				margin: 0.25rem 0 0.75rem;
+			}
+
+			.architecture-options {
+				display: grid;
+				grid-template-columns: repeat(3, minmax(0, 1fr));
+				gap: 0.75rem;
+			}
+
+			.architecture-option {
+				display: flex;
+				flex-direction: column;
+				gap: 0.25rem;
+				padding: 0.85rem 1rem;
+				border: 1px solid #d1d5db;
+				border-radius: 0.5rem;
+				background: #fff;
+				cursor: pointer;
+				text-align: left;
+				transition: all 0.15s ease;
+			}
+
+			.architecture-option:hover {
+				border-color: #6b7280;
+				background: #f9fafb;
+			}
+
+			.architecture-option.selected {
+				border-color: #2563eb;
+				background: #dbeafe;
+			}
+
+			.architecture-option .option-label {
+				font-weight: 600;
+				font-size: 0.875rem;
+			}
+
+			.architecture-option small {
+				font-size: 0.75rem;
+				color: #6b7280;
+			}
+
+			.architecture-option.selected small {
+				color: #1e40af;
+			}
+
+			.angular-preview {
+				border: 1px solid #d0d7de;
+				border-radius: 0.5rem;
+				padding: 0.75rem 1rem;
+				background: #f0fdf4;
+			}
+
+			.angular-preview-text {
+				margin: 0;
+				font-size: 0.875rem;
+				color: #166534;
+			}
+
 			.module-grid {
 				display: grid;
 				grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -761,6 +905,73 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				background: #f0fdfa;
 			}
 
+			.artifacts-list {
+				margin-top: 0.75rem;
+				border-top: 1px solid #d0d7de;
+				padding-top: 0.75rem;
+			}
+
+			.artifacts-list h4 {
+				margin: 0 0 0.5rem;
+				font-size: 0.85rem;
+				text-transform: uppercase;
+				letter-spacing: 0.03em;
+				color: #374151;
+			}
+
+			.artifact-item {
+				display: flex;
+				align-items: center;
+				gap: 0.75rem;
+				padding: 0.5rem 0.75rem;
+				border: 1px solid #e5e7eb;
+				border-radius: 0.375rem;
+				margin-bottom: 0.4rem;
+				background: #fff;
+			}
+
+			.artifact-item.artifact-failed {
+				border-color: #fca5a5;
+				background: #fef2f2;
+			}
+
+			.artifact-target {
+				font-weight: 600;
+				font-size: 0.85rem;
+				min-width: 5rem;
+			}
+
+			.artifact-type {
+				font-size: 0.8rem;
+				color: #6b7280;
+			}
+
+			.artifact-status {
+				margin-left: auto;
+				font-size: 0.75rem;
+				font-weight: 600;
+				padding: 0.15rem 0.5rem;
+				border-radius: 999px;
+			}
+
+			.artifact-status.status-success {
+				background: #d1fae5;
+				color: #065f46;
+			}
+
+			.artifact-status.status-failed {
+				background: #fee2e2;
+				color: #991b1b;
+			}
+
+			.artifact-error {
+				display: block;
+				width: 100%;
+				color: #991b1b;
+				font-size: 0.75rem;
+				margin-top: 0.25rem;
+			}
+
 			.error {
 				color: #b3261e;
 				margin-top: 0.75rem;
@@ -785,6 +996,10 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				}
 
 				.queue-builder-grid {
+					grid-template-columns: 1fr;
+				}
+
+				.architecture-options {
 					grid-template-columns: 1fr;
 				}
 			}
@@ -822,18 +1037,11 @@ export class GenerationWizardComponent {
 			note: 'Live now',
 		},
 		{
-			label: 'Shell App',
+			label: 'Angular App',
 			value: 'AngularShell',
 			category: 'Frontend App',
 			live: true,
-			note: 'Live now',
-		},
-		{
-			label: 'Micro Frontend (MFE)',
-			value: 'AngularMfe',
-			category: 'Frontend App',
-			live: true,
-			note: 'Live now',
+			note: 'Configure architecture below',
 		},
 	];
 
@@ -843,6 +1051,21 @@ export class GenerationWizardComponent {
 	readonly frontendTypeOptions = this.buildTypeOptions.filter(
 		(option) => option.category === 'Frontend App'
 	);
+
+	readonly angularArchitectureOptions: AngularArchitectureOption[] = [
+		{ label: 'Monolithic', value: 'Monolithic', description: 'Single standalone application' },
+		{ label: 'MFE Shell', value: 'MfeShell', description: 'Host container that dynamically loads feature modules' },
+		{ label: 'MFE Remote', value: 'MfeRemote', description: 'Feature module loaded by a shell host' },
+	];
+
+	readonly angularUiOptions: AngularUiOption[] = [
+		{ label: 'Web only', value: 'WebOnly', description: 'Angular 21.2.9' },
+		{ label: 'Mobile only', value: 'MobileOnly', description: 'Ionic/Capacitor' },
+		{ label: 'Web + Mobile', value: 'WebMobile', description: 'Both Angular and Ionic with shared domain logic' },
+	];
+
+	readonly selectedArchitecture = signal<AngularArchitectureType | null>(null);
+	readonly selectedUiTarget = signal<AngularUiTarget | null>(null);
 
 	readonly form = this.fb.nonNullable.group({
 		verticalSlug: ['', Validators.required],
@@ -893,6 +1116,7 @@ export class GenerationWizardComponent {
 	readonly generationGitHubUrl = signal<string | null>(null);
 	readonly generatedZipFileName = signal<string | null>(null);
 	readonly generatedAt = signal<string | null>(null);
+	readonly generationArtifacts = signal<GenerationArtifact[]>([]);
 
 	constructor() {
 		const routeSlug = this.route.snapshot.paramMap.get('slug')?.trim() ?? '';
@@ -928,6 +1152,7 @@ export class GenerationWizardComponent {
 			this.generationGitHubUrl.set(null);
 			this.generatedZipFileName.set(null);
 			this.generatedAt.set(null);
+			this.generationArtifacts.set([]);
 		});
 	}
 
@@ -950,6 +1175,8 @@ export class GenerationWizardComponent {
 			this.syncCanvasModulesToType(type);
 		} else {
 			this.clearCanvasModules();
+			this.selectedArchitecture.set(null);
+			this.selectedUiTarget.set(null);
 		}
 	}
 
@@ -1007,10 +1234,46 @@ export class GenerationWizardComponent {
 
 	isCanvasTypeSelected(): boolean {
 		return this.form.controls.type.value === 'AngularShell' ||
-			this.form.controls.type.value === 'AngularMfe';
+			this.form.controls.type.value === 'AngularMfeRemote' ||
+			this.form.controls.type.value === 'Monolithic';
+	}
+
+	selectArchitecture(value: AngularArchitectureType): void {
+		this.selectedArchitecture.set(value);
+		this.syncFrontendTypeFromArchitecture(value);
+	}
+
+	selectUiTarget(value: AngularUiTarget): void {
+		this.selectedUiTarget.set(value);
+	}
+
+	selectedArchitectureLabel(): string {
+		return this.angularArchitectureOptions.find((o) => o.value === this.selectedArchitecture())?.label ?? '';
+	}
+
+	selectedUiTargetLabel(): string {
+		return this.angularUiOptions.find((o) => o.value === this.selectedUiTarget())?.label ?? '';
+	}
+
+	private syncFrontendTypeFromArchitecture(arch: AngularArchitectureType): void {
+		if (arch === 'MfeShell') {
+			this.form.controls.type.setValue('AngularShell');
+			this.syncCanvasModulesToType('AngularShell');
+		} else if (arch === 'MfeRemote') {
+			this.form.controls.type.setValue('AngularMfeRemote');
+			this.syncCanvasModulesToType('AngularMfeRemote');
+		} else {
+			this.form.controls.type.setValue('Monolithic');
+			this.syncCanvasModulesToType('Monolithic');
+		}
 	}
 
 	canGenerate(): boolean {
+		if (this.isCanvasTypeSelected()) {
+			if (!this.selectedArchitecture() || !this.selectedUiTarget()) {
+				return false;
+			}
+		}
 		return this.validationPreview()?.isValid === true;
 	}
 
@@ -1028,8 +1291,12 @@ export class GenerationWizardComponent {
 			return 'Kebab-case only, and the name must end with -shell.';
 		}
 
-		if (this.form.controls.type.value === 'AngularMfe') {
+		if (this.form.controls.type.value === 'AngularMfeRemote') {
 			return 'Kebab-case only, and the name must not end with -shell or -service.';
+		}
+
+		if (this.form.controls.type.value === 'Monolithic') {
+			return 'Kebab-case only, e.g. customer-portal';
 		}
 
 		return 'Kebab-case only, e.g. intake-service';
@@ -1040,8 +1307,12 @@ export class GenerationWizardComponent {
 			return 'Step 4: Canvas Modules (Shell)';
 		}
 
-		if (this.form.controls.type.value === 'AngularMfe') {
+		if (this.form.controls.type.value === 'AngularMfeRemote') {
 			return 'Step 4: Canvas Modules (Micro Frontend)';
+		}
+
+		if (this.form.controls.type.value === 'Monolithic') {
+			return 'Step 4: Canvas Modules (Monolithic App)';
 		}
 
 		return 'Step 4: Genesis Modules (Backend only)';
@@ -1188,12 +1459,24 @@ export class GenerationWizardComponent {
 		this.generationError.set(null);
 
 		this.generationApiService.generateService(request).subscribe({
-			next: (response) => {
-				this.downloadZip(response.zipBlob, response.fileName);
-				this.generatedZipFileName.set(response.fileName);
-				this.generatedAt.set(response.generationTimestamp ?? new Date().toISOString());
-				this.generationGitHubUrl.set(response.gitHubRepoUrl);
-				this.isGenerating.set(false);
+			next: (metadata) => {
+				this.generatedAt.set(metadata.generatedAt);
+				this.generationGitHubUrl.set(metadata.gitHubRepoUrl);
+				this.generationArtifacts.set(metadata.artifacts);
+				this.generatedZipFileName.set(`${metadata.serviceName}-scaffold.zip`);
+
+				// Auto-download the ZIP
+				this.generationApiService.downloadServiceZip(request).subscribe({
+					next: (zipResult) => {
+						this.downloadZip(zipResult.zipBlob, zipResult.fileName);
+						this.isGenerating.set(false);
+					},
+					error: () => {
+						// Metadata succeeded but ZIP download failed — still show results
+						this.generationError.set('Generation succeeded but ZIP download failed. You can retry the download.');
+						this.isGenerating.set(false);
+					},
+				});
 			},
 			error: (error) => {
 				this.handleGenerationError(error);
@@ -1270,7 +1553,7 @@ export class GenerationWizardComponent {
 			return null;
 		}
 
-		if (value.type === 'AngularMfe' && (serviceName.endsWith('-shell') || serviceName.endsWith('-service'))) {
+		if (value.type === 'AngularMfeRemote' && (serviceName.endsWith('-shell') || serviceName.endsWith('-service'))) {
 			this.validationError.set('Micro Frontend (MFE) names must not end with -shell or -service.');
 			return null;
 		}
@@ -1292,6 +1575,8 @@ export class GenerationWizardComponent {
 			mysql: 'MySQL',
 		};
 
+		const uiTargets = this.buildUiTargets();
+
 		return {
 			verticalSlug,
 			name: serviceName,
@@ -1299,6 +1584,7 @@ export class GenerationWizardComponent {
 			description: value.description.trim(),
 			version: value.version.trim(),
 			type: value.type,
+			...(uiTargets.length > 0 ? { uiTargets } : {}),
 			genesisModules,
 			canvasModules,
 			database: hasDatabase
@@ -1309,6 +1595,24 @@ export class GenerationWizardComponent {
 				: null,
 			createGitHubRepo: value.createGitHubRepo,
 		};
+	}
+
+	private buildUiTargets(): ('web' | 'mobile')[] {
+		if (this.form.controls.type.value !== 'Monolithic') {
+			return [];
+		}
+
+		const uiTarget = this.selectedUiTarget();
+		switch (uiTarget) {
+			case 'WebOnly':
+				return ['web'];
+			case 'MobileOnly':
+				return ['mobile'];
+			case 'WebMobile':
+				return ['web', 'mobile'];
+			default:
+				return [];
+		}
 	}
 
 	private loadVerticals(preferredSlug: string): void {
@@ -1427,11 +1731,11 @@ export class GenerationWizardComponent {
 	}
 
 	private allowedCanvasModuleNamesForCurrentType(): string[] {
-		if (this.form.controls.type.value === 'AngularShell') {
+		if (this.form.controls.type.value === 'AngularShell' || this.form.controls.type.value === 'Monolithic') {
 			return [...SHELL_PRESELECTED_CANVAS_MODULES, ...SHARED_CANVAS_MODULES];
 		}
 
-		if (this.form.controls.type.value === 'AngularMfe') {
+		if (this.form.controls.type.value === 'AngularMfeRemote') {
 			return [...SHARED_CANVAS_MODULES, ...MFE_ONLY_CANVAS_MODULES];
 		}
 
@@ -1439,7 +1743,7 @@ export class GenerationWizardComponent {
 	}
 
 	private syncCanvasModulesToType(type: BuildTypeOption['value']): void {
-		if (type !== 'AngularShell' && type !== 'AngularMfe') {
+		if (type !== 'AngularShell' && type !== 'AngularMfeRemote' && type !== 'Monolithic') {
 			this.clearCanvasModules();
 			return;
 		}

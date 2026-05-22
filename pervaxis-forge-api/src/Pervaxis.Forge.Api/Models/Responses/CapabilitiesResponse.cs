@@ -18,13 +18,15 @@
 
 namespace Pervaxis.Forge.Api.Models.Responses;
 
-public record GenerationResult
+public sealed record CapabilitiesResponse
 {
-    public required string ServiceName { get; init; }
-    public required string VerticalSlug { get; init; }
-    public string? GitHubRepoUrl { get; init; }
-    public bool InfrastructureDeployed { get; init; }
-    public IReadOnlyList<string> DeployedResources { get; init; } = [];
-    public IReadOnlyList<GenerationArtifactResponse> Artifacts { get; init; } = [];
-    public required DateTimeOffset GeneratedAt { get; init; }
+    public required IReadOnlyList<UiTargetCapability> UiTargets { get; init; }
+    public required IReadOnlyList<string> BackendTargets { get; init; }
+}
+
+public sealed record UiTargetCapability
+{
+    public required string Key { get; init; }
+    public required string Label { get; init; }
+    public required IReadOnlyList<string> ServiceTypes { get; init; }
 }

@@ -25,6 +25,7 @@ public record ServiceGenerationSpec
     public required string Description { get; init; }
     public required string Version { get; init; }
     public required string Type { get; init; }
+    public List<string> UiTargets { get; init; } = [];
     public List<string> GenesisModules { get; init; } = [];
     public GenerationDatabaseConfig? Database { get; init; }
     public List<GenerationQueueConfig> Queues { get; init; } = [];

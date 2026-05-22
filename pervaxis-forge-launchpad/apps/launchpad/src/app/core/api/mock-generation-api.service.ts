@@ -21,9 +21,12 @@ import { Observable, of, delay } from 'rxjs';
 
 import {
 	BatchGenerationRequest,
+	GenerationArtifact,
 	GenerationExecutionResult,
+	GenerationMetadataResult,
 	GenerationRequest,
 	GenerationAuditEntry,
+	GeneratedServiceRecord,
 	RecentGenerationsResponse,
 	ValidationPreviewResult,
 } from '../models/generation.model';
@@ -263,8 +266,53 @@ export class MockGenerationApiService implements IGenerationApiService {
 		}).pipe(delay(300));
 	}
 
-	generateService(request: GenerationRequest): Observable<GenerationExecutionResult> {
-		const content = `Generated scaffold for ${request.name} in ${request.verticalSlug}`;
+	generateService(request: GenerationRequest): Observable<GenerationMetadataResult> {
+		const artifacts: GenerationArtifact[] = [
+			{
+				target: 'backend',
+				serviceType: request.type,
+				status: 'Succeeded',
+				path: `${request.name}/backend`,
+				files: [`src/${request.name}.csproj`, `src/Program.cs`],
+				error: null,
+			},
+		];
+
+		if (request.uiTargets?.includes('web')) {
+			artifacts.push({
+				target: 'web',
+				serviceType: 'Monolithic',
+				status: 'Succeeded',
+				path: `${request.name}/web`,
+				files: ['src/app/app.component.ts', 'src/main.ts'],
+				error: null,
+			});
+		}
+
+		if (request.uiTargets?.includes('mobile')) {
+			artifacts.push({
+				target: 'mobile',
+				serviceType: 'Ionic',
+				status: 'Succeeded',
+				path: `${request.name}/mobile`,
+				files: ['src/app/app.component.ts', 'src/main.ts'],
+				error: null,
+			});
+		}
+
+		return of({
+			serviceName: request.name,
+			verticalSlug: request.verticalSlug,
+			gitHubRepoUrl: request.createGitHubRepo
+				? `https://github.com/clarivex-tech/${request.name}`
+				: null,
+			generatedAt: new Date().toISOString(),
+			artifacts,
+		}).pipe(delay(600));
+	}
+
+	downloadServiceZip(request: GenerationRequest): Observable<GenerationExecutionResult> {
+		const content = `Generated scaffold ZIP for ${request.name} in ${request.verticalSlug}`;
 		const zipBlob = new Blob([content], { type: 'application/zip' });
 
 		return of({
@@ -320,5 +368,53 @@ export class MockGenerationApiService implements IGenerationApiService {
 		const audit = generations.find((g) => g.id === generationId);
 
 		return of(audit ?? generations[0]).pipe(delay(300));
+	}
+
+	listGeneratedServices(verticalSlug: string): Observable<GeneratedServiceRecord[]> {
+		const generations = this.auditLog.get(verticalSlug) ?? [];
+		const services: GeneratedServiceRecord[] = [];
+
+		for (const gen of generations) {
+			for (const result of gen.results) {
+				if (result.status === 'success') {
+					services.push({
+						id: `svc-${verticalSlug}-${result.name}`,
+						serviceName: result.name,
+						serviceType: 'RestApi',
+						cloudProvider: 'AWS',
+						generatedAt: gen.timestamp,
+						generatedBy: gen.operator,
+					});
+				}
+			}
+		}
+
+		return of(services).pipe(delay(400));
+	}
+
+	regenerateService(verticalSlug: string, serviceId: string): Observable<GenerationExecutionResult> {
+		const generations = this.auditLog.get(verticalSlug) ?? [];
+		let serviceName = 'unknown-service';
+
+		for (const gen of generations) {
+			for (const result of gen.results) {
+				if (`svc-${verticalSlug}-${result.name}` === serviceId) {
+					serviceName = result.name;
+					break;
+				}
+			}
+		}
+
+		const content = `Regenerated scaffold for ${serviceName} in ${verticalSlug}`;
+		const zipBlob = new Blob([content], { type: 'application/zip' });
+
+		return of({
+			zipBlob,
+			fileName: `${serviceName}-regenerated.zip`,
+			gitHubRepoUrl: null,
+			generatedServiceName: serviceName,
+			generatedVertical: verticalSlug,
+			generationTimestamp: new Date().toISOString(),
+		}).pipe(delay(600));
 	}
 }

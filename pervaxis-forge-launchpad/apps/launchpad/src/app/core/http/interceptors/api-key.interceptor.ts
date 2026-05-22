@@ -1,4 +1,4 @@
-/*
+/**
  ************************************************************************
  * Copyright (C) 2026 Clarivex Technologies Private Limited
  * All Rights Reserved.
@@ -16,15 +16,19 @@
  ************************************************************************
  */
 
-namespace Pervaxis.Forge.Api.Models.Responses;
+import { HttpInterceptorFn } from '@angular/common/http';
 
-public record GenerationResult
-{
-    public required string ServiceName { get; init; }
-    public required string VerticalSlug { get; init; }
-    public string? GitHubRepoUrl { get; init; }
-    public bool InfrastructureDeployed { get; init; }
-    public IReadOnlyList<string> DeployedResources { get; init; } = [];
-    public IReadOnlyList<GenerationArtifactResponse> Artifacts { get; init; } = [];
-    public required DateTimeOffset GeneratedAt { get; init; }
-}
+import { environment } from '@env/environment';
+
+export const apiKeyInterceptor: HttpInterceptorFn = (request, next) => {
+	if (environment.apiKey && request.url.startsWith(environment.apiBaseUrl)) {
+		const cloned = request.clone({
+			setHeaders: {
+				'X-Api-Key': environment.apiKey,
+			},
+		});
+		return next(cloned);
+	}
+
+	return next(request);
+};

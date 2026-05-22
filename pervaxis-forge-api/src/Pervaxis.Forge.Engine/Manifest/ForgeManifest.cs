@@ -18,6 +18,8 @@ public sealed record ForgeManifest
 
     public IReadOnlyList<string> CanvasModules { get; init; } = [];
 
+    public IReadOnlyList<string> UiTargets { get; init; } = [];
+
     public DatabaseConfig? Database { get; init; }
 
     public QueueConfig? Queue { get; init; }

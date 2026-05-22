@@ -1,0 +1,8 @@
+{
+  "product": "{{ model.manifest.product }}",
+  "verticalSlug": "{{ model.manifest.vertical_slug }}",
+  "serviceName": "{{ model.manifest.service_name }}",
+  "serviceType": "Monolithic",
+  "componentPrefix": "{{ model.manifest.component_prefix }}",
+  "uiTargets": [{{ for target in model.manifest.ui_targets }}"{{ target }}"{{ if !for.last }}, {{ end }}{{ end }}]
+}

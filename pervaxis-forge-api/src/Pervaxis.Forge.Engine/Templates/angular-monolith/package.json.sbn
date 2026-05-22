@@ -1,0 +1,4 @@
+{
+  "name": "{{ model.manifest.service_name }}",
+  "private": true
+}
