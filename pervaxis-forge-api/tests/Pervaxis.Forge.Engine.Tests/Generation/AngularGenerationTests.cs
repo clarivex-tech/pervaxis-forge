@@ -80,14 +80,14 @@ public class AngularGenerationTests
 
         using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
         var entries = archive.Entries.Select(e => e.FullName).ToList();
-        entries.Should().Contain("libs/intake-profile/src/lib/module.ts");
+        entries.Should().Contain("libs/intake-profile/src/lib/routes.ts");
         entries.Should().Contain("libs/intake-profile/src/lib/component.ts");
         entries.Should().Contain("libs/intake-profile/src/index.ts");
 
-        using var moduleStream = new StreamReader(archive.GetEntry("libs/intake-profile/src/lib/module.ts")!.Open());
-        var moduleContent = await moduleStream.ReadToEndAsync();
-        moduleContent.Should().Contain("CanvasDashboardModule");
-        moduleContent.Should().Contain("@pervaxis/canvas-dashboard");
+        using var componentStream = new StreamReader(archive.GetEntry("libs/intake-profile/src/lib/component.ts")!.Open());
+        var componentContent = await componentStream.ReadToEndAsync();
+        componentContent.Should().Contain("CanvasDashboardModule");
+        componentContent.Should().Contain("@pervaxis/canvas-dashboard");
     }
 
     [Fact]
