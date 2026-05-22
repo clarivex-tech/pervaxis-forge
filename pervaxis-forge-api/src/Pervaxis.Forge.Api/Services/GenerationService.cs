@@ -79,19 +79,19 @@ public sealed class GenerationService : IGenerationService
                 isPrivate: true,
                 ct);
 
-            await gitHubService.ConfigureBranchProtectionAsync(
-                plainToken,
-                verticalEntity.SourceControlConfig.GitHubOrg!,
-                request.Name,
-                "main",
-                ct);
-
             await gitHubService.PushInitialCommitAsync(
                 gitHubRepoUrl,
                 plainToken,
                 zipBytes,
                 "Pervaxis Forge",
                 "forge@clarivex.tech",
+                ct);
+
+            await gitHubService.ConfigureBranchProtectionAsync(
+                plainToken,
+                verticalEntity.SourceControlConfig.GitHubOrg!,
+                request.Name,
+                "main",
                 ct);
 
             gitHubReposCreated = true;
