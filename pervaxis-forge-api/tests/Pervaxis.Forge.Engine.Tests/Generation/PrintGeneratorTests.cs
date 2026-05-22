@@ -83,6 +83,36 @@ public class PrintGeneratorTests
     }
 
     [Fact]
+    public async Task GenerateAsync_IntakeServiceWithoutDatabase_DoesNotEmitDbContextWiring()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "clarivolt",
+            VerticalSlug = "clarivolt",
+            ServiceName = "intake-service",
+            ServiceType = ServiceType.RestApi,
+            ComponentPrefix = "clv",
+            CloudProvider = "AWS",
+            GenesisModules = ["FileStorage", "Messaging"],
+        };
+
+        var zipBytes = await generator.GenerateAsync(manifest, "AWS");
+
+        using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        var entries = archive.Entries.Select(e => e.FullName).ToList();
+
+        const string src = "src/Pervaxis.Clarivolt.Intake";
+
+        entries.Should().Contain($"{src}/Program.cs");
+        entries.Should().NotContain(e => e.Contains("/Data/", StringComparison.OrdinalIgnoreCase));
+
+        using var programStream = new StreamReader(archive.GetEntry($"{src}/Program.cs")!.Open());
+        var programContent = await programStream.ReadToEndAsync();
+        programContent.Should().NotContain("AddDbContextPool<");
+        programContent.Should().NotContain("GetConnectionString(\"Pervaxis.Clarivolt.IntakeDb\")");
+    }
+
+    [Fact]
     public async Task GenerateAsync_IntakeServiceZip_ExtractsAllFilesToDisk()
     {
         var manifest = new ForgeManifest
