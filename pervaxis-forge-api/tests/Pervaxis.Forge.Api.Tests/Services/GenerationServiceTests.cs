@@ -113,6 +113,26 @@ public sealed class GenerationServiceTests
         zip.Should().NotBeEmpty();
     }
 
+    [Fact]
+    public async Task ValidateAsync_TreatsMissingCollectionsAsEmpty()
+    {
+        await using var fixture = await TestDb.CreateAsync();
+
+        var service = CreateService(fixture.Db);
+        var request = CreateRequest("clarivolt", "claims-web") with
+        {
+            Type = "Monolithic",
+            UiTargets = null!,
+            GenesisModules = null!,
+            CanvasModules = null!
+        };
+
+        var result = await service.ValidateAsync(request);
+
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(error => error.Contains("Monolithic requests must include uiTargets"));
+    }
+
     private static GenerationService CreateService(ForgeDbContext db)
     {
         var verticalService = new Mock<IVerticalService>();

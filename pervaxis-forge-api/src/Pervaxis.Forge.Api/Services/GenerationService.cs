@@ -324,6 +324,9 @@ public sealed class GenerationService : IGenerationService
     private static ForgeManifest BuildManifest(GenerationRequest request, VerticalResponse vertical)
     {
         var serviceType = ParseServiceType(request.Type);
+        var uiTargets = request.UiTargets ?? [];
+        var genesisModules = request.GenesisModules ?? [];
+        var canvasModules = request.CanvasModules ?? [];
         var isBackend = serviceType == ServiceType.RestApi
             || serviceType == ServiceType.GraphQL
             || serviceType == ServiceType.Grpc;
@@ -341,9 +344,9 @@ public sealed class GenerationService : IGenerationService
             ServiceType = serviceType,
             ComponentPrefix = vertical.ComponentPrefix,
             CloudProvider = vertical.CloudProvider,
-            UiTargets = request.UiTargets,
-            GenesisModules = isBackend ? request.GenesisModules : [],
-            CanvasModules = isAngular ? request.CanvasModules : [],
+            UiTargets = uiTargets,
+            GenesisModules = isBackend ? genesisModules : [],
+            CanvasModules = isAngular ? canvasModules : [],
             Metadata = new ManifestMetadata
             {
                 Version = request.Version,

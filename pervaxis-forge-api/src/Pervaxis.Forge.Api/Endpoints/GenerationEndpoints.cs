@@ -189,6 +189,14 @@ internal static class GenerationEndpoints
         {
             return Results.NotFound(new { errors = new[] { ex.Message } });
         }
+        catch (ArgumentException ex)
+        {
+            return Results.UnprocessableEntity(new { errors = new[] { ex.Message } });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Results.UnprocessableEntity(new { errors = new[] { ex.Message } });
+        }
     }
 
     private static async Task<IResult> GetAuditLog(string slug, IGenerationService generationService, CancellationToken ct = default)
