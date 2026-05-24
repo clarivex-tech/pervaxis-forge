@@ -1,0 +1,25 @@
+import { Component } from '@angular/core';
+
+/**
+ * VERTICAL: This is your starting point.
+ * Replace this placeholder with your domain-specific dashboard.
+ */
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-dashboard',
+  standalone: true,
+  template: `
+    <div class="dashboard">
+      <h1>Welcome to {{ model.manifest.service_name }}</h1>
+      <p>This scaffold is ready for your business logic. Start building here.</p>
+    </div>
+  `,
+  styles: [`
+    .dashboard {
+      padding: var(--spacing-xl);
+    }
+    h1 {
+      margin-bottom: var(--spacing-md);
+    }
+  `],
+})
+export class DashboardComponent {}

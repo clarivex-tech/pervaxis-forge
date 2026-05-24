@@ -1,5 +1,5 @@
 import { ApplicationConfig, ErrorHandler } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { provideRouter, withViewTransitions } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
@@ -10,15 +10,30 @@ import { appRoutes } from './app.routes';
 import { GlobalErrorHandler } from './core/handlers/global-error-handler';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
+import { loadingInterceptor } from './core/interceptors/loading.interceptor';
 
+/**
+ * Application-wide configuration.
+ *
+ * HORIZONTAL (do not modify):
+ *   - Error handling, HTTP interceptors, animations, routing strategy
+ *
+ * VERTICAL (extend as needed):
+ *   - Add feature-specific providers below the horizontal providers
+ */
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideRouter(appRoutes),
-    provideHttpClient(withInterceptors([authInterceptor, errorInterceptor])),
+    // --- Horizontal providers (managed by platform team) ---
+    provideRouter(appRoutes, withViewTransitions()),
+    provideHttpClient(
+      withInterceptors([authInterceptor, loadingInterceptor, errorInterceptor])
+    ),
     provideAnimationsAsync(),
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
     provideIonicAngular(),
 {{ end }}
     { provide: ErrorHandler, useClass: GlobalErrorHandler },
+
+    // --- Vertical providers (add your feature providers below) ---
   ],
 };
