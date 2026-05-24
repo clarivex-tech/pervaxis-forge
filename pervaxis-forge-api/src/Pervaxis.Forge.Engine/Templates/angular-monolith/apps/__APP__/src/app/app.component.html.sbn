@@ -1,0 +1,9 @@
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+<ion-app>
+  <ion-router-outlet></ion-router-outlet>
+</ion-app>
+{{ else }}
+<main class="app-container">
+  <router-outlet></router-outlet>
+</main>
+{{ end }}

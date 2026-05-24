@@ -1,0 +1,14 @@
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.{{ model.manifest.vertical_slug }}.{{ model.manifest.service_name | string.replace "-" "" }}',
+  appName: '{{ model.manifest.service_name }}',
+  webDir: 'dist/{{ model.manifest.service_name }}',
+  server: {
+    androidScheme: 'https',
+  },
+};
+
+export default config;
+{{ end }}

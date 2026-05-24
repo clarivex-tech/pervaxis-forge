@@ -32,6 +32,13 @@ public sealed class FileGenerator
 
             var template = await templateLoader.LoadAsync(resourceName, cancellationToken);
             var rendered = templateEngine.Render(template, model);
+
+            // Skip templates that render to empty/whitespace content.
+            // This enables conditional file emission via Scriban {{ if }} guards —
+            // e.g., platform.service.ts only emitted for web+mobile targets.
+            if (string.IsNullOrWhiteSpace(rendered))
+                continue;
+
             var relativeSuffix = TemplateLoader.GetRelativeSuffix(resourceName, templateRoot);
             // Render the path itself so filename tokens like {{ model.names.solution_file }} are resolved.
             var renderedPath = templateEngine.Render(relativeSuffix, model);
