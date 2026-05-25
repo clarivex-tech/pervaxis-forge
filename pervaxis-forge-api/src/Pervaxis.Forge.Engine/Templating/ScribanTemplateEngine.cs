@@ -51,6 +51,7 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                     ["name"] = m.Name,
                     ["package_name"] = m.PackageName,
                     ["import_name"] = m.ImportName,
+                    ["version"] = m.Version,
                 }).ToList(),
                 ["names"] = new Scriban.Runtime.ScriptObject
                 {

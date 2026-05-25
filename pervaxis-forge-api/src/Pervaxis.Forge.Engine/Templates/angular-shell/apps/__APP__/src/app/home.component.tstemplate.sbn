@@ -16,11 +16,16 @@
  ************************************************************************
  */
 
-import { bootstrapApplication } from '@angular/platform-browser';
-import { appConfig } from './app/app.config';
-import { AppComponent } from './app/app.component';
+import { Component } from '@angular/core';
 
-bootstrapApplication(AppComponent, appConfig).catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : 'Unknown bootstrap error';
-  console.error('[Bootstrap] Application failed to start:', message);
-});
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-home',
+  standalone: true,
+  template: `
+    <main>
+      <h1>Welcome to {{ model.manifest.service_name }}</h1>
+      <p>This is the home page placeholder. Replace this with your domain content.</p>
+    </main>
+  `
+})
+export class HomeComponent {}

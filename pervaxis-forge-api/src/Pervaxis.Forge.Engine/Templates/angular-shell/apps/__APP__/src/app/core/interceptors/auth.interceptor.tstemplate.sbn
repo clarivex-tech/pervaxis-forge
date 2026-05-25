@@ -16,11 +16,20 @@
  ************************************************************************
  */
 
-import { bootstrapApplication } from '@angular/platform-browser';
-import { appConfig } from './app/app.config';
-import { AppComponent } from './app/app.component';
+import { HttpInterceptorFn } from '@angular/common/http';
 
-bootstrapApplication(AppComponent, appConfig).catch((err: unknown) => {
-  const message = err instanceof Error ? err.message : 'Unknown bootstrap error';
-  console.error('[Bootstrap] Application failed to start:', message);
-});
+// TODO: Inject auth service to retrieve the actual token
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+  const token = ''; // Replace with auth service token retrieval
+
+  if (token) {
+    const cloned = req.clone({
+      setHeaders: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+    return next(cloned);
+  }
+
+  return next(req);
+};
