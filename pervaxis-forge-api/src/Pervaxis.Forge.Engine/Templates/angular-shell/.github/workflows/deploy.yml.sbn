@@ -1,0 +1,48 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  build-test-deploy:
+    name: Build · Test · Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache node_modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
+          restore-keys: ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npx nx lint {{ model.manifest.service_name }}
+
+      - name: Test
+        run: npx nx test {{ model.manifest.service_name }} --coverage
+
+      - name: Build
+        run: npx nx build {{ model.manifest.service_name }} --configuration production
+
+      - name: Deploy
+        if: github.ref_name == 'main'
+        run: |
+          echo "TODO: Add deployment steps for {{ model.manifest.service_name }}"
+          # Placeholder: deploy dist/{{ model.manifest.service_name }} to target environment

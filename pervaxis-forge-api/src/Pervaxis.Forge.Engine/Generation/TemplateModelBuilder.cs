@@ -28,6 +28,7 @@ public static class TemplateModelBuilder
                 Name = moduleName,
                 PackageName = CanvasModules.GetPackageName(moduleName),
                 ImportName = CanvasModules.GetImportName(moduleName),
+                Version = CanvasModules.GetVersion(moduleName),
             })
             .ToList();
 
