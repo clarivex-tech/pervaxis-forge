@@ -1,0 +1,22 @@
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+import { Injectable } from '@angular/core';
+import { Capacitor } from '@capacitor/core';
+
+@Injectable({ providedIn: 'root' })
+export class PlatformService {
+  /**
+   * Returns true when the app is running inside a Capacitor native shell
+   * (Android/iOS), false when running in a standard browser.
+   */
+  get isNative(): boolean {
+    return Capacitor.isNativePlatform();
+  }
+
+  /**
+   * Returns the current platform: 'ios', 'android', or 'web'.
+   */
+  get platform(): string {
+    return Capacitor.getPlatform();
+  }
+}
+{{ end }}

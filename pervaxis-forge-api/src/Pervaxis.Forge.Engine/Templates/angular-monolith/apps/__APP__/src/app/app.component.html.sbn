@@ -1,0 +1,15 @@
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+<ion-app>
+  <ion-router-outlet></ion-router-outlet>
+</ion-app>
+{{ else }}
+<!-- Loading indicator (horizontal — do not remove) -->
+@if (loading.isLoading()) {
+  <div class="global-loading-bar" aria-label="Loading"></div>
+}
+
+<!-- VERTICAL: Add your app shell layout (header, sidebar, footer) around the router-outlet -->
+<main class="app-container">
+  <router-outlet></router-outlet>
+</main>
+{{ end }}
