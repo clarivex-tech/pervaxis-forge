@@ -1,13 +1,14 @@
 import { ErrorHandler, Injectable, inject } from '@angular/core';
 import { LoggerService } from '../services/logger.service';
+import { ErrorReporter } from '../services/error-reporter';
 
 @Injectable()
 export class GlobalErrorHandler implements ErrorHandler {
   private readonly logger = inject(LoggerService);
+  private readonly reporter = inject(ErrorReporter);
 
   handleError(error: unknown): void {
     this.logger.error('Unhandled application error', error);
-
-    // TODO: Add remote error reporting (e.g., Sentry, CloudWatch RUM)
+    this.reporter.report(error);
   }
 }

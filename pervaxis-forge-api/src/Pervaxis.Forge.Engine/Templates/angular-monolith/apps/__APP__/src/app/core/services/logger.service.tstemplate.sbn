@@ -8,6 +8,19 @@ export enum LogLevel {
   Error = 3,
 }
 
+/**
+ * HORIZONTAL: Structured logging service with environment-aware level suppression.
+ *
+ * - Development: all levels output to console
+ * - Production: only warn and error output
+ *
+ * VERTICAL: To add remote log shipping (CloudWatch, Datadog, etc.),
+ * extend this service or provide a custom LogTransport:
+ *
+ *   export abstract class LogTransport {
+ *     abstract ship(level: LogLevel, message: string, args: unknown[]): void;
+ *   }
+ */
 @Injectable({ providedIn: 'root' })
 export class LoggerService {
   private readonly minLevel: LogLevel = environment.production
@@ -36,7 +49,5 @@ export class LoggerService {
     if (this.minLevel <= LogLevel.Error) {
       console.error(`[ERROR] ${message}`, ...args);
     }
-
-    // TODO: Add remote log shipping (e.g., CloudWatch, Datadog)
   }
 }

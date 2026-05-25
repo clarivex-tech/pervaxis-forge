@@ -1,0 +1,30 @@
+import { Injectable } from '@angular/core';
+import { environment } from '../../../environments/environment';
+
+/**
+ * HORIZONTAL: Error reporting abstraction.
+ *
+ * Default implementation is a no-op in production (errors are logged via LoggerService).
+ *
+ * VERTICAL: To integrate with a real error reporting service (Sentry, CloudWatch RUM,
+ * Datadog), extend this class or provide a custom implementation:
+ *
+ *   { provide: ErrorReporter, useClass: SentryErrorReporter }
+ */
+@Injectable({ providedIn: 'root' })
+export class ErrorReporter {
+  /**
+   * Report an error to the remote error tracking service.
+   * Override this method with your integration.
+   */
+  report(error: unknown): void {
+    if (!environment.production) {
+      // In development, errors are already visible in the console via LoggerService.
+      return;
+    }
+
+    // Production: no-op by default.
+    // VERTICAL: Replace with your error reporting integration, e.g.:
+    // Sentry.captureException(error);
+  }
+}

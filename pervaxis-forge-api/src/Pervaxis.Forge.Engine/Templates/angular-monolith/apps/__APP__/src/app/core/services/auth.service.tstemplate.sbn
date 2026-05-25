@@ -1,0 +1,87 @@
+import { Injectable, signal, computed } from '@angular/core';
+import { Router } from '@angular/router';
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+}
+
+/**
+ * HORIZONTAL: Core authentication service.
+ * Manages token storage, refresh, and authentication state.
+ *
+ * VERTICAL: Integrate with your identity provider (Cognito, Auth0, Azure AD)
+ * by implementing the login() and refreshToken() methods.
+ */
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private readonly tokenState = signal<AuthTokens | null>(this.loadTokens());
+
+  /** Whether the user is currently authenticated with a valid token. */
+  readonly isAuthenticated = computed(() => {
+    const tokens = this.tokenState();
+    if (!tokens) return false;
+    return Date.now() < tokens.expiresAt;
+  });
+
+  /** The current access token, or null if not authenticated. */
+  readonly accessToken = computed(() => this.tokenState()?.accessToken ?? null);
+
+  constructor(private readonly router: Router) {}
+
+  /**
+   * Store tokens after successful authentication.
+   * Call this from your login component after receiving tokens from your IdP.
+   */
+  setTokens(tokens: AuthTokens): void {
+    this.tokenState.set(tokens);
+    sessionStorage.setItem('auth_tokens', JSON.stringify(tokens));
+  }
+
+  /**
+   * Clear tokens and redirect to login.
+   */
+  logout(): void {
+    this.tokenState.set(null);
+    sessionStorage.removeItem('auth_tokens');
+    this.router.navigate(['/login']);
+  }
+
+  /**
+   * Attempt to refresh the access token using the refresh token.
+   * VERTICAL: Implement this with your identity provider's token refresh endpoint.
+   */
+  async refreshToken(): Promise<boolean> {
+    const tokens = this.tokenState();
+    if (!tokens?.refreshToken) {
+      this.logout();
+      return false;
+    }
+
+    // TODO: VERTICAL — Replace with actual token refresh call to your IdP
+    // Example:
+    // const response = await fetch('/auth/refresh', {
+    //   method: 'POST',
+    //   body: JSON.stringify({ refreshToken: tokens.refreshToken }),
+    // });
+    // const newTokens = await response.json();
+    // this.setTokens(newTokens);
+    // return true;
+
+    this.logout();
+    return false;
+  }
+
+  private loadTokens(): AuthTokens | null {
+    try {
+      const stored = sessionStorage.getItem('auth_tokens');
+      if (!stored) return null;
+      const tokens: AuthTokens = JSON.parse(stored);
+      if (Date.now() >= tokens.expiresAt) return null;
+      return tokens;
+    } catch {
+      return null;
+    }
+  }
+}

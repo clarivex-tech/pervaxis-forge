@@ -1,0 +1,12 @@
+import { Injectable } from '@angular/core';
+import { environment } from '../../../environments/environment';
+
+@Injectable({ providedIn: 'root' })
+export class ErrorReporter {
+  report(error: unknown): void {
+    if (!environment.production) {
+      return;
+    }
+    // VERTICAL: Replace with your error reporting integration (Sentry, CloudWatch RUM)
+  }
+}
