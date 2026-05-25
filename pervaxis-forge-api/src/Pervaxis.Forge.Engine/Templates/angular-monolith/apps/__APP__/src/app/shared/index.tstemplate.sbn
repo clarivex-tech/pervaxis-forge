@@ -1,0 +1,15 @@
+/**
+ * Shared module barrel export.
+ *
+ * Place reusable components, directives, and pipes in this folder.
+ * Export them from this file so features can import from '@shared'.
+ *
+ * Convention:
+ *   - shared/components/   — Reusable UI components
+ *   - shared/directives/   — Custom directives
+ *   - shared/pipes/        — Custom pipes
+ *   - shared/models/       — Shared interfaces and types
+ *
+ * Example:
+ *   export { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
+ */

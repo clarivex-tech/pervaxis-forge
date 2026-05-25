@@ -5,20 +5,22 @@
     <title>{{ model.manifest.service_name }}</title>
     <base href="/" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <!--
+      Content Security Policy:
+      - 'unsafe-inline' for style-src is required because Angular uses inline styles
+        for component encapsulation (ViewEncapsulation.Emulated). This is a known
+        tradeoff documented by the Angular team.
+      - If your vertical does NOT use component styles, you can remove 'unsafe-inline'.
+      - For stricter CSP, consider using ViewEncapsulation.None with external stylesheets.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self';"
     />
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
     <meta name="color-scheme" content="light dark" />
-    <meta
-      name="apple-mobile-web-app-capable"
-      content="yes"
-    />
-    <meta
-      name="apple-mobile-web-app-status-bar-style"
-      content="default"
-    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
 {{ end }}
     <link rel="icon" type="image/x-icon" href="favicon.ico" />
   </head>

@@ -36,7 +36,5 @@ export class LoggerService {
     if (this.minLevel <= LogLevel.Error) {
       console.error(`[ERROR] ${message}`, ...args);
     }
-
-    // TODO: Add remote log shipping (e.g., CloudWatch, Datadog)
   }
 }

@@ -5,15 +5,21 @@ import { authGuard } from './core/guards/auth.guard';
  * Application routes.
  *
  * HORIZONTAL (do not modify):
- *   - Auth guard enforcement pattern
- *   - Wildcard catch-all redirect
+ *   - Login route, auth guard enforcement, wildcard catch-all
  *
  * VERTICAL (extend here):
- *   - Add your feature routes below the dashboard route
+ *   - Add your feature routes in the marked section below
  *   - Use lazy loading: loadComponent / loadChildren
  *   - Apply authGuard to protected routes
  */
 export const appRoutes: Routes = [
+  {
+    path: 'login',
+    loadComponent: () =>
+      import('./features/login/login.component').then(
+        (m) => m.LoginComponent
+      ),
+  },
   {
     path: '',
     redirectTo: 'dashboard',
@@ -29,16 +35,16 @@ export const appRoutes: Routes = [
   },
 
   // --- VERTICAL: Add your feature routes here ---
-  // Example:
-  // {
-  //   path: 'assets',
-  //   canActivate: [authGuard],
-  //   loadComponent: () =>
-  //     import('./features/assets/asset-list.component').then(m => m.AssetListComponent),
-  // },
 
   {
+    path: 'not-found',
+    loadComponent: () =>
+      import('./features/not-found/not-found.component').then(
+        (m) => m.NotFoundComponent
+      ),
+  },
+  {
     path: '**',
-    redirectTo: '',
+    redirectTo: 'not-found',
   },
 ];
