@@ -43,5 +43,15 @@
       "standalone": true
     }
   },
-  "plugins": []
+  "plugins": [
+    {
+      "plugin": "@nx/angular/plugin",
+      "options": {
+        "buildTargetName": "build",
+        "serveTargetName": "serve",
+        "testTargetName": "test",
+        "lintTargetName": "lint"
+      }
+    }
+  ]
 }
