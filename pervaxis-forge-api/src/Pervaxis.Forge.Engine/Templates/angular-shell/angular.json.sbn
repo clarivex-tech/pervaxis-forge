@@ -24,7 +24,7 @@
             "polyfills": ["zone.js"],
             "tsConfig": "apps/{{ model.manifest.service_name }}/tsconfig.app.json",
             "assets": [
-              "apps/{{ model.manifest.service_name }}/src/favicon.ico",
+              "apps/{{ model.manifest.service_name }}/src/favicon.svg",
               "apps/{{ model.manifest.service_name }}/src/assets"
             ],
             "styles": ["apps/{{ model.manifest.service_name }}/src/styles.scss"],
