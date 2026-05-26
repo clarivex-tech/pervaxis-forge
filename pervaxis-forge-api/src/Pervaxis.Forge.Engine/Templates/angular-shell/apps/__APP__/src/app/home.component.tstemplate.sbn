@@ -16,11 +16,12 @@
  ************************************************************************
  */
 
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
   selector: '{{ model.manifest.component_prefix }}-home',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
     <main>
       <h1>Welcome to {{ model.manifest.service_name }}</h1>

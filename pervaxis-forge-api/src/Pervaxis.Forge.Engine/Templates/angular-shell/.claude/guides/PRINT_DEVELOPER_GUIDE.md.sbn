@@ -30,7 +30,7 @@ nx g @nx/angular:library \
   --name=canvas-domain-<your-domain> \
   --directory=libs/domain/<your-domain> \
   --standalone \
-  --unitTestRunner=vitest-analog
+  --unitTestRunner=jest
 ```
 
 Then add the path alias to `tsconfig.base.json`:
@@ -279,10 +279,10 @@ it('sends GET /api/customers', () => {
 
 ### Store
 
-Mock the API service with `vi.fn()`:
+Mock the API service with `jest.fn()`:
 
 ```typescript
-const mockApi = { list: vi.fn().mockReturnValue(of(MOCK_PAGE)) };
+const mockApi = { list: jest.fn().mockReturnValue(of(MOCK_PAGE)) };
 TestBed.configureTestingModule({
   providers: [CustomerStore, { provide: CustomerApiService, useValue: mockApi }],
 });

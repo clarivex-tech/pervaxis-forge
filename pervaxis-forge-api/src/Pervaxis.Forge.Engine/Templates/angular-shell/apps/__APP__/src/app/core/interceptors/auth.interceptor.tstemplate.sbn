@@ -17,16 +17,28 @@
  */
 
 import { HttpInterceptorFn } from '@angular/common/http';
+import { inject } from '@angular/core';
 
-// TODO: Inject auth service to retrieve the actual token
+/**
+ * Auth token interceptor.
+ *
+ * Token management is handled by CanvasAuthModule (registered in app.config.ts).
+ * This interceptor retrieves the current access token from the Canvas auth service
+ * and attaches it to outgoing requests.
+ *
+ * If your vertical uses a different auth provider, replace the token retrieval
+ * logic below with your own AuthService injection.
+ */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const token = ''; // Replace with auth service token retrieval
+  // CanvasAuthModule exposes the token via sessionStorage after login.
+  // This is the integration point — Canvas handles the full OAuth flow.
+  const token = sessionStorage.getItem('canvas_access_token');
 
   if (token) {
     const cloned = req.clone({
       setHeaders: {
-        Authorization: `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+      },
     });
     return next(cloned);
   }
