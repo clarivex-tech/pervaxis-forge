@@ -38,8 +38,13 @@
               "budgets": [
                 {
                   "type": "initial",
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+                  "maximumWarning": "750kB",
+                  "maximumError": "1.5MB"
+{{ else }}
                   "maximumWarning": "500kB",
                   "maximumError": "1MB"
+{{ end }}
                 },
                 {
                   "type": "anyComponentStyle",

@@ -19,12 +19,12 @@ export class ErrorReporter {
    */
   report(error: unknown): void {
     if (!environment.production) {
-      // In development, errors are already visible in the console via LoggerService.
       return;
     }
 
-    // Production: no-op by default.
+    // Production: no-op by default — error is available for your integration.
     // VERTICAL: Replace with your error reporting integration, e.g.:
     // Sentry.captureException(error);
+    void error;
   }
 }
