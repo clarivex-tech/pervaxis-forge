@@ -1,0 +1,33 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+
+jobs:
+  build-test:
+    name: Build · Test · Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Test with coverage
+        run: nx test {{ model.manifest.service_name }} --coverage --coverageReporters=lcov
+
+      - name: Build
+        run: nx build {{ model.manifest.service_name }} --configuration=production
+
+      - name: Deploy
+        run: |
+          echo "Deployment target must be configured by the vertical team."
+          echo "See README.md for deployment instructions."

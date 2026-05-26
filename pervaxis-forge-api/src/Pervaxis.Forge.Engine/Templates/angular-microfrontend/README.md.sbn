@@ -4,7 +4,7 @@ Angular MFE for the **{{ model.manifest.vertical_slug }}** vertical — generate
 
 ## Stack
 
-- Angular 18 (NgModule-based MFE)
+- Angular 21 (Standalone MFE)
 - Pervaxis Canvas modules: {{ for m in model.selected_canvas_modules }}{{ m.name }}{{ if !for.last }}, {{ end }}{{ end }}
 
 ## Getting Started
