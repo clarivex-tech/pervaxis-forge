@@ -1,7 +1,7 @@
 export default {
   displayName: '{{ model.manifest.service_name }}',
   preset: '../../jest.preset.js',
-  setupFilesAfterFramework: ['jest-preset-angular/setup-jest'],
+  setupFilesAfterEnv: ['jest-preset-angular/setup-jest'],
   transform: {
     '^.+\\.(ts|mjs|js|html)$': [
       'jest-preset-angular',
