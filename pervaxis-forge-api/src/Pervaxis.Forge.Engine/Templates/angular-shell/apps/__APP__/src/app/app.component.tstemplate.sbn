@@ -16,13 +16,14 @@
  ************************************************************************
  */
 
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
 @Component({
   selector: '{{ model.manifest.component_prefix }}-root',
   standalone: true,
   imports: [RouterOutlet],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `<router-outlet />`
 })
 export class AppComponent {}
