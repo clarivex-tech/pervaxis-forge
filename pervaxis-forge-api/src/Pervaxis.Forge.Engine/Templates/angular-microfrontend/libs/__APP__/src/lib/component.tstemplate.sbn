@@ -36,5 +36,8 @@ import { {{ model.names.angular_mfe_component_name }}ApiService } from './api.se
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class {{ model.names.angular_mfe_component_name }} {
-  private readonly apiService = inject({{ model.names.angular_mfe_component_name }}ApiService);
+  // VERTICAL: Use apiService to load domain data. Example:
+  // readonly items = signal<DomainItem[]>([]);
+  // constructor() { this.apiService.getAll().subscribe(data => this.items.set(data)); }
+  protected readonly apiService = inject({{ model.names.angular_mfe_component_name }}ApiService);
 }

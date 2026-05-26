@@ -1,0 +1,9 @@
+sonar.projectKey={{ model.manifest.vertical_slug }}_{{ model.manifest.service_name }}
+sonar.organization={{ model.manifest.vertical_slug }}
+sonar.host.url=https://sonarcloud.io
+sonar.sources=libs
+sonar.tests=libs
+sonar.test.inclusions=**/*.spec.ts
+sonar.typescript.lcov.reportPaths=coverage/**/lcov.info
+sonar.exclusions=node_modules/**,dist/**,.nx/**
+sonar.coverage.exclusions=**/*.spec.ts,**/test-setup.ts
