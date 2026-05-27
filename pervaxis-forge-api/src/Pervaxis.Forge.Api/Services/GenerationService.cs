@@ -375,6 +375,7 @@ public sealed class GenerationService : IGenerationService
 
         var log = new GenerationLog
         {
+            Id = Guid.NewGuid(),
             VerticalId = verticalId,
             Manifest = jsonDoc,
             ServiceCount = serviceCount,
@@ -395,6 +396,7 @@ public sealed class GenerationService : IGenerationService
 
         db.GeneratedServices.Add(new GeneratedService
         {
+            Id = Guid.NewGuid(),
             VerticalId = verticalId,
             ServiceName = manifest.ServiceName,
             ServiceType = manifest.ServiceType.ToString(),
