@@ -45,7 +45,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 var isRunningInLambda = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME"));
-var dataProtectionEnabled = !isRunningInLambda && builder.Configuration.GetValue<bool>("Forge:DataProtection:Enabled");
+var isLocalMode = builder.Configuration.GetValue<bool>("Forge:LocalMode");
+var dataProtectionEnabled = !isRunningInLambda && !isLocalMode && builder.Configuration.GetValue<bool>("Forge:DataProtection:Enabled");
 var dataProtectionPrefix = builder.Configuration["Forge:DataProtection:Prefix"] ?? "/Pervaxis/Forge/DataProtection";
 var dataProtectionKmsKeyId = builder.Configuration["Forge:DataProtection:KmsKeyId"];
 
@@ -73,14 +74,22 @@ builder.Services.AddResponseCompression(options =>
     options.EnableForHttps = true;
 });
 
-builder.Services.AddDbContextPool<ForgeDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("ForgeDb"),
-        npgsql =>
-        {
-            npgsql.EnableRetryOnFailure(3);
-            npgsql.CommandTimeout(10);
-        }));
+if (isLocalMode)
+{
+    builder.Services.AddDbContext<ForgeDbContext>(options =>
+        options.UseInMemoryDatabase("forge-local"));
+}
+else
+{
+    builder.Services.AddDbContextPool<ForgeDbContext>(options =>
+        options.UseNpgsql(
+            builder.Configuration.GetConnectionString("ForgeDb"),
+            npgsql =>
+            {
+                npgsql.EnableRetryOnFailure(3);
+                npgsql.CommandTimeout(10);
+            }));
+}
 
 builder.Services.AddScoped<IVerticalService, VerticalService>();
 
@@ -270,7 +279,7 @@ app.UseAuthorization();
 
 // Keep Lambda startup lean: schema migrations must run out of band because
 // they can exceed the cold-start budget and cause INIT timeouts.
-if (!isRunningInLambda && app.Environment.IsDevelopment())
+if (!isLocalMode && !isRunningInLambda && app.Environment.IsDevelopment())
 {
     await ApplyPendingMigrationsAsync(app.Services);
 }

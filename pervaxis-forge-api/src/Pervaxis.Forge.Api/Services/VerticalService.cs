@@ -42,6 +42,7 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
 
         var vertical = new Vertical
         {
+            Id = Guid.NewGuid(),
             Slug = request.Slug,
             DisplayName = request.DisplayName,
             Description = request.Description,
@@ -50,6 +51,7 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
             ComponentPrefix = NamingConvention.GetComponentPrefix(request.ComponentPrefix),
             CloudConfig = new VerticalCloudConfig
             {
+                Id = Guid.NewGuid(),
                 Provider = request.CloudProvider.Provider,
                 AwsAccountId = request.CloudProvider.AwsAccountId,
                 IamRoleArn = request.CloudProvider.IamRoleArn,
@@ -57,6 +59,7 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
             },
             SourceControlConfig = new VerticalSourceControlConfig
             {
+                Id = Guid.NewGuid(),
                 Platform = request.SourceControl.Platform,
                 GitHubOrg = request.SourceControl.GitHubOrg,
                 AccessToken = request.SourceControl.AccessToken,
@@ -65,6 +68,7 @@ public sealed class VerticalService(ForgeDbContext db) : IVerticalService
             },
             TechDefaults = new EntityTechDefaults
             {
+                Id = Guid.NewGuid(),
                 Environments = [.. request.TechDefaults.Environments],
                 DefaultEnvironment = request.TechDefaults.DefaultEnvironment,
                 GenerateTerraform = request.TechDefaults.GenerateTerraform,
