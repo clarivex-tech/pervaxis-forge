@@ -1,4 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { Router } from '@angular/router';
 
 export interface AuthTokens {
@@ -17,6 +17,7 @@ export interface AuthTokens {
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private readonly tokenState = signal<AuthTokens | null>(this.loadTokens());
+  private readonly router = inject(Router);
 
   /** Whether the user is currently authenticated with a valid token. */
   readonly isAuthenticated = computed(() => {
@@ -27,8 +28,6 @@ export class AuthService {
 
   /** The current access token, or null if not authenticated. */
   readonly accessToken = computed(() => this.tokenState()?.accessToken ?? null);
-
-  constructor(private readonly router: Router) {}
 
   /**
    * Store tokens after successful authentication.

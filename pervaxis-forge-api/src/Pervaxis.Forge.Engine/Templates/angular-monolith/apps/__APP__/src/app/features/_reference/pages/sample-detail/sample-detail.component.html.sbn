@@ -1,0 +1,132 @@
+<div class="sample-detail">
+  @if (loading()) {
+    <p class="sample-detail__loading">Loading...</p>
+  }
+
+  @if (error(); as errorMsg) {
+    <p class="sample-detail__error" [textContent]="errorMsg"></p>
+  }
+
+  @if (item(); as item) {
+    <header class="sample-detail__header">
+      <h1 [textContent]="item.name"></h1>
+      <a [routerLink]="['edit']" class="btn btn--primary">Edit</a>
+    </header>
+
+    <dl class="sample-detail__fields">
+      <div class="sample-detail__field">
+        <dt>ID</dt>
+        <dd [textContent]="item.id"></dd>
+      </div>
+      <div class="sample-detail__field">
+        <dt>Name</dt>
+        <dd [textContent]="item.name"></dd>
+      </div>
+      <div class="sample-detail__field">
+        <dt>Description</dt>
+        <dd [textContent]="item.description"></dd>
+      </div>
+      <div class="sample-detail__field">
+        <dt>Status</dt>
+        <dd>
+          <span class="badge" [class.badge--active]="item.status === 'active'"
+                [class.badge--inactive]="item.status === 'inactive'"
+                [textContent]="item.status">
+          </span>
+        </dd>
+      </div>
+      <div class="sample-detail__field">
+        <dt>Created At</dt>
+        <dd [textContent]="item.createdAt"></dd>
+      </div>
+    </dl>
+
+    <a routerLink="../" class="btn">Back to List</a>
+  }
+</div>
+
+<style>
+  .sample-detail {
+    padding: var(--spacing-lg, 1.5rem);
+    max-width: 600px;
+  }
+
+  .sample-detail__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--spacing-lg, 1.5rem);
+  }
+
+  .sample-detail__fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md, 1rem);
+    margin-bottom: var(--spacing-lg, 1.5rem);
+  }
+
+  .sample-detail__field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs, 0.25rem);
+  }
+
+  .sample-detail__field dt {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: var(--color-text-secondary, #666);
+  }
+
+  .sample-detail__field dd {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--color-text, #333);
+  }
+
+  .sample-detail__loading,
+  .sample-detail__error {
+    padding: var(--spacing-lg, 1.5rem);
+    text-align: center;
+  }
+
+  .sample-detail__error {
+    color: var(--color-error, #d32f2f);
+  }
+
+  .btn {
+    display: inline-block;
+    padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+    border: 1px solid var(--color-border, #e0e0e0);
+    border-radius: var(--radius-sm, 4px);
+    background: var(--color-surface, #fff);
+    color: var(--color-text, #333);
+    text-decoration: none;
+    cursor: pointer;
+    font-size: 0.875rem;
+  }
+
+  .btn--primary {
+    background: var(--color-primary, #1976d2);
+    color: var(--color-on-primary, #fff);
+    border-color: var(--color-primary, #1976d2);
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm, 4px);
+    font-size: 0.75rem;
+    font-weight: 500;
+  }
+
+  .badge--active {
+    background: var(--color-success-bg, #e8f5e9);
+    color: var(--color-success, #2e7d32);
+  }
+
+  .badge--inactive {
+    background: var(--color-warning-bg, #fff3e0);
+    color: var(--color-warning, #e65100);
+  }
+</style>

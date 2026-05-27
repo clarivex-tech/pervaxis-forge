@@ -1,0 +1,62 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { RouterLink } from '@angular/router';
+import { SampleService } from '../../services/sample.service';
+import { SampleItem } from '../../models/sample.model';
+
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-sample-list',
+  standalone: true,
+  imports: [CommonModule, RouterLink],
+  templateUrl: './sample-list.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class SampleListComponent implements OnInit {
+  private readonly sampleService = inject(SampleService);
+
+  readonly items = signal<SampleItem[]>([]);
+  readonly loading = signal<boolean>(true);
+  readonly error = signal<string | null>(null);
+
+  ngOnInit(): void {
+    this.loadItems();
+  }
+
+  private loadItems(): void {
+    this.loading.set(true);
+    this.sampleService.getAll().subscribe({
+      next: (data) => {
+        this.items.set(data);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.error.set('Failed to load items');
+        this.loading.set(false);
+      },
+    });
+  }
+
+  deleteItem(id: number): void {
+    this.sampleService.delete(id).subscribe({
+      next: () => this.loadItems(),
+    });
+  }
+}

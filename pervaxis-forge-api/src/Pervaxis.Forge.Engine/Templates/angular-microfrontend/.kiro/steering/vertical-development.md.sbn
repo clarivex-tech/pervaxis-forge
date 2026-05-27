@@ -1,0 +1,20 @@
+---
+inclusion: auto
+---
+# Vertical Development Conventions (MFE)
+
+When creating or modifying feature libraries in this workspace:
+
+- Use `inject()` function, never constructor injection
+- Use `ChangeDetectionStrategy.OnPush` on all components
+- Use `HttpClient` via inject for HTTP calls
+- Put feature code in `libs/{app-name}/src/lib/`
+- Follow the structure in `lib/_reference/`
+- Write a `.spec.ts` for every `.ts` file
+- Use typed interfaces, never `any` or `unknown`
+- Import `authGuard` from `@pervaxis/canvas-auth` on all protected routes
+- Use CSS custom properties for styling
+- Export public API from `src/index.ts` barrel file
+- Use signals for component state
+- Keep components standalone with explicit imports
+- Export routes as `MFE_ROUTES` from the library

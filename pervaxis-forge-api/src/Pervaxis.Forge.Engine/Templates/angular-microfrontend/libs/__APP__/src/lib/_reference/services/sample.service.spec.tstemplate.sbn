@@ -1,0 +1,123 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { SampleService } from './sample.service';
+import { CreateSampleDto, SampleItem, UpdateSampleDto } from '../models/sample.model';
+
+describe('SampleService', () => {
+  let service: SampleService;
+  let httpMock: HttpTestingController;
+  const baseUrl = '/api/samples';
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [provideHttpClient(), provideHttpClientTesting()],
+    });
+    service = TestBed.inject(SampleService);
+    httpMock = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => {
+    httpMock.verify();
+  });
+
+  it('should be created', () => {
+    expect(service).toBeTruthy();
+  });
+
+  describe('getAll', () => {
+    it('should return all sample items', () => {
+      const mockItems: SampleItem[] = [
+        { id: 1, name: 'Item 1', description: 'Desc 1', status: 'active', createdAt: '2024-01-01' },
+        { id: 2, name: 'Item 2', description: 'Desc 2', status: 'inactive', createdAt: '2024-01-02' },
+      ];
+
+      service.getAll().subscribe((items) => {
+        expect(items).toEqual(mockItems);
+        expect(items.length).toBe(2);
+      });
+
+      const req = httpMock.expectOne(baseUrl);
+      expect(req.request.method).toBe('GET');
+      req.flush(mockItems);
+    });
+  });
+
+  describe('getById', () => {
+    it('should return a single sample item', () => {
+      const mockItem: SampleItem = {
+        id: 1, name: 'Item 1', description: 'Desc 1', status: 'active', createdAt: '2024-01-01',
+      };
+
+      service.getById(1).subscribe((item) => {
+        expect(item).toEqual(mockItem);
+      });
+
+      const req = httpMock.expectOne(`${baseUrl}/1`);
+      expect(req.request.method).toBe('GET');
+      req.flush(mockItem);
+    });
+  });
+
+  describe('create', () => {
+    it('should create a new sample item', () => {
+      const dto: CreateSampleDto = { name: 'New Item', description: 'New Desc', status: 'active' };
+      const mockResponse: SampleItem = { id: 3, ...dto, createdAt: '2024-01-03' };
+
+      service.create(dto).subscribe((item) => {
+        expect(item).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(baseUrl);
+      expect(req.request.method).toBe('POST');
+      expect(req.request.body).toEqual(dto);
+      req.flush(mockResponse);
+    });
+  });
+
+  describe('update', () => {
+    it('should update an existing sample item', () => {
+      const dto: UpdateSampleDto = { name: 'Updated Name' };
+      const mockResponse: SampleItem = {
+        id: 1, name: 'Updated Name', description: 'Desc 1', status: 'active', createdAt: '2024-01-01',
+      };
+
+      service.update(1, dto).subscribe((item) => {
+        expect(item).toEqual(mockResponse);
+      });
+
+      const req = httpMock.expectOne(`${baseUrl}/1`);
+      expect(req.request.method).toBe('PUT');
+      expect(req.request.body).toEqual(dto);
+      req.flush(mockResponse);
+    });
+  });
+
+  describe('delete', () => {
+    it('should delete a sample item', () => {
+      service.delete(1).subscribe();
+
+      const req = httpMock.expectOne(`${baseUrl}/1`);
+      expect(req.request.method).toBe('DELETE');
+      req.flush(null);
+    });
+  });
+});
