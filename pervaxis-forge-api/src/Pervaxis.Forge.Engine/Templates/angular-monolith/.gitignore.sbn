@@ -23,6 +23,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Reference module — for learning only, not committed
+**/features/_reference/
+
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
 # Capacitor native platforms
 android/

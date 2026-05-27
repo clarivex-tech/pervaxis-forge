@@ -1,0 +1,58 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { ActivatedRoute, RouterLink } from '@angular/router';
+import { SampleService } from '../../services/sample.service';
+import { SampleItem } from '../../models/sample.model';
+
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-sample-detail',
+  standalone: true,
+  imports: [CommonModule, RouterLink],
+  templateUrl: './sample-detail.component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class SampleDetailComponent implements OnInit {
+  private readonly route = inject(ActivatedRoute);
+  private readonly sampleService = inject(SampleService);
+
+  readonly item = signal<SampleItem | null>(null);
+  readonly loading = signal<boolean>(true);
+  readonly error = signal<string | null>(null);
+
+  ngOnInit(): void {
+    const id = Number(this.route.snapshot.paramMap.get('id'));
+    this.loadItem(id);
+  }
+
+  private loadItem(id: number): void {
+    this.loading.set(true);
+    this.sampleService.getById(id).subscribe({
+      next: (data) => {
+        this.item.set(data);
+        this.loading.set(false);
+      },
+      error: () => {
+        this.error.set('Failed to load item');
+        this.loading.set(false);
+      },
+    });
+  }
+}
