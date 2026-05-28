@@ -24,7 +24,7 @@ import { AbstractControl } from '@angular/forms';
  *
  * Usage in templates:
  *   @if (form.controls.email.invalid && form.controls.email.touched) {
- *     <small class="field-error">{{ getFormFieldError(form.controls.email, 'Email') }}</small>
+ *     <small class="field-error">getFormFieldError(form.controls.email, 'Email')</small>
  *   }
  *
  * Vertical teams: extend the errorMessages map for custom validators.
