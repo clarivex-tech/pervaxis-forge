@@ -16,35 +16,74 @@
  ************************************************************************
  */
 
-import { Component, inject } from '@angular/core';
-import { RouterOutlet } from '@angular/router';
+import { Component, inject, computed } from '@angular/core';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
-import { IonApp, IonRouterOutlet } from '@ionic/angular/standalone';
+import { IonApp, IonRouterOutlet, IonProgressBar, IonToast, IonAlert } from '@ionic/angular/standalone';
 {{ end }}
 import { LoadingService } from './core/services/loading.service';
+import { NotificationService } from './core/services/notification.service';
+import { ConfirmDialogService } from '@shared/services/confirm-dialog.service';
+import { RouteLoadingService } from './core/services/route-loading.service';
+import { InactivityService } from './core/services/inactivity.service';
+{{ if !(model.manifest.ui_targets | array.contains "mobile") }}
+import { AuthSyncService } from './core/services/auth-sync.service';
+{{ end }}
 
 /**
  * Root application component.
  *
  * HORIZONTAL (do not modify):
- *   - Loading indicator integration
- *   - Router outlet wiring
+ *   - Loading indicator
+ *   - Notification toasts
+ *   - Confirmation dialog
+ *   - App shell layout (header, sidebar)
+ *   - Route loading, inactivity detection, auth sync bootstrap
  *
  * VERTICAL (extend as needed):
- *   - Add app-level layout (header, sidebar, footer) in the template
+ *   - Add navigation links in the header/sidebar
  *   - Add shared UI imports to the imports array
  */
 @Component({
   selector: '{{ model.manifest.component_prefix }}-root',
   standalone: true,
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
-  imports: [IonApp, IonRouterOutlet],
+  imports: [IonApp, IonRouterOutlet, IonProgressBar, IonToast, IonAlert],
 {{ else }}
-  imports: [RouterOutlet],
+  imports: [RouterOutlet, RouterLink, RouterLinkActive],
 {{ end }}
   templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss'],
 })
 export class AppComponent {
   title = '{{ model.manifest.service_name }}';
   protected readonly loading = inject(LoadingService);
+  protected readonly notifications = inject(NotificationService).notifications;
+  protected readonly confirmDialog = inject(ConfirmDialogService).activeDialog;
+  private readonly confirmService = inject(ConfirmDialogService);
+  private readonly routeLoading = inject(RouteLoadingService);
+  private readonly inactivity = inject(InactivityService);
+{{ if !(model.manifest.ui_targets | array.contains "mobile") }}
+  private readonly authSync = inject(AuthSyncService);
+{{ end }}
+
+  constructor() {
+    this.routeLoading.init();
+    this.inactivity.start();
+{{ if !(model.manifest.ui_targets | array.contains "mobile") }}
+    this.authSync.init();
+{{ end }}
+  }
+
+  dismissNotification(id: number): void {
+    inject(NotificationService).dismiss(id);
+  }
+
+  onConfirmOk = (): void => {
+    this.confirmService.resolve(true);
+  };
+
+  onConfirmCancel = (): void => {
+    this.confirmService.resolve(false);
+  };
 }
