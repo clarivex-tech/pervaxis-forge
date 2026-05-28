@@ -17,6 +17,7 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+    "baseUrl": ".",
     "paths": {
       "@core/*": ["apps/{{ model.manifest.service_name }}/src/app/core/*"],
       "@shared/*": ["apps/{{ model.manifest.service_name }}/src/app/shared/*"],

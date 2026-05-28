@@ -1,5 +1,35 @@
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
 <ion-app>
+  <!-- Loading indicator (horizontal — do not remove) -->
+  @if (loading.isLoading()) {
+    <ion-progress-bar type="indeterminate" color="primary"></ion-progress-bar>
+  }
+
+  <!-- Notifications toast (horizontal — do not remove) -->
+  @for (notification of notifications(); track notification.id) {
+    <ion-toast
+      [isOpen]="true"
+      [message]="notification.message"
+      [duration]="notification.duration"
+      [color]="notification.type === 'error' ? 'danger' : notification.type === 'success' ? 'success' : 'primary'"
+      position="top"
+      (didDismiss)="dismissNotification(notification.id)"
+    ></ion-toast>
+  }
+
+  <!-- Confirmation dialog (horizontal — do not remove) -->
+  @if (confirmDialog()) {
+    <ion-alert
+      [isOpen]="true"
+      [header]="confirmDialog()!.title"
+      [message]="confirmDialog()!.message"
+      [buttons]="[
+        { text: confirmDialog()!.cancelLabel || 'Cancel', role: 'cancel', handler: onConfirmCancel },
+        { text: confirmDialog()!.confirmLabel || 'Confirm', role: 'confirm', handler: onConfirmOk }
+      ]"
+    ></ion-alert>
+  }
+
   <ion-router-outlet></ion-router-outlet>
 </ion-app>
 {{ else }}
@@ -8,8 +38,48 @@
   <div class="global-loading-bar" aria-label="Loading"></div>
 }
 
-<!-- VERTICAL: Add your app shell layout (header, sidebar, footer) around the router-outlet -->
-<main class="app-container">
-  <router-outlet></router-outlet>
-</main>
+<!-- Notifications toast (horizontal — do not remove) -->
+<div class="notification-container" aria-live="polite">
+  @for (notification of notifications(); track notification.id) {
+    <div class="notification-toast" [class]="'notification-toast--' + notification.type">
+      <span>{{ notification.message }}</span>
+      <button (click)="dismissNotification(notification.id)" aria-label="Dismiss">&times;</button>
+    </div>
+  }
+</div>
+
+<!-- Confirmation dialog (horizontal — do not remove) -->
+@if (confirmDialog()) {
+  <div class="confirm-overlay" (click)="onConfirmCancel()">
+    <div class="confirm-dialog" (click)="$event.stopPropagation()">
+      <h3>{{ confirmDialog()!.title }}</h3>
+      <p>{{ confirmDialog()!.message }}</p>
+      <div class="confirm-actions">
+        <button class="btn" (click)="onConfirmCancel()">{{ confirmDialog()!.cancelLabel || 'Cancel' }}</button>
+        <button class="btn" [class.btn--danger]="confirmDialog()!.destructive" (click)="onConfirmOk()">{{ confirmDialog()!.confirmLabel || 'Confirm' }}</button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- App Shell Layout -->
+<header class="app-header">
+  <nav class="app-header__nav">
+    <span class="app-header__brand">{{ title }}</span>
+    <!-- VERTICAL: Add navigation links here -->
+  </nav>
+</header>
+
+<div class="app-layout">
+  <aside class="app-sidebar">
+    <!-- VERTICAL: Add sidebar navigation items here -->
+    <nav class="app-sidebar__nav">
+      <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+    </nav>
+  </aside>
+
+  <main class="app-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>
 {{ end }}
