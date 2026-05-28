@@ -8,12 +8,23 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
     // Escape both before parsing and restore after rendering.
     private const string GitHubExprPlaceholder = " GH ";
     private const string AngularExprPlaceholder = " NG_EXPR ";
+    private const string AngularIfPlaceholder = " NG_IF ";
+    private const string AngularForPlaceholder = " NG_FOR ";
+    private const string AngularSwitchPlaceholder = " NG_SWITCH ";
+    private const string AngularOptionalChainPlaceholder = " NG_OPTCHAIN ";
+    private const string AngularNonNullPlaceholder = " NG_NONNULL ";
 
     public string Render(string templateText, TemplateModel model)
     {
         var processedText = templateText
             .Replace("${{", GitHubExprPlaceholder)
             .Replace("{{ '", AngularExprPlaceholder);
+        processedText = processedText
+            .Replace("@if", AngularIfPlaceholder)
+            .Replace("@for", AngularForPlaceholder)
+            .Replace("@switch", AngularSwitchPlaceholder)
+            .Replace("?.", AngularOptionalChainPlaceholder)
+            .Replace(")!", AngularNonNullPlaceholder);
         var template = Template.Parse(processedText);
 
         if (template.HasErrors)
@@ -98,6 +109,11 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
 
         return result
             .Replace(GitHubExprPlaceholder, "${{")
-            .Replace(AngularExprPlaceholder, "{{ '");
+            .Replace(AngularExprPlaceholder, "{{ '")
+            .Replace(AngularIfPlaceholder, "@if")
+            .Replace(AngularForPlaceholder, "@for")
+            .Replace(AngularSwitchPlaceholder, "@switch")
+            .Replace(AngularOptionalChainPlaceholder, "?.")
+            .Replace(AngularNonNullPlaceholder, ")!");
     }
 }

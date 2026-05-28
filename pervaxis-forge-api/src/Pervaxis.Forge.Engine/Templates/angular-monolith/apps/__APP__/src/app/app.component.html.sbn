@@ -42,7 +42,7 @@
 <div class="notification-container" aria-live="polite">
   @for (notification of notifications(); track notification.id) {
     <div class="notification-toast" [class]="'notification-toast--' + notification.type">
-      <span>{{ notification.message }}</span>
+      <span [textContent]="notification.message"></span>
       <button (click)="dismissNotification(notification.id)" aria-label="Dismiss">&times;</button>
     </div>
   }
@@ -52,11 +52,11 @@
 @if (confirmDialog()) {
   <div class="confirm-overlay" (click)="onConfirmCancel()">
     <div class="confirm-dialog" (click)="$event.stopPropagation()">
-      <h3>{{ confirmDialog()!.title }}</h3>
-      <p>{{ confirmDialog()!.message }}</p>
+      <h3 [textContent]="confirmDialog()?.title"></h3>
+      <p [textContent]="confirmDialog()?.message"></p>
       <div class="confirm-actions">
-        <button class="btn" (click)="onConfirmCancel()">{{ confirmDialog()!.cancelLabel || 'Cancel' }}</button>
-        <button class="btn" [class.btn--danger]="confirmDialog()!.destructive" (click)="onConfirmOk()">{{ confirmDialog()!.confirmLabel || 'Confirm' }}</button>
+        <button class="btn" (click)="onConfirmCancel()" [textContent]="confirmDialog()?.cancelLabel || 'Cancel'"></button>
+        <button class="btn" [class.btn--danger]="confirmDialog()?.destructive" (click)="onConfirmOk()" [textContent]="confirmDialog()?.confirmLabel || 'Confirm'"></button>
       </div>
     </div>
   </div>
@@ -65,7 +65,7 @@
 <!-- App Shell Layout -->
 <header class="app-header">
   <nav class="app-header__nav">
-    <span class="app-header__brand">{{ title }}</span>
+    <span class="app-header__brand" [textContent]="title"></span>
     <!-- VERTICAL: Add navigation links here -->
   </nav>
 </header>
