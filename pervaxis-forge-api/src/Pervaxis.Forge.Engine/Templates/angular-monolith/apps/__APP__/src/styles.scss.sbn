@@ -154,3 +154,31 @@ select {
   }
 }
 {{ end }}
+
+/* Print Stylesheet */
+@media print {
+  .global-loading-bar,
+  nav,
+  aside,
+  footer,
+  button,
+  [aria-hidden="true"] {
+    display: none !important;
+  }
+
+  body {
+    font-size: 12pt;
+    color: #000;
+    background: #fff;
+  }
+
+  a[href]::after {
+    content: " (" attr(href) ")";
+    font-size: 0.8em;
+    color: #555;
+  }
+
+  * {
+    box-shadow: none !important;
+  }
+}

@@ -27,3 +27,6 @@ export { EmptyStateComponent } from './components/empty-state/empty-state.compon
 
 // Shared services
 export { ConfirmDialogService } from './services/confirm-dialog.service';
+
+// Shared models
+export { PaginatedResponse, PaginationParams, DEFAULT_PAGE_SIZE, buildPaginationParams } from './models/pagination.model';
