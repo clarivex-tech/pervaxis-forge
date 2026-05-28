@@ -17,7 +17,12 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "paths": {}
+    "paths": {
+      "@core/*": ["apps/{{ model.manifest.service_name }}/src/app/core/*"],
+      "@shared/*": ["apps/{{ model.manifest.service_name }}/src/app/shared/*"],
+      "@features/*": ["apps/{{ model.manifest.service_name }}/src/app/features/*"],
+      "@env/*": ["apps/{{ model.manifest.service_name }}/src/environments/*"]
+    }
   },
   "angularCompilerOptions": {
     "enableI18nLegacyMessageIdFormat": false,
