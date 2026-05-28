@@ -18,33 +18,34 @@
 
 import { CanActivateFn } from '@angular/router';
 import { inject } from '@angular/core';
-{{ if model.manifest.ui_targets | array.contains "mobile" }}
-import { NavController } from '@ionic/angular/standalone';
-{{ else }}
-import { Router } from '@angular/router';
-{{ end }}
 import { AuthService } from '../services/auth.service';
+import { LoggerService } from '../services/logger.service';
 
 /**
- * HORIZONTAL: Route guard that prevents unauthenticated access.
- * Redirects to /login if the user has no valid token.
+ * HORIZONTAL: Permission-based route guard factory.
+ *
+ * Usage in routes:
+ *   { path: 'orders', canActivate: [permissionGuard('orders:read')], ... }
+ *   { path: 'admin', canActivate: [permissionGuard('admin:access')], ... }
+ *
+ * VERTICAL: Implement AuthService.hasPermission() with your IdP's
+ * claims/roles/scopes to make this guard functional.
  */
-export const authGuard: CanActivateFn = () => {
-  const auth = inject(AuthService);
-{{ if model.manifest.ui_targets | array.contains "mobile" }}
-  const navCtrl = inject(NavController);
-{{ else }}
-  const router = inject(Router);
-{{ end }}
+export function permissionGuard(requiredPermission: string): CanActivateFn {
+  return () => {
+    const auth = inject(AuthService);
+    const logger = inject(LoggerService);
 
-  if (auth.isAuthenticated()) {
-    return true;
-  }
+    if (!auth.isAuthenticated()) {
+      logger.warn('Permission guard: user not authenticated');
+      return false;
+    }
 
-{{ if model.manifest.ui_targets | array.contains "mobile" }}
-  navCtrl.navigateRoot('/login');
-{{ else }}
-  router.navigate(['/login']);
-{{ end }}
-  return false;
-};
+    const hasPermission = auth.hasPermission(requiredPermission);
+    if (!hasPermission) {
+      logger.warn(`Permission guard: missing permission '${requiredPermission}'`);
+    }
+
+    return hasPermission;
+  };
+}

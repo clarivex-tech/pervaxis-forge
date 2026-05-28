@@ -19,7 +19,12 @@
 import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ReactiveFormsModule, FormBuilder, FormGroup, Validators } from '@angular/forms';
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+import { ActivatedRoute } from '@angular/router';
+import { NavController } from '@ionic/angular/standalone';
+{{ else }}
 import { ActivatedRoute, Router } from '@angular/router';
+{{ end }}
 import { SampleService } from '../../services/sample.service';
 
 @Component({
@@ -32,7 +37,11 @@ import { SampleService } from '../../services/sample.service';
 export class SampleFormComponent implements OnInit {
   private readonly fb = inject(FormBuilder);
   private readonly route = inject(ActivatedRoute);
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+  private readonly navCtrl = inject(NavController);
+{{ else }}
   private readonly router = inject(Router);
+{{ end }}
   private readonly sampleService = inject(SampleService);
 
   readonly isEditMode = signal<boolean>(false);
@@ -95,6 +104,10 @@ export class SampleFormComponent implements OnInit {
   }
 
   private navigateToList(): void {
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+    this.navCtrl.navigateBack('../');
+{{ else }}
     this.router.navigate(['../'], { relativeTo: this.route });
+{{ end }}
   }
 }

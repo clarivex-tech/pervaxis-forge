@@ -1,5 +1,9 @@
 import { Component, inject } from '@angular/core';
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+import { NavController } from '@ionic/angular/standalone';
+{{ else }}
 import { Router } from '@angular/router';
+{{ end }}
 import { FormsModule } from '@angular/forms';
 import { AuthService, AuthTokens } from '../../core/services/auth.service';
 
@@ -91,7 +95,11 @@ import { AuthService, AuthTokens } from '../../core/services/auth.service';
 })
 export class LoginComponent {
   private readonly auth = inject(AuthService);
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+  private readonly navCtrl = inject(NavController);
+{{ else }}
   private readonly router = inject(Router);
+{{ end }}
 
   username = '';
   password = '';
@@ -106,6 +114,10 @@ export class LoginComponent {
     };
 
     this.auth.setTokens(mockTokens);
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+    this.navCtrl.navigateRoot('/dashboard');
+{{ else }}
     this.router.navigate(['/dashboard']);
+{{ end }}
   }
 }

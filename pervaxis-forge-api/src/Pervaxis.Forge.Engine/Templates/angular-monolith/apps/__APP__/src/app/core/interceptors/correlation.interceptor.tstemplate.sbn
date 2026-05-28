@@ -16,21 +16,22 @@
  ************************************************************************
  */
 
-import { ErrorHandler, Injectable, inject } from '@angular/core';
-import { LoggerService } from '../services/logger.service';
-import { ErrorReporter } from '../services/error-reporter';
+import { HttpInterceptorFn } from '@angular/common/http';
 
 /**
- * HORIZONTAL: Global error handler.
- * Catches all unhandled exceptions and routes them to logging + reporting.
+ * HORIZONTAL: Attaches a unique X-Correlation-Id header to every outgoing request.
+ * Enables end-to-end request tracing across frontend and backend logs.
+ *
+ * Vertical teams do NOT need to manage correlation IDs manually.
  */
-@Injectable()
-export class GlobalErrorHandler implements ErrorHandler {
-  private readonly logger = inject(LoggerService);
-  private readonly reporter = inject(ErrorReporter);
+export const correlationInterceptor: HttpInterceptorFn = (req, next) => {
+  const correlationId = crypto.randomUUID();
 
-  handleError(error: unknown): void {
-    this.logger.error('Unhandled application error', error);
-    this.reporter.report(error);
-  }
-}
+  const cloned = req.clone({
+    setHeaders: {
+      'X-Correlation-Id': correlationId,
+    },
+  });
+
+  return next(cloned);
+};

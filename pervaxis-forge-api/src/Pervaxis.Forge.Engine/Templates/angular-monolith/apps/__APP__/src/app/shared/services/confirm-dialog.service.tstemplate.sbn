@@ -1,0 +1,69 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ ************************************************************************
+ */
+
+import { Injectable, signal } from '@angular/core';
+import { Subject } from 'rxjs';
+import { first } from 'rxjs/operators';
+
+export interface ConfirmDialogOptions {
+  title: string;
+  message: string;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  destructive?: boolean;
+}
+
+/**
+ * HORIZONTAL: Confirmation dialog service.
+ * Provides a promise-based API for confirming destructive actions.
+ *
+ * Usage:
+ *   private confirm = inject(ConfirmDialogService);
+ *
+ *   async deleteItem(id: number): Promise<void> {
+ *     const confirmed = await this.confirm.open({
+ *       title: 'Delete item?',
+ *       message: 'This action cannot be undone.',
+ *       destructive: true,
+ *     });
+ *     if (confirmed) { ... }
+ *   }
+ *
+ * VERTICAL: Render the dialog in your app shell by reading
+ * the activeDialog() signal and calling resolve(true/false).
+ */
+@Injectable({ providedIn: 'root' })
+export class ConfirmDialogService {
+  readonly activeDialog = signal<ConfirmDialogOptions | null>(null);
+  private result$ = new Subject<boolean>();
+
+  /**
+   * Open a confirmation dialog and wait for the user's response.
+   */
+  open(options: ConfirmDialogOptions): Promise<boolean> {
+    this.activeDialog.set({
+      confirmLabel: 'Confirm',
+      cancelLabel: 'Cancel',
+      destructive: false,
+      ...options,
+    });
+
+    return new Promise<boolean>((resolve) => {
+      this.result$.pipe(first()).subscribe((result) => {
+        this.activeDialog.set(null);
+        resolve(result);
+      });
+    });
+  }
+
+  /**
+   * Resolve the active dialog (called by the dialog UI component).
+   */
+  resolve(confirmed: boolean): void {
+    this.result$.next(confirmed);
+  }
+}

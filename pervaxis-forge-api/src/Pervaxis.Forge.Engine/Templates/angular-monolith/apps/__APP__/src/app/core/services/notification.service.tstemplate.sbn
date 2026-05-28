@@ -1,0 +1,79 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Injectable, signal } from '@angular/core';
+
+export type NotificationType = 'success' | 'error' | 'warning' | 'info';
+
+export interface Notification {
+  id: number;
+  message: string;
+  type: NotificationType;
+  duration: number;
+}
+
+const DEFAULT_DURATION_MS = 4000;
+
+/**
+ * HORIZONTAL: Global notification/toast service.
+ * Provides a standard API for showing user feedback messages.
+ *
+ * Usage:
+ *   private notify = inject(NotificationService);
+ *   this.notify.success('Item saved');
+ *   this.notify.error('Failed to load data');
+ *
+ * VERTICAL: Render notifications in your app shell layout by reading
+ * notifications() signal and displaying them as toasts/snackbars.
+ */
+@Injectable({ providedIn: 'root' })
+export class NotificationService {
+  private nextId = 0;
+  readonly notifications = signal<Notification[]>([]);
+
+  success(message: string, duration = DEFAULT_DURATION_MS): void {
+    this.show(message, 'success', duration);
+  }
+
+  error(message: string, duration = DEFAULT_DURATION_MS): void {
+    this.show(message, 'error', duration);
+  }
+
+  warning(message: string, duration = DEFAULT_DURATION_MS): void {
+    this.show(message, 'warning', duration);
+  }
+
+  info(message: string, duration = DEFAULT_DURATION_MS): void {
+    this.show(message, 'info', duration);
+  }
+
+  dismiss(id: number): void {
+    this.notifications.update((list) => list.filter((n) => n.id !== id));
+  }
+
+  private show(message: string, type: NotificationType, duration: number): void {
+    const id = ++this.nextId;
+    const notification: Notification = { id, message, type, duration };
+
+    this.notifications.update((list) => [...list, notification]);
+
+    if (duration > 0) {
+      setTimeout(() => this.dismiss(id), duration);
+    }
+  }
+}

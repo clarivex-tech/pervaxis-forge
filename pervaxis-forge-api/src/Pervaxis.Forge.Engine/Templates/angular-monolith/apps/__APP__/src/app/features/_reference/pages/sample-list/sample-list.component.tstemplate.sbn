@@ -28,6 +28,97 @@ import { SampleItem } from '../../models/sample.model';
   imports: [CommonModule, RouterLink],
   templateUrl: './sample-list.component.html',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  styles: [`
+    .sample-list {
+      padding: var(--spacing-lg, 1.5rem);
+    }
+
+    .sample-list__header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: var(--spacing-md, 1rem);
+    }
+
+    .sample-list__table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .sample-list__table th,
+    .sample-list__table td {
+      padding: var(--spacing-sm, 0.5rem) var(--spacing-md, 1rem);
+      text-align: left;
+      border-bottom: 1px solid var(--color-border, #e0e0e0);
+    }
+
+    .sample-list__table th {
+      font-weight: 600;
+      background: var(--color-surface, #f9f9f9);
+    }
+
+    .sample-list__actions {
+      display: flex;
+      gap: var(--spacing-xs, 0.25rem);
+    }
+
+    .sample-list__loading,
+    .sample-list__error,
+    .sample-list__empty {
+      padding: var(--spacing-lg, 1.5rem);
+      text-align: center;
+    }
+
+    .sample-list__error {
+      color: var(--color-error, #d32f2f);
+    }
+
+    .btn {
+      display: inline-block;
+      padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+      border: 1px solid var(--color-border, #e0e0e0);
+      border-radius: var(--radius-sm, 4px);
+      background: var(--color-surface, #fff);
+      color: var(--color-text, #333);
+      text-decoration: none;
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+
+    .btn--primary {
+      background: var(--color-primary, #1976d2);
+      color: var(--color-on-primary, #fff);
+      border-color: var(--color-primary, #1976d2);
+    }
+
+    .btn--danger {
+      color: var(--color-error, #d32f2f);
+      border-color: var(--color-error, #d32f2f);
+    }
+
+    .btn--small {
+      padding: var(--spacing-xxs, 0.125rem) var(--spacing-xs, 0.25rem);
+      font-size: 0.75rem;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: var(--radius-sm, 4px);
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .badge--active {
+      background: var(--color-success-bg, #e8f5e9);
+      color: var(--color-success, #2e7d32);
+    }
+
+    .badge--inactive {
+      background: var(--color-warning-bg, #fff3e0);
+      color: var(--color-warning, #e65100);
+    }
+  `],
 })
 export class SampleListComponent implements OnInit {
   private readonly sampleService = inject(SampleService);
