@@ -1,5 +1,10 @@
-import { CanActivateFn, Router } from '@angular/router';
+import { CanActivateFn } from '@angular/router';
 import { inject } from '@angular/core';
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+import { NavController } from '@ionic/angular/standalone';
+{{ else }}
+import { Router } from '@angular/router';
+{{ end }}
 import { AuthService } from '../services/auth.service';
 
 /**
@@ -8,12 +13,20 @@ import { AuthService } from '../services/auth.service';
  */
 export const authGuard: CanActivateFn = () => {
   const auth = inject(AuthService);
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+  const navCtrl = inject(NavController);
+{{ else }}
   const router = inject(Router);
+{{ end }}
 
   if (auth.isAuthenticated()) {
     return true;
   }
 
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+  navCtrl.navigateRoot('/login');
+{{ else }}
   router.navigate(['/login']);
+{{ end }}
   return false;
 };
