@@ -64,6 +64,17 @@ export class AuthService {
   /** The current access token, or null if not authenticated. */
   readonly accessToken = computed(() => this.tokenState()?.accessToken ?? null);
 
+  /**
+   * Check if the current user has a specific permission.
+   * VERTICAL: Implement by decoding JWT claims, checking roles/scopes from your IdP.
+   */
+  hasPermission(permission: string): boolean {
+    // TODO: VERTICAL — Decode token claims and check for the required permission.
+    // Example: return this.decodedToken()?.permissions?.includes(permission) ?? false;
+    void permission;
+    return this.isAuthenticated();
+  }
+
   constructor() {
     this.loadTokens();
   }
