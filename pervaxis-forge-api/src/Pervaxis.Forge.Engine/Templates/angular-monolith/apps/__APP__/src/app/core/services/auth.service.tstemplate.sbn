@@ -19,6 +19,7 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
 import { NavController } from '@ionic/angular/standalone';
+import { Preferences } from '@capacitor/preferences';
 {{ else }}
 import { Router } from '@angular/router';
 {{ end }}
@@ -29,16 +30,24 @@ export interface AuthTokens {
   expiresAt: number;
 }
 
+const AUTH_STORAGE_KEY = 'auth_tokens';
+
 /**
  * HORIZONTAL: Core authentication service.
  * Manages token storage, refresh, and authentication state.
+ *
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+ * Uses Capacitor Preferences for secure, persistent token storage on native.
+{{ else }}
+ * Uses sessionStorage for token persistence in the browser.
+{{ end }}
  *
  * VERTICAL: Integrate with your identity provider (Cognito, Auth0, Azure AD)
  * by implementing the login() and refreshToken() methods.
  */
 @Injectable({ providedIn: 'root' })
 export class AuthService {
-  private readonly tokenState = signal<AuthTokens | null>(this.loadTokens());
+  private readonly tokenState = signal<AuthTokens | null>(null);
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
   private readonly navCtrl = inject(NavController);
 {{ else }}
@@ -55,13 +64,21 @@ export class AuthService {
   /** The current access token, or null if not authenticated. */
   readonly accessToken = computed(() => this.tokenState()?.accessToken ?? null);
 
+  constructor() {
+    this.loadTokens();
+  }
+
   /**
    * Store tokens after successful authentication.
    * Call this from your login component after receiving tokens from your IdP.
    */
   setTokens(tokens: AuthTokens): void {
     this.tokenState.set(tokens);
-    sessionStorage.setItem('auth_tokens', JSON.stringify(tokens));
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+    void Preferences.set({ key: AUTH_STORAGE_KEY, value: JSON.stringify(tokens) });
+{{ else }}
+    sessionStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(tokens));
+{{ end }}
   }
 
   /**
@@ -69,10 +86,11 @@ export class AuthService {
    */
   logout(): void {
     this.tokenState.set(null);
-    sessionStorage.removeItem('auth_tokens');
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
+    void Preferences.remove({ key: AUTH_STORAGE_KEY });
     this.navCtrl.navigateRoot('/login');
 {{ else }}
+    sessionStorage.removeItem(AUTH_STORAGE_KEY);
     this.router.navigate(['/login']);
 {{ end }}
   }
@@ -93,15 +111,32 @@ export class AuthService {
     return false;
   }
 
-  private loadTokens(): AuthTokens | null {
+  private loadTokens(): void {
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+    void Preferences.get({ key: AUTH_STORAGE_KEY }).then(({ value }) => {
+      if (!value) return;
+      try {
+        const tokens: AuthTokens = JSON.parse(value);
+        if (Date.now() < tokens.expiresAt) {
+          this.tokenState.set(tokens);
+        } else {
+          void Preferences.remove({ key: AUTH_STORAGE_KEY });
+        }
+      } catch {
+        void Preferences.remove({ key: AUTH_STORAGE_KEY });
+      }
+    });
+{{ else }}
     try {
-      const stored = sessionStorage.getItem('auth_tokens');
-      if (!stored) return null;
+      const stored = sessionStorage.getItem(AUTH_STORAGE_KEY);
+      if (!stored) return;
       const tokens: AuthTokens = JSON.parse(stored);
-      if (Date.now() >= tokens.expiresAt) return null;
-      return tokens;
+      if (Date.now() < tokens.expiresAt) {
+        this.tokenState.set(tokens);
+      }
     } catch {
-      return null;
+      sessionStorage.removeItem(AUTH_STORAGE_KEY);
     }
+{{ end }}
   }
 }

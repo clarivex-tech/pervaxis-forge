@@ -10,6 +10,16 @@
   padding: 0;
 }
 
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+/* Safe-area tokens for iOS notch / Android punch-hole */
+:root {
+  --safe-area-top: env(safe-area-inset-top);
+  --safe-area-bottom: env(safe-area-inset-bottom);
+  --safe-area-left: env(safe-area-inset-left);
+  --safe-area-right: env(safe-area-inset-right);
+}
+{{ end }}
+
 html,
 body {
   height: 100%;

@@ -4,7 +4,11 @@
     <meta charset="utf-8" />
     <title>{{ model.manifest.service_name }}</title>
     <base href="/" />
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+{{ else }}
     <meta name="viewport" content="width=device-width, initial-scale=1" />
+{{ end }}
     <!--
       Content Security Policy:
       - 'unsafe-inline' for style-src is required because Angular uses inline styles

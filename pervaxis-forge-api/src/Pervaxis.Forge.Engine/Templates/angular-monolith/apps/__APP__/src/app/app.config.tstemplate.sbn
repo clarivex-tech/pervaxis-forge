@@ -27,6 +27,7 @@ import { provideIonicAngular } from '@ionic/angular/standalone';
 import { appRoutes } from './app.routes';
 import { GlobalErrorHandler } from './core/handlers/global-error-handler';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+import { correlationInterceptor } from './core/interceptors/correlation.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { loadingInterceptor } from './core/interceptors/loading.interceptor';
 import { retryInterceptor } from './core/interceptors/retry.interceptor';
@@ -45,7 +46,7 @@ export const appConfig: ApplicationConfig = {
     // --- Horizontal providers (managed by platform team) ---
     provideRouter(appRoutes, withViewTransitions()),
     provideHttpClient(
-      withInterceptors([authInterceptor, retryInterceptor, loadingInterceptor, errorInterceptor])
+      withInterceptors([correlationInterceptor, authInterceptor, retryInterceptor, loadingInterceptor, errorInterceptor])
     ),
     provideAnimationsAsync(),
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
