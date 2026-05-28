@@ -20,3 +20,10 @@ export { NgOptimizedImage } from '@angular/common';
 
 // Form error utility — use in all reactive form templates
 export { getFormFieldError } from './utils/form-errors';
+
+// Shared UI components
+export { SkeletonLoaderComponent } from './components/skeleton-loader/skeleton-loader.component';
+export { EmptyStateComponent } from './components/empty-state/empty-state.component';
+
+// Shared services
+export { ConfirmDialogService } from './services/confirm-dialog.service';
