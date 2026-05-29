@@ -21,5 +21,20 @@
     <PackageReference Include="Octokit" Version="*" />
     <PackageReference Include="LibGit2Sharp" Version="*" />
     <PackageReference Include="Amazon.Lambda.AspNetCoreServer.Hosting" Version="*" />
+    <PackageReference Include="Serilog.AspNetCore" Version="*" />
+    <PackageReference Include="Serilog.Formatting.Compact" Version="*" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="*" />
+    <PackageReference Include="Serilog.Enrichers.Span" Version="*" />
+    <PackageReference Include="AWS.Logger.SeriLog" Version="*" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="*" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="*" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.15.1-beta.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="*" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="*" />
+    <PackageReference Include="Asp.Versioning.Http" Version="*" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="*" />
   </ItemGroup>
 </Project>

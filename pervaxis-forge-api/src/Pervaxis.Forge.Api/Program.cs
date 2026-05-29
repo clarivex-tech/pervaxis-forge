@@ -32,12 +32,14 @@ using System.Threading.RateLimiting;
 using Octokit;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
+using Pervaxis.Forge.Api.Infrastructure.Extensions;
+using Pervaxis.Forge.Api.Infrastructure.Http;
+using Pervaxis.Forge.Api.Infrastructure.Middleware;
 using Pervaxis.Forge.Api.Models.Configuration;
 using Pervaxis.Forge.Api.Models.Requests;
 using Pervaxis.Forge.Api.Services;
 using Pervaxis.Forge.Engine.Generation;
 using Amazon.Lambda.AspNetCoreServer;
-using System.Text.Json;
 using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -63,7 +65,7 @@ if (dataProtectionEnabled)
         });
 }
 
-builder.Logging.AddConsole();
+builder.AddForgeSerilog();
 builder.Logging.AddFilter("Microsoft.AspNetCore.DataProtection", LogLevel.Information);
 builder.Logging.AddFilter("Amazon.AspNetCore.DataProtection.SSM", LogLevel.Information);
 builder.Logging.AddFilter("Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository", LogLevel.Warning);
@@ -183,6 +185,35 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+// Cross-cutting concerns: resilience options, tracing, validation, versioning
+builder.Services.Configure<ForgeResilienceOptions>(
+    builder.Configuration.GetSection(ForgeResilienceOptions.SectionName));
+builder.Services.AddForgeTracing(builder.Configuration);
+builder.Services.AddForgeValidation();
+builder.Services.AddForgeVersioning();
+
+// HTTP infrastructure: context accessor, delegating handlers, typed clients
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<CorrelationIdHandler>();
+builder.Services.AddTransient<HttpLoggingHandler>();
+
+builder.Services.AddHttpClient<IGitHubHttpClient, GitHubHttpClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["GitHub:BaseUrl"] ?? "https://api.github.com");
+    client.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+})
+.AddHttpMessageHandler<CorrelationIdHandler>()
+.AddHttpMessageHandler<HttpLoggingHandler>()
+.AddForgeResilience(builder.Configuration.GetSection("Resilience:GitHub"));
+
+builder.Services.AddHttpClient<IForgeInternalHttpClient, ForgeInternalHttpClient>(client =>
+{
+    // Base address configured per deployment
+})
+.AddHttpMessageHandler<CorrelationIdHandler>()
+.AddHttpMessageHandler<HttpLoggingHandler>()
+.AddForgeResilience(builder.Configuration.GetSection("Resilience:Internal"));
+
 var app = builder.Build();
 
 app.Logger.LogInformation(
@@ -192,36 +223,10 @@ app.Logger.LogInformation(
     dataProtectionPrefix,
     string.IsNullOrWhiteSpace(dataProtectionKmsKeyId) ? "<default AWS-managed SSM encryption>" : dataProtectionKmsKeyId);
 
-app.Use(async (context, next) =>
-{
-    try
-    {
-        await next();
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogError(ex, "Unhandled exception while processing {Method} {Path}", context.Request.Method, context.Request.Path);
-
-        if (context.Response.HasStarted)
-        {
-            throw;
-        }
-
-        context.Response.Clear();
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        context.Response.ContentType = "application/problem+json";
-
-        var payload = JsonSerializer.Serialize(new
-        {
-            type = "about:blank",
-            title = "Internal Server Error",
-            status = StatusCodes.Status500InternalServerError,
-            detail = "The request pipeline failed unexpectedly.",
-        });
-
-        await context.Response.WriteAsync(payload);
-    }
-});
+// Cross-cutting middleware (order is critical)
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<ExceptionHandlerMiddleware>();
+app.UseMiddleware<SecurityHeadersMiddleware>();
 
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:EnableSwagger"))
 {
@@ -253,25 +258,6 @@ app.Use(async (context, next) =>
         elapsedMs,
         actor,
         context.TraceIdentifier);
-});
-app.Use(async (context, next) =>
-{
-    context.Response.OnStarting(() =>
-    {
-        var headers = context.Response.Headers;
-        headers["X-Content-Type-Options"] = "nosniff";
-        headers["X-Frame-Options"] = "DENY";
-        headers["Referrer-Policy"] = "no-referrer";
-
-        if (!app.Environment.IsDevelopment())
-        {
-            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
-        }
-
-        return Task.CompletedTask;
-    });
-
-    await next();
 });
 app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
