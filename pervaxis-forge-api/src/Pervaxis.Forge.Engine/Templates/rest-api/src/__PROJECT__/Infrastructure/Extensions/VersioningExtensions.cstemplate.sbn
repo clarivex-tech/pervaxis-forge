@@ -16,19 +16,27 @@
  ************************************************************************
  */
 
-namespace {{ model.names.namespace }}.Models.Configuration;
+using Asp.Versioning;
 
-public sealed class ForgeResilienceOptions
+namespace {{ model.names.namespace }}.Infrastructure.Extensions;
+
+public static class VersioningExtensions
 {
-    public const string SectionName = "Resilience";
+    public static IServiceCollection AddForgeVersioning(this IServiceCollection services)
+    {
+        services.AddApiVersioning(options =>
+        {
+            options.DefaultApiVersion = new ApiVersion(1, 0);
+            options.AssumeDefaultVersionWhenUnspecified = true;
+            options.ReportApiVersions = true;
+            options.ApiVersionReader = new UrlSegmentApiVersionReader();
+        })
+        .AddApiExplorer(options =>
+        {
+            options.GroupNameFormat = "'v'VVV";
+            options.SubstituteApiVersionInUrl = true;
+        });
 
-    public int MaxRetryAttempts { get; set; } = 3;
-
-    public int CircuitBreakerFailureThreshold { get; set; } = 5;
-
-    public int CircuitBreakerSamplingWindowSeconds { get; set; } = 30;
-
-    public int CircuitBreakerBreakDurationSeconds { get; set; } = 60;
-
-    public int TimeoutSeconds { get; set; } = 30;
+        return services;
+    }
 }

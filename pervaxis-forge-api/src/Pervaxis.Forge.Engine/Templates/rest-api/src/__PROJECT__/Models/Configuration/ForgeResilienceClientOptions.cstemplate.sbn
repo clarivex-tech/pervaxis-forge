@@ -18,17 +18,15 @@
 
 namespace {{ model.names.namespace }}.Models.Configuration;
 
-public sealed class ForgeResilienceOptions
+public sealed class ForgeResilienceClientOptions
 {
-    public const string SectionName = "Resilience";
+    public int? MaxRetryAttempts { get; set; }
 
-    public int MaxRetryAttempts { get; set; } = 3;
+    public int? CircuitBreakerFailureThreshold { get; set; }
 
-    public int CircuitBreakerFailureThreshold { get; set; } = 5;
+    public int? CircuitBreakerSamplingWindowSeconds { get; set; }
 
-    public int CircuitBreakerSamplingWindowSeconds { get; set; } = 30;
+    public int? CircuitBreakerBreakDurationSeconds { get; set; }
 
-    public int CircuitBreakerBreakDurationSeconds { get; set; } = 60;
-
-    public int TimeoutSeconds { get; set; } = 30;
+    public int? TimeoutSeconds { get; set; }
 }
