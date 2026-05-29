@@ -17,6 +17,10 @@
  */
 
 using {{ model.names.namespace }}.Extensions;
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Infrastructure.Http;
+using {{ model.names.namespace }}.Infrastructure.Middleware;
+using {{ model.names.namespace }}.Models.Configuration;
 {{- for module in model.selected_modules }}
 using {{ module.package_name }}.Extensions;
 {{- end }}
@@ -33,10 +37,12 @@ using System.Diagnostics;
 using System.Threading.RateLimiting;
 using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Auth;
-using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// ── Structured Logging (Serilog + CloudWatch) ──────────────────────────────
+builder.AddForgeSerilog();
 
 builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
@@ -52,6 +58,10 @@ builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
 });
+
+// ── Configuration options ──────────────────────────────────────────────────
+builder.Services.Configure<ForgeResilienceOptions>(
+    builder.Configuration.GetSection(ForgeResilienceOptions.SectionName));
 builder.Services.AddOptions<ForgeDataClassificationOptions>()
     .BindConfiguration(ForgeDataClassificationOptions.SectionName);
 builder.Services.AddOptions<ForgeAuthenticationOptions>()
@@ -84,6 +94,7 @@ builder.Services.AddRateLimiter(limiterOptions =>
                 }));
     }
 });
+
 const string ForgeUiCorsPolicy = "ForgeUi";
 builder.Services.AddCors(options =>
 {
@@ -115,6 +126,21 @@ builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>
         builder.Configuration.GetConnectionString("{{ model.names.dot_net_class_name }}Db"),
         npgsql => npgsql.EnableRetryOnFailure(3)));
 {{- end }}
+
+// ── OpenTelemetry Tracing ──────────────────────────────────────────────────
+builder.Services.AddForgeTracing(builder.Configuration);
+
+// ── FluentValidation ───────────────────────────────────────────────────────
+builder.Services.AddForgeValidation();
+
+// ── API Versioning ─────────────────────────────────────────────────────────
+builder.Services.AddForgeVersioning();
+
+// ── HTTP Context + DelegatingHandlers ─────────────────────────────────────
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<CorrelationIdHandler>();
+builder.Services.AddTransient<HttpLoggingHandler>();
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -128,7 +154,15 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// ── Middleware pipeline (order is critical) ────────────────────────────────
+// 1. Correlation ID first — establishes request identity for all downstream
+app.UseMiddleware<CorrelationIdMiddleware>();
+// 2. Exception handler second — catches errors from all downstream middleware
+app.UseMiddleware<ExceptionHandlerMiddleware>();
+// 3. Security headers third — applies to all responses including error responses
+app.UseMiddleware<SecurityHeadersMiddleware>();
+
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:EnableSwagger"))
 {
     app.UseSwagger();
     app.UseSwaggerUI(options =>
@@ -152,38 +186,20 @@ app.Use(async (context, next) =>
         : "anonymous";
 
     app.Logger.LogInformation(
-        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {TraceId}",
+        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {CorrelationId}",
         "request",
         context.Request.Method,
         context.Request.Path.Value,
         context.Response.StatusCode,
         elapsedMs,
         actor,
-        context.TraceIdentifier);
-});
-app.Use(async (context, next) =>
-{
-    context.Response.OnStarting(() =>
-    {
-        var headers = context.Response.Headers;
-        headers["X-Content-Type-Options"] = "nosniff";
-        headers["X-Frame-Options"] = "DENY";
-        headers["Referrer-Policy"] = "no-referrer";
-
-        if (!app.Environment.IsDevelopment())
-        {
-            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
-        }
-
-        return Task.CompletedTask;
-    });
-
-    await next();
+        context.Items["CorrelationId"]?.ToString() ?? context.TraceIdentifier);
 });
 app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapHealthChecks("/health").RequireAuthorization();
+// Health check is anonymous — load balancers must reach it without an API key
+app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers().RequireAuthorization();
 
 app.Run();

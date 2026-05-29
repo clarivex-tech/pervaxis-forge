@@ -16,7 +16,22 @@
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.*" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="10.*" />
+    <!-- Cross-cutting concerns -->
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="*" />
+    <PackageReference Include="Serilog.AspNetCore" Version="*" />
+    <PackageReference Include="Serilog.Formatting.Compact" Version="*" />
+    <PackageReference Include="Serilog.Enrichers.Span" Version="*" />
+    <PackageReference Include="Serilog.Enrichers.Environment" Version="*" />
+    <PackageReference Include="AWS.Logger.SeriLog" Version="*" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="*" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.15.1-beta.1" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="*" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="*" />
+    <PackageReference Include="Asp.Versioning.Http" Version="*" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="*" />
 {{- for module in model.selected_modules }}
     <PackageReference Include="{{ module.package_name }}" />
 {{- end }}

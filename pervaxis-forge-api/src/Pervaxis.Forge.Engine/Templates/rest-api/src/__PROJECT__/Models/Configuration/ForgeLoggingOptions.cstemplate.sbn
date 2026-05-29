@@ -18,17 +18,18 @@
 
 namespace {{ model.names.namespace }}.Models.Configuration;
 
-public sealed class ForgeResilienceOptions
+public sealed class ForgeLoggingOptions
 {
-    public const string SectionName = "Resilience";
+    public const string SectionName = "Serilog";
 
-    public int MaxRetryAttempts { get; set; } = 3;
+    public string ServiceName { get; set; } = "{{ model.manifest.service_name }}";
 
-    public int CircuitBreakerFailureThreshold { get; set; } = 5;
+    public CloudWatchOptions? CloudWatch { get; set; }
+}
 
-    public int CircuitBreakerSamplingWindowSeconds { get; set; } = 30;
+public sealed class CloudWatchOptions
+{
+    public string LogGroup { get; set; } = "/pervaxis/{{ model.manifest.vertical_slug }}/{{ model.manifest.service_name }}";
 
-    public int CircuitBreakerBreakDurationSeconds { get; set; } = 60;
-
-    public int TimeoutSeconds { get; set; } = 30;
+    public string? LogStreamPrefix { get; set; }
 }

@@ -16,19 +16,23 @@
  ************************************************************************
  */
 
-namespace {{ model.names.namespace }}.Models.Configuration;
+using FluentValidation;
+using {{ model.names.namespace }}.Infrastructure.Validation;
 
-public sealed class ForgeResilienceOptions
+namespace {{ model.names.namespace }}.Infrastructure.Extensions;
+
+public static class ValidationExtensions
 {
-    public const string SectionName = "Resilience";
+    public static IServiceCollection AddForgeValidation(this IServiceCollection services)
+    {
+        services.AddValidatorsFromAssemblyContaining<Program>();
+        services.AddScoped<ValidationEndpointFilter>();
+        return services;
+    }
 
-    public int MaxRetryAttempts { get; set; } = 3;
-
-    public int CircuitBreakerFailureThreshold { get; set; } = 5;
-
-    public int CircuitBreakerSamplingWindowSeconds { get; set; } = 30;
-
-    public int CircuitBreakerBreakDurationSeconds { get; set; } = 60;
-
-    public int TimeoutSeconds { get; set; } = 30;
+    public static RouteGroupBuilder WithValidation(this RouteGroupBuilder group)
+    {
+        group.AddEndpointFilter<ValidationEndpointFilter>();
+        return group;
+    }
 }

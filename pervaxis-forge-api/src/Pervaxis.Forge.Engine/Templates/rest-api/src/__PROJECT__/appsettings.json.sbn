@@ -6,7 +6,34 @@
     }
   },
   "AllowedHosts": "*",
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft.AspNetCore": "Warning",
+        "Microsoft.EntityFrameworkCore": "Warning",
+        "System.Net.Http": "Warning"
+      }
+    },
+    "CloudWatch": {
+      "LogGroup": "/pervaxis/{{ model.manifest.vertical_slug }}/{{ model.manifest.service_name }}",
+      "LogStreamPrefix": "{{ model.manifest.service_name }}"
+    }
+  },
+  "Resilience": {
+    "Default": {
+      "MaxRetryAttempts": 3,
+      "CircuitBreakerFailureThreshold": 5,
+      "CircuitBreakerSamplingWindowSeconds": 30,
+      "CircuitBreakerBreakDurationSeconds": 60,
+      "TimeoutSeconds": 30
+    }
+  },
+  "OpenTelemetry": {
+    "OtlpEndpoint": "http://localhost:4317"
+  },
   "Forge": {
+    "ServiceName": "{{ model.manifest.service_name }}",
     "EnableSwagger": false,
     "Authentication": {
       "ApiKey": ""
@@ -15,12 +42,6 @@
       "UseSecretsManager": false,
       "SecretId": "",
       "ApiKeySecretKey": "Forge:Authentication:ApiKey"
-    },
-    "Resilience": {
-      "Enabled": true,
-      "RetryCount": 3,
-      "RetryDelayMilliseconds": 1000,
-      "TimeoutSeconds": 30
     },
     "AuditLogging": {
       "Enabled": true

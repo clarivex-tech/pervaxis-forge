@@ -18,17 +18,9 @@
 
 namespace {{ model.names.namespace }}.Models.Configuration;
 
-public sealed class ForgeResilienceOptions
+public sealed class ForgeTracingOptions
 {
-    public const string SectionName = "Resilience";
+    public const string SectionName = "OpenTelemetry";
 
-    public int MaxRetryAttempts { get; set; } = 3;
-
-    public int CircuitBreakerFailureThreshold { get; set; } = 5;
-
-    public int CircuitBreakerSamplingWindowSeconds { get; set; } = 30;
-
-    public int CircuitBreakerBreakDurationSeconds { get; set; } = 60;
-
-    public int TimeoutSeconds { get; set; } = 30;
+    public string OtlpEndpoint { get; set; } = "http://localhost:4317";
 }
