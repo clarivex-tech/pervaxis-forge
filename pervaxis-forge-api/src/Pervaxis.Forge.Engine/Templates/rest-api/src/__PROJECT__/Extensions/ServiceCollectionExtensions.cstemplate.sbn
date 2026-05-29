@@ -16,6 +16,8 @@
  ************************************************************************
  */
 
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Infrastructure.Http;
 using {{ model.names.namespace }}.Services;
 
 namespace {{ model.names.namespace }}.Extensions;
@@ -27,8 +29,13 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.AddScoped<I{{ model.names.dot_net_class_name }}, {{ model.names.dot_net_class_name }}Service>();
+
+        // HTTP client with full DelegatingHandler chain:
+        // CorrelationId → HttpLogging → Resilience (retry + circuit breaker + timeout)
         services.AddHttpClient("forge-resilience")
-            .AddStandardResilienceHandler();
+            .AddHttpMessageHandler<CorrelationIdHandler>()
+            .AddHttpMessageHandler<HttpLoggingHandler>()
+            .AddForgeResilience(configuration.GetSection("Resilience:Default"));
 
         return services;
     }
