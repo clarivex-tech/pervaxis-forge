@@ -46,7 +46,23 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
             ["AngularMfeRoutePath"] = model.DerivedNames.AngularMfeRoutePath,
             ["model"] = new Scriban.Runtime.ScriptObject
             {
-                ["manifest"] = model.Manifest,
+                ["manifest"] = new Scriban.Runtime.ScriptObject
+                {
+                    ["product"] = model.Manifest.Product,
+                    ["vertical_slug"] = model.Manifest.VerticalSlug,
+                    ["service_name"] = model.Manifest.ServiceName,
+                    ["service_type"] = model.Manifest.ServiceType.ToString(),
+                    ["component_prefix"] = model.Manifest.ComponentPrefix,
+                    ["cloud_provider"] = model.Manifest.CloudProvider,
+                    ["metadata"] = new Scriban.Runtime.ScriptObject
+                    {
+                        ["author"] = model.Manifest.Metadata?.Author,
+                        ["description"] = model.Manifest.Metadata?.Description,
+                        ["version"] = model.Manifest.Metadata?.Version,
+                        ["created_by"] = model.Manifest.Metadata?.CreatedBy,
+                        ["created_at_utc"] = model.Manifest.Metadata?.CreatedAtUtc?.ToString("O"),
+                    },
+                },
                 ["cloud_provider"] = model.CloudProvider,
                 ["current_year"] = model.CurrentYear,
                 ["current_month"] = DateTime.UtcNow.ToString("MM"),
