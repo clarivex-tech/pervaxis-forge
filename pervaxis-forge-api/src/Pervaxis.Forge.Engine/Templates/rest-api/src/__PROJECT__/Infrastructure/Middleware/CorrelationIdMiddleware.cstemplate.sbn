@@ -1,3 +1,4 @@
+{{ if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -65,3 +66,4 @@ public sealed class CorrelationIdMiddleware
         return Guid.TryParse(value, out _);
     }
 }
+{{ end }}

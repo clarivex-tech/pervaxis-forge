@@ -32,7 +32,7 @@ public static class ServiceCollectionExtensions
 
         // HTTP client with full DelegatingHandler chain:
         // CorrelationId → JwtPropagation → HttpLogging → Resilience (retry + circuit breaker + timeout)
-        services.AddHttpClient("forge-resilience")
+        services.AddHttpClient<IForgeInternalHttpClient, ForgeInternalHttpClient>()
             .AddHttpMessageHandler<CorrelationIdHandler>()
             .AddHttpMessageHandler<JwtPropagationHandler>()
             .AddHttpMessageHandler<HttpLoggingHandler>()

@@ -17,19 +17,27 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
     <!-- Cross-cutting concerns -->
+{{ if model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled }}
     <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="*" />
+{{ end }}
+{{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
     <PackageReference Include="Serilog.AspNetCore" Version="*" />
     <PackageReference Include="Serilog.Formatting.Compact" Version="*" />
     <PackageReference Include="Serilog.Enrichers.Span" Version="*" />
     <PackageReference Include="Serilog.Enrichers.Environment" Version="*" />
     <PackageReference Include="AWS.Logger.SeriLog" Version="*" />
+{{ end }}
+{{ if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="*" />
+{{ end }}
+{{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="*" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="*" />
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="*" />
     <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.15.1-beta.1" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="*" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" Version="*" />
+{{ end }}
     <PackageReference Include="Asp.Versioning.Http" Version="*" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="*" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />

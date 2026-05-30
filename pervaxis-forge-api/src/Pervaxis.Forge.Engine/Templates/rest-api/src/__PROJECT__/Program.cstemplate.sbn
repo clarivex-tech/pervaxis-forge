@@ -47,7 +47,9 @@ using {{ model.names.namespace }}.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // ── Structured Logging (Serilog + CloudWatch) ──────────────────────────────
+{{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
 builder.AddForgeSerilog();
+{{ end }}
 
 builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
@@ -127,18 +129,26 @@ builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>
 {{- end }}
 
 // ── OpenTelemetry Tracing ──────────────────────────────────────────────────
+{{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
 builder.Services.AddForgeTracing(builder.Configuration);
+{{ end }}
 
 // ── FluentValidation ───────────────────────────────────────────────────────
+{{ if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
 builder.Services.AddForgeValidation();
+{{ end }}
 
 // ── API Versioning ─────────────────────────────────────────────────────────
 builder.Services.AddForgeVersioning();
 
 // ── HTTP Context + DelegatingHandlers ─────────────────────────────────────
 builder.Services.AddHttpContextAccessor();
+{{ if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
 builder.Services.AddTransient<CorrelationIdHandler>();
+{{ end }}
+{{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
 builder.Services.AddTransient<HttpLoggingHandler>();
+{{ end }}
 builder.Services.AddTransient<JwtPropagationHandler>();
 builder.Services.AddTransient<ExternalAuthHandler>();
 builder.Services.AddSingleton<IForgeHashingService, ForgeHashingService>();
@@ -174,7 +184,9 @@ var app = builder.Build();
 
 // ── Middleware pipeline (order is critical) ────────────────────────────────
 // 1. Correlation ID first — establishes request identity for all downstream
+{{ if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
 app.UseMiddleware<CorrelationIdMiddleware>();
+{{ end }}
 // 2. Exception handler second — catches errors from all downstream middleware
 app.UseMiddleware<ExceptionHandlerMiddleware>();
 // 3. JWT propagation — extracts Bearer token for service-to-service forwarding
@@ -182,7 +194,9 @@ app.UseMiddleware<JwtPropagationMiddleware>();
 // 4. Security headers — applies to all responses including error responses
 app.UseMiddleware<SecurityHeadersMiddleware>();
 // 5. Tenant resolution (multi-tenant services only)
+{{ if model.manifest.multi_tenancy }}
 app.UseMiddleware<TenantMiddleware>();
+{{ end }}
 
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:EnableSwagger"))
 {

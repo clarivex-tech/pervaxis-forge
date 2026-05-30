@@ -1,4 +1,3 @@
-{{ if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -19,26 +18,9 @@
 
 namespace {{ model.names.namespace }}.Infrastructure.Http;
 
-public sealed class CorrelationIdHandler : DelegatingHandler
+public sealed class ForgeInternalHttpClient : IForgeInternalHttpClient
 {
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    public ForgeInternalHttpClient(HttpClient client) => Client = client;
 
-    public CorrelationIdHandler(IHttpContextAccessor httpContextAccessor)
-    {
-        _httpContextAccessor = httpContextAccessor;
-    }
-
-    protected override Task<HttpResponseMessage> SendAsync(
-        HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        var correlationId = _httpContextAccessor.HttpContext?.Items["CorrelationId"]?.ToString();
-
-        if (!string.IsNullOrEmpty(correlationId))
-        {
-            request.Headers.TryAddWithoutValidation("X-Correlation-ID", correlationId);
-        }
-
-        return base.SendAsync(request, cancellationToken);
-    }
+    public HttpClient Client { get; }
 }
-{{ end }}

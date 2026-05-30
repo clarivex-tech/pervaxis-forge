@@ -1,3 +1,4 @@
+{{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -51,3 +52,4 @@ public static class TracingExtensions
         return services;
     }
 }
+{{ end }}
