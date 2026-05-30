@@ -6,6 +6,7 @@
     }
   },
   "AllowedHosts": "*",
+{{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
   "Serilog": {
     "MinimumLevel": {
       "Default": "Information",
@@ -20,6 +21,7 @@
       "LogStreamPrefix": "{{ model.manifest.service_name }}"
     }
   },
+{{ end }}
   "Resilience": {
     "Default": {
       "MaxRetryAttempts": 3,
@@ -39,9 +41,11 @@
   "ExternalServices": {
     "BaseUrl": ""
   },
+{{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
   "OpenTelemetry": {
     "OtlpEndpoint": "http://localhost:4317"
   },
+{{ end }}
   "Forge": {
     "ServiceName": "{{ model.manifest.service_name }}",
     "EnableSwagger": false,

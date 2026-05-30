@@ -1,3 +1,4 @@
+{{ if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -64,3 +65,4 @@ public sealed class ValidationEndpointFilter : IEndpointFilter
         return await next(context).ConfigureAwait(false);
     }
 }
+{{ end }}

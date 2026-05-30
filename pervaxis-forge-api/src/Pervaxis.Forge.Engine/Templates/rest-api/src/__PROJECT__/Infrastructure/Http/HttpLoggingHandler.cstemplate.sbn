@@ -1,3 +1,4 @@
+{{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -94,3 +95,4 @@ public sealed class HttpLoggingHandler : DelegatingHandler
         return headerName.EndsWith("-Token", StringComparison.OrdinalIgnoreCase);
     }
 }
+{{ end }}

@@ -62,6 +62,55 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                         ["created_by"] = model.Manifest.Metadata?.CreatedBy,
                         ["created_at_utc"] = model.Manifest.Metadata?.CreatedAtUtc?.ToString("O"),
                     },
+                    ["auth"] = model.Manifest.Auth is { } auth
+                        ? new Scriban.Runtime.ScriptObject
+                        {
+                            ["api_key_enabled"] = auth.ApiKeyEnabled,
+                            ["jwt_enabled"] = auth.JwtEnabled,
+                            ["mtls_enabled"] = auth.MtlsEnabled,
+                        }
+                        : null,
+                    ["resilience"] = model.Manifest.Resilience is { } resilience
+                        ? new Scriban.Runtime.ScriptObject
+                        {
+                            ["retry_enabled"] = resilience.RetryEnabled,
+                            ["circuit_breaker_enabled"] = resilience.CircuitBreakerEnabled,
+                            ["timeout_enabled"] = resilience.TimeoutEnabled,
+                            ["internal_http_client"] = resilience.InternalHttpClient,
+                            ["external_http_client"] = resilience.ExternalHttpClient,
+                        }
+                        : null,
+                    ["observability"] = model.Manifest.Observability is { } observability
+                        ? new Scriban.Runtime.ScriptObject
+                        {
+                            ["serilog_enabled"] = observability.SerilogEnabled,
+                            ["cloud_watch_enabled"] = observability.CloudWatchEnabled,
+                            ["open_telemetry_enabled"] = observability.OpenTelemetryEnabled,
+                            ["correlation_id_enabled"] = observability.CorrelationIdEnabled,
+                            ["prometheus_enabled"] = observability.PrometheusEnabled,
+                        }
+                        : null,
+                    ["validation"] = model.Manifest.Validation is { } validation
+                        ? new Scriban.Runtime.ScriptObject
+                        {
+                            ["fluent_validation_enabled"] = validation.FluentValidationEnabled,
+                        }
+                        : null,
+                    ["background_jobs"] = model.Manifest.BackgroundJobs is { } backgroundJobs
+                        ? new Scriban.Runtime.ScriptObject
+                        {
+                            ["provider"] = backgroundJobs.Provider,
+                        }
+                        : null,
+                    ["utilities"] = model.Manifest.Utilities is { } utilities
+                        ? new Scriban.Runtime.ScriptObject
+                        {
+                            ["pdf_enabled"] = utilities.PdfEnabled,
+                            ["template_engine_enabled"] = utilities.TemplateEngineEnabled,
+                            ["hashing_enabled"] = utilities.HashingEnabled,
+                        }
+                        : null,
+                    ["multi_tenancy"] = model.Manifest.MultiTenancy,
                 },
                 ["cloud_provider"] = model.CloudProvider,
                 ["current_year"] = model.CurrentYear,

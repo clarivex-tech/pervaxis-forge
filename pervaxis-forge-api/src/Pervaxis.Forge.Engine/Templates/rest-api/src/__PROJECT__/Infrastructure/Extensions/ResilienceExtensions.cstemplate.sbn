@@ -1,3 +1,4 @@
+{{ if model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -95,3 +96,4 @@ public static class ResilienceExtensions
         return builder;
     }
 }
+{{ end }}
