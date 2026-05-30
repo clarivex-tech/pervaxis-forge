@@ -149,7 +149,6 @@ builder.Services.AddTransient<CorrelationIdHandler>();
 {{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
 builder.Services.AddTransient<HttpLoggingHandler>();
 {{ end }}
-builder.Services.AddTransient<JwtPropagationHandler>();
 builder.Services.AddTransient<ExternalAuthHandler>();
 builder.Services.AddSingleton<IForgeHashingService, ForgeHashingService>();
 builder.Services.AddScoped<ITenantContext, TenantContext>();
@@ -187,11 +186,11 @@ var app = builder.Build();
 {{ if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
 app.UseMiddleware<CorrelationIdMiddleware>();
 {{ end }}
-// 2. Exception handler second â€” catches errors from all downstream middleware
-app.UseMiddleware<ExceptionHandlerMiddleware>();
-// 3. JWT propagation â€” extracts Bearer token for service-to-service forwarding
+// 2. JWT propagation — extracts Bearer token before downstream middleware runs
 app.UseMiddleware<JwtPropagationMiddleware>();
-// 4. Security headers â€” applies to all responses including error responses
+// 3. Exception handler third — catches errors from all downstream middleware
+app.UseMiddleware<ExceptionHandlerMiddleware>();
+// 4. Security headers — applies to all responses including error responses
 app.UseMiddleware<SecurityHeadersMiddleware>();
 // 5. Tenant resolution (multi-tenant services only)
 {{ if model.manifest.multi_tenancy }}
@@ -239,3 +238,4 @@ app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers().RequireAuthorization();
 
 app.Run();
+
