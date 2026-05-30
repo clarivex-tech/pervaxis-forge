@@ -145,7 +145,14 @@ public sealed class GenerationService : IGenerationService
                     GenesisModules = serviceSpec.GenesisModules,
                     Database = serviceSpec.Database,
                     Queues = serviceSpec.Queues,
-                    Metadata = serviceSpec.Metadata
+                    Metadata = serviceSpec.Metadata,
+                    Auth = serviceSpec.Auth,
+                    Resilience = serviceSpec.Resilience,
+                    Observability = serviceSpec.Observability,
+                    Validation = serviceSpec.Validation,
+                    BackgroundJobs = serviceSpec.BackgroundJobs,
+                    Utilities = serviceSpec.Utilities,
+                    MultiTenancy = serviceSpec.MultiTenancy
                 };
 
                 var manifest = BuildManifest(fullRequest, vertical);
@@ -350,7 +357,14 @@ public sealed class GenerationService : IGenerationService
             {
                 Version = request.Version,
                 CreatedAtUtc = DateTimeOffset.UtcNow
-            }
+            },
+            Auth = request.Auth,
+            Resilience = request.Resilience,
+            Observability = request.Observability,
+            Validation = request.Validation,
+            BackgroundJobs = request.BackgroundJobs,
+            Utilities = request.Utilities,
+            MultiTenancy = request.MultiTenancy
         };
 
         if (isBackend && request.Database != null)

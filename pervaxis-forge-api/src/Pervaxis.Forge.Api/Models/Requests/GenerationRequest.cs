@@ -16,6 +16,8 @@
  ************************************************************************
  */
 
+using Pervaxis.Forge.Engine.Manifest;
+
 namespace Pervaxis.Forge.Api.Models.Requests;
 
 public record GenerationRequest
@@ -33,4 +35,11 @@ public record GenerationRequest
     public List<GenerationQueueConfig> Queues { get; init; } = [];
     public GenerationMetadata Metadata { get; init; } = new();
     public bool CreateGitHubRepo { get; init; } = false;
+    public AuthConfig? Auth { get; init; }
+    public ResilienceConfig? Resilience { get; init; }
+    public ObservabilityConfig? Observability { get; init; }
+    public ValidationConfig? Validation { get; init; }
+    public BackgroundJobConfig? BackgroundJobs { get; init; }
+    public UtilitiesConfig? Utilities { get; init; }
+    public bool MultiTenancy { get; init; } = false;
 }
