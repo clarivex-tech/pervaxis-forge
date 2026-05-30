@@ -135,7 +135,7 @@ builder.Services.AddRateLimiter(limiterOptions =>
     }
 });
 builder.Services.AddForgeAuthentication(builder.Configuration);
-builder.Services.Configure<ForgeAuth0Options>(builder.Configuration.GetSection(ForgeAuth0Options.SectionName));
+builder.Services.Configure<ForgeOidcOptions>(builder.Configuration.GetSection(ForgeOidcOptions.SectionName));
 builder.Services.Configure<ForgeTenantOptions>(builder.Configuration.GetSection(ForgeTenantOptions.SectionName));
 builder.Services.Configure<ForgeOutboxOptions>(builder.Configuration.GetSection(ForgeOutboxOptions.SectionName));
 builder.Services.AddSingleton<IForgeHashingService, ForgeHashingService>();
