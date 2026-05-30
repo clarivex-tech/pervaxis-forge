@@ -16,10 +16,10 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -38,6 +38,10 @@ import { IVerticalApiService, VERTICAL_API_SERVICE } from '@core/api/vertical-ap
 import { MODULES_API_SERVICE, IModulesApiService } from '@core/api/modules-api.service';
 import { CanvasModule, EnterpriseScaffoldOptions, GenerationRequest, GenesisModule, ValidationPreviewResult } from '@core/models/generation.model';
 import { VerticalSummaryResponse } from '@core/models/vertical.model';
+import { InfraOptionsFormControls, INFRA_OPTIONS_DEFAULTS } from './utils/infra-options-defaults';
+import { mapInfraOptionsToRequest, getInfraReviewSummary } from './utils/infra-options-mapping';
+import { infraOptionsValidator } from './utils/infra-options-validator';
+import { InfrastructureOptionsComponent } from './steps/infrastructure-step/infrastructure-options.component';
 
 type BuildTypeOption = {
 	label: string;
@@ -67,6 +71,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 		MatButtonModule,
 		MatIconModule,
 		MatSlideToggleModule,
+		InfrastructureOptionsComponent,
 	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	template: `
@@ -365,6 +370,12 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 					</mat-card-content>
 				</mat-card>
 
+				<!-- Infrastructure Options (collapsible, between Production Readiness and Deployment Settings) -->
+				<forge-infrastructure-options
+					[infraForm]="infraOptionsForm"
+					[databaseConfigured]="form.controls.useDatabase.value"
+				/>
+
 				<!-- STEP 6: Deployment Settings -->
 				<mat-card class="step-card" [class.active]="activeStep() === 5">
 					<mat-card-header>
@@ -511,6 +522,30 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 										<span class="value">{{ form.controls.deployInfrastructure.value ? 'Deploy enabled' : 'Deploy disabled' }}</span>
 									</div>
 								</div>
+							</div>
+
+							<!-- Infrastructure Options Summary -->
+							<div class="review-section">
+								<h4>Infrastructure Options</h4>
+								@if (infraReviewSummary().length === 0) {
+									<div class="review-all-defaults">
+										<mat-icon>check_circle</mat-icon>
+										<span>All defaults</span>
+									</div>
+								} @else {
+									@for (group of infraReviewSummary(); track group.label) {
+										<div class="review-infra-group">
+											<span class="review-infra-group-label">{{ group.label }}</span>
+											<div class="review-infra-items">
+												@for (item of group.items; track item.name) {
+													<span class="review-infra-item" [class.non-default]="item.isNonDefault">
+														{{ item.name }}: <strong>{{ item.value }}</strong>
+													</span>
+												}
+											</div>
+										</div>
+									}
+								}
 							</div>
 						</div>
 
@@ -1097,6 +1132,51 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				word-break: break-word;
 			}
 
+			.review-all-defaults {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				color: #4caf50;
+				font-size: 0.85rem;
+			}
+
+			.review-all-defaults mat-icon {
+				font-size: 16px;
+				width: 16px;
+				height: 16px;
+			}
+
+			.review-infra-group {
+				margin-bottom: 0.5rem;
+			}
+
+			.review-infra-group-label {
+				font-size: 0.75rem;
+				font-weight: 600;
+				text-transform: uppercase;
+				color: #64748b;
+				letter-spacing: 0.5px;
+			}
+
+			.review-infra-items {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				margin-top: 0.25rem;
+			}
+
+			.review-infra-item {
+				font-size: 0.8rem;
+				padding: 2px 8px;
+				border-radius: 4px;
+				background: #f1f5f9;
+			}
+
+			.review-infra-item.non-default {
+				background: #e3f2fd;
+				color: #1565c0;
+			}
+
 			.preview-card {
 				border: 1px solid #d1e7dd;
 				border-radius: 0.5rem;
@@ -1297,6 +1377,35 @@ export class GenerationWizardV2Component {
 		piiClassificationEnabled: [false],
 		outputCachingEnabled: [false],
 	});
+
+	/** Nested FormGroup for infrastructure toggle options */
+	readonly infraOptionsForm = new FormGroup<InfraOptionsFormControls>({
+		apiKeyEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.apiKeyEnabled, { nonNullable: true }),
+		jwtEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.jwtEnabled, { nonNullable: true }),
+		mtlsEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.mtlsEnabled, disabled: true }, { nonNullable: true }),
+		retryEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.retryEnabled, { nonNullable: true }),
+		circuitBreakerEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.circuitBreakerEnabled, { nonNullable: true }),
+		timeoutEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.timeoutEnabled, { nonNullable: true }),
+		internalHttpClient: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.internalHttpClient, { nonNullable: true }),
+		externalHttpClient: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.externalHttpClient, { nonNullable: true }),
+		serilogEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.serilogEnabled, { nonNullable: true }),
+		cloudWatchEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.cloudWatchEnabled, { nonNullable: true }),
+		openTelemetryEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.openTelemetryEnabled, { nonNullable: true }),
+		correlationIdEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.correlationIdEnabled, { nonNullable: true }),
+		prometheusEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.prometheusEnabled, disabled: true }, { nonNullable: true }),
+		multiTenancy: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.multiTenancy, { nonNullable: true }),
+		fluentValidationEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.fluentValidationEnabled, { nonNullable: true }),
+		backgroundJobProvider: new FormControl<string | null>(INFRA_OPTIONS_DEFAULTS.backgroundJobProvider),
+		pdfEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.pdfEnabled, disabled: true }, { nonNullable: true }),
+		templateEngineEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.templateEngineEnabled, disabled: true }, { nonNullable: true }),
+		hashingEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.hashingEnabled, { nonNullable: true }),
+	}, { validators: [infraOptionsValidator(() => this.form.controls.useDatabase.value)] });
+
+	/** Whether a database is configured (derived from Deployment Settings) */
+	readonly databaseConfigured = computed(() => this.form.controls.useDatabase.value);
+
+	/** Infrastructure review summary for the review step */
+	readonly infraReviewSummary = computed(() => getInfraReviewSummary(this.infraOptionsForm.getRawValue()));
 
 	readonly verticals = signal<VerticalSummaryResponse[]>([]);
 	readonly selectedVertical = signal<VerticalSummaryResponse | null>(null);
@@ -1663,6 +1772,7 @@ export class GenerationWizardV2Component {
 			} : null,
 			createGitHubRepo: value.createGitHubRepo,
 			enterprise,
+			...mapInfraOptionsToRequest(this.infraOptionsForm.getRawValue()),
 		};
 	}
 
