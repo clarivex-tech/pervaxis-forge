@@ -31,9 +31,10 @@ public static class ServiceCollectionExtensions
         services.AddScoped<I{{ model.names.dot_net_class_name }}, {{ model.names.dot_net_class_name }}Service>();
 
         // HTTP client with full DelegatingHandler chain:
-        // CorrelationId → HttpLogging → Resilience (retry + circuit breaker + timeout)
+        // CorrelationId → JwtPropagation → HttpLogging → Resilience (retry + circuit breaker + timeout)
         services.AddHttpClient("forge-resilience")
             .AddHttpMessageHandler<CorrelationIdHandler>()
+            .AddHttpMessageHandler<JwtPropagationHandler>()
             .AddHttpMessageHandler<HttpLoggingHandler>()
             .AddForgeResilience(configuration.GetSection("Resilience:Default"));
 

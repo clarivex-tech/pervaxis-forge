@@ -32,6 +32,11 @@
     <PackageReference Include="OpenTelemetry.Exporter.Console" Version="*" />
     <PackageReference Include="Asp.Versioning.Http" Version="*" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="*" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+    <PackageReference Include="BCrypt.Net-Next" Version="*" />
+{{- if model.manifest.has_messaging }}
+    <PackageReference Include="AWSSDK.SQS" Version="3.*" />
+{{- end }}
 {{- for module in model.selected_modules }}
     <PackageReference Include="{{ module.package_name }}" />
 {{- end }}

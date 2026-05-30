@@ -36,5 +36,7 @@
     <PackageReference Include="OpenTelemetry.Exporter.Console" Version="*" />
     <PackageReference Include="Asp.Versioning.Http" Version="*" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="*" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
+    <PackageReference Include="BCrypt.Net-Next" Version="*" />
   </ItemGroup>
 </Project>

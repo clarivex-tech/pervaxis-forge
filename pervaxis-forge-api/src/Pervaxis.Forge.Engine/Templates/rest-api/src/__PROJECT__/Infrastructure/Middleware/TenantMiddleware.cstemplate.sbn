@@ -1,0 +1,97 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.Extensions.Options;
+using {{ model.names.namespace }}.Models.Configuration;
+
+namespace {{ model.names.namespace }}.Infrastructure.Middleware;
+
+public sealed class TenantMiddleware
+{
+    private const string HeaderName = "X-Tenant-ID";
+    private const int MaxLength = 64;
+
+    private readonly RequestDelegate _next;
+    private readonly ILogger<TenantMiddleware> _logger;
+    private readonly IOptions<ForgeTenantOptions> _tenantOptions;
+
+    public TenantMiddleware(
+        RequestDelegate next,
+        ILogger<TenantMiddleware> logger,
+        IOptions<ForgeTenantOptions> tenantOptions)
+    {
+        _next = next;
+        _logger = logger;
+        _tenantOptions = tenantOptions;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        var tenantId = context.Request.Headers[HeaderName].FirstOrDefault();
+
+        if (!string.IsNullOrEmpty(tenantId) && tenantId.Length > MaxLength)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            context.Response.ContentType = "application/problem+json";
+            await context.Response.WriteAsJsonAsync(new
+            {
+                type = "https://tools.ietf.org/html/rfc7807",
+                title = "Bad Request",
+                status = 400,
+                detail = $"X-Tenant-ID header value exceeds the maximum length of {MaxLength} characters"
+            });
+            return;
+        }
+
+        if (string.IsNullOrEmpty(tenantId))
+        {
+            if (_tenantOptions.Value.Required)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                context.Response.ContentType = "application/problem+json";
+                await context.Response.WriteAsJsonAsync(new
+                {
+                    type = "https://tools.ietf.org/html/rfc7807",
+                    title = "Bad Request",
+                    status = 400,
+                    detail = "X-Tenant-ID header is required"
+                });
+                return;
+            }
+
+            await _next(context).ConfigureAwait(false);
+            return;
+        }
+
+        context.Items["TenantId"] = tenantId;
+
+        // Enrich OTel span
+        System.Diagnostics.Activity.Current?.SetTag("tenant.id", tenantId);
+
+        context.Response.OnStarting(() =>
+        {
+            context.Response.Headers[HeaderName] = tenantId;
+            return Task.CompletedTask;
+        });
+
+        using (_logger.BeginScope(new Dictionary<string, object> { ["TenantId"] = tenantId }))
+        {
+            await _next(context).ConfigureAwait(false);
+        }
+    }
+}
