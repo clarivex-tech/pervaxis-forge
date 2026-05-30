@@ -106,6 +106,9 @@ public sealed class ExceptionHandlerMiddleware
                 Detail = string.Join(" ", fluentEx.Errors.Select(e => e.ErrorMessage))
             },
 
+            // TODO: VERTICAL — Add domain-specific conflict exceptions here, e.g.:
+            // MyConflictException => new ProblemDetails { Status = 409, Title = "Conflict", Detail = ex.Message },
+
             OperationCanceledException => new ProblemDetails
             {
                 Type = "https://tools.ietf.org/html/rfc7807",

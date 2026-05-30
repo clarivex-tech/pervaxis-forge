@@ -27,7 +27,17 @@
       "CircuitBreakerSamplingWindowSeconds": 30,
       "CircuitBreakerBreakDurationSeconds": 60,
       "TimeoutSeconds": 30
+    },
+    "External": {
+      "MaxRetryAttempts": 2,
+      "CircuitBreakerFailureThreshold": 3,
+      "CircuitBreakerSamplingWindowSeconds": 60,
+      "CircuitBreakerBreakDurationSeconds": 120,
+      "TimeoutSeconds": 15
     }
+  },
+  "ExternalServices": {
+    "BaseUrl": ""
   },
   "OpenTelemetry": {
     "OtlpEndpoint": "http://localhost:4317"
@@ -35,9 +45,24 @@
   "Forge": {
     "ServiceName": "{{ model.manifest.service_name }}",
     "EnableSwagger": false,
-    "Authentication": {
-      "ApiKey": ""
+    "Auth0": {
+      "Authority": "",
+      "Audience": "",
+      "Domain": ""
     },
+    "Authentication": {
+      "ApiKey": "",
+      "Scheme": "ApiKey"
+    },
+    "Tenant": {
+      "Required": false
+    },
+{{- if model.manifest.has_messaging }}
+    "Outbox": {
+      "MaxRetries": 5,
+      "PollingIntervalSeconds": 10
+    },
+{{- end }}
     "Secrets": {
       "UseSecretsManager": false,
       "SecretId": "",

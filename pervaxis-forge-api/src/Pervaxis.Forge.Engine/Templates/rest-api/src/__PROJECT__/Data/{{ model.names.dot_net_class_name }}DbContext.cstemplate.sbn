@@ -1,8 +1,85 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Reflection;
 using Microsoft.EntityFrameworkCore;
+using {{ model.names.namespace }}.Infrastructure.Tenancy;
+using {{ model.names.namespace }}.Models.Tenancy;
 
 namespace {{ model.names.namespace }}.Data;
 
-public sealed class {{ model.names.dot_net_class_name }}DbContext(
-    DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> options) : DbContext(options)
+public class {{ model.names.dot_net_class_name }}DbContext : DbContext
 {
+    private readonly ITenantContext _tenantContext;
+
+    public {{ model.names.dot_net_class_name }}DbContext(
+        DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> options,
+        ITenantContext tenantContext)
+        : base(options)
+    {
+        _tenantContext = tenantContext;
+    }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        // Apply global query filter to all ITenantEntity types
+        foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+        {
+            if (typeof(ITenantEntity).IsAssignableFrom(entityType.ClrType))
+            {
+                var method = typeof({{ model.names.dot_net_class_name }}DbContext)
+                    .GetMethod(nameof(ApplyTenantFilter),
+                        BindingFlags.NonPublic | BindingFlags.Instance)!
+                    .MakeGenericMethod(entityType.ClrType);
+                method.Invoke(this, [modelBuilder]);
+            }
+        }
+    }
+
+    private void ApplyTenantFilter<TEntity>(ModelBuilder modelBuilder)
+        where TEntity : class, ITenantEntity
+    {
+        modelBuilder.Entity<TEntity>()
+            .HasQueryFilter(e => _tenantContext.TenantId == null || e.TenantId == _tenantContext.TenantId);
+    }
+
+    public override async Task<int> SaveChangesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        var tenantId = _tenantContext.TenantId;
+
+        var newTenantEntities = ChangeTracker.Entries<ITenantEntity>()
+            .Where(e => e.State == EntityState.Added)
+            .ToList();
+
+        if (newTenantEntities.Count > 0)
+        {
+            if (string.IsNullOrEmpty(tenantId))
+                throw new InvalidOperationException(
+                    "A TenantId is required to persist tenant-scoped entities. " +
+                    "Ensure the X-Tenant-ID header is present on the request.");
+
+            foreach (var entry in newTenantEntities)
+                entry.Entity.TenantId = tenantId;
+        }
+
+        return await base.SaveChangesAsync(cancellationToken);
+    }
 }

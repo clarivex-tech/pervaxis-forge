@@ -64,7 +64,7 @@ jobs:
             /d:sonar.pullrequest.key="${{ github.event.pull_request.number }}" \
             /d:sonar.pullrequest.branch="${{ github.head_ref }}" \
             /d:sonar.pullrequest.base="${{ github.base_ref }}" \
-            /d:sonar.qualitygate.wait=false
+            /d:sonar.qualitygate.wait=true
 
       - run: dotnet build Pervaxis.Forge.slnx --no-restore --configuration Release
 
@@ -73,6 +73,7 @@ jobs:
           dotnet test Pervaxis.Forge.slnx --no-build --configuration Release \
             --filter "Category!=Integration" \
             --collect:"XPlat Code Coverage" --results-directory TestResults \
+            --minimum-coverage 80 \
             -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
 
       - name: SonarQube end

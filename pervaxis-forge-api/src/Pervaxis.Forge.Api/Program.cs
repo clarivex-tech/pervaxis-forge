@@ -20,8 +20,6 @@ using Amazon.Extensions.NETCore.Setup;
 using Amazon.AspNetCore.DataProtection.SSM;
 using Amazon.SecretsManager;
 using Amazon.SecurityToken;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -35,6 +33,7 @@ using Pervaxis.Forge.Api.Endpoints;
 using Pervaxis.Forge.Api.Infrastructure.Extensions;
 using Pervaxis.Forge.Api.Infrastructure.Http;
 using Pervaxis.Forge.Api.Infrastructure.Middleware;
+using Pervaxis.Forge.Api.Infrastructure.Security;
 using Pervaxis.Forge.Api.Models.Configuration;
 using Pervaxis.Forge.Api.Models.Requests;
 using Pervaxis.Forge.Api.Services;
@@ -135,19 +134,11 @@ builder.Services.AddRateLimiter(limiterOptions =>
                 }));
     }
 });
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = "ForgeApiKey";
-    options.DefaultChallengeScheme = "ForgeApiKey";
-})
-    .AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>("ForgeApiKey", _ => { });
-builder.Services.AddAuthorization(options =>
-{
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .AddAuthenticationSchemes("ForgeApiKey")
-        .RequireAuthenticatedUser()
-        .Build();
-});
+builder.Services.AddForgeAuthentication(builder.Configuration);
+builder.Services.Configure<ForgeAuth0Options>(builder.Configuration.GetSection(ForgeAuth0Options.SectionName));
+builder.Services.Configure<ForgeTenantOptions>(builder.Configuration.GetSection(ForgeTenantOptions.SectionName));
+builder.Services.Configure<ForgeOutboxOptions>(builder.Configuration.GetSection(ForgeOutboxOptions.SectionName));
+builder.Services.AddSingleton<IForgeHashingService, ForgeHashingService>();
 builder.Services.AddSingleton<Func<string, IGitHubClient>>(
     _ => token => new GitHubClient(new ProductHeaderValue("pervaxis-forge"))
     {
@@ -195,6 +186,8 @@ builder.Services.AddForgeVersioning();
 // HTTP infrastructure: context accessor, delegating handlers, typed clients
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<CorrelationIdHandler>();
+builder.Services.AddTransient<JwtPropagationHandler>();
+builder.Services.AddTransient<ExternalAuthHandler>();
 builder.Services.AddTransient<HttpLoggingHandler>();
 
 builder.Services.AddHttpClient<IGitHubHttpClient, GitHubHttpClient>(client =>
@@ -211,8 +204,20 @@ builder.Services.AddHttpClient<IForgeInternalHttpClient, ForgeInternalHttpClient
     // Base address configured per deployment
 })
 .AddHttpMessageHandler<CorrelationIdHandler>()
+.AddHttpMessageHandler<JwtPropagationHandler>()
 .AddHttpMessageHandler<HttpLoggingHandler>()
 .AddForgeResilience(builder.Configuration.GetSection("Resilience:Internal"));
+
+builder.Services.AddHttpClient<IForgeExternalHttpClient, ForgeExternalHttpClient>(client =>
+{
+    var baseUrl = builder.Configuration["ExternalServices:BaseUrl"];
+    if (!string.IsNullOrEmpty(baseUrl))
+        client.BaseAddress = new Uri(baseUrl);
+})
+.AddHttpMessageHandler<CorrelationIdHandler>()
+.AddHttpMessageHandler<ExternalAuthHandler>()
+.AddHttpMessageHandler<HttpLoggingHandler>()
+.AddForgeResilience(builder.Configuration.GetSection("Resilience:External"));
 
 var app = builder.Build();
 
@@ -226,6 +231,7 @@ app.Logger.LogInformation(
 // Cross-cutting middleware (order is critical)
 app.UseMiddleware<CorrelationIdMiddleware>();
 app.UseMiddleware<ExceptionHandlerMiddleware>();
+app.UseMiddleware<JwtPropagationMiddleware>();
 app.UseMiddleware<SecurityHeadersMiddleware>();
 
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:EnableSwagger"))
