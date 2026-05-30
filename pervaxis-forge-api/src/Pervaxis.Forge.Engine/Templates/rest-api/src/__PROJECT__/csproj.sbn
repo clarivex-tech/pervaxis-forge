@@ -11,37 +11,37 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.2" />
-    <PackageReference Include="AWSSDK.SecretsManager" Version="3.7.*" />
-    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" Version="3.7.*" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
-    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.*" />
+    <PackageReference Include="Swashbuckle.AspNetCore" />
+    <PackageReference Include="AWSSDK.SecretsManager" />
+    <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <!-- Cross-cutting concerns -->
 {{ if model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled }}
-    <PackageReference Include="Microsoft.Extensions.Http.Resilience" Version="*" />
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
 {{ end }}
 {{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
-    <PackageReference Include="Serilog.AspNetCore" Version="*" />
-    <PackageReference Include="Serilog.Formatting.Compact" Version="*" />
-    <PackageReference Include="Serilog.Enrichers.Span" Version="*" />
-    <PackageReference Include="Serilog.Enrichers.Environment" Version="*" />
-    <PackageReference Include="AWS.Logger.SeriLog" Version="*" />
+    <PackageReference Include="Serilog.AspNetCore" />
+    <PackageReference Include="Serilog.Formatting.Compact" />
+    <PackageReference Include="Serilog.Enrichers.Span" />
+    <PackageReference Include="Serilog.Enrichers.Environment" />
+    <PackageReference Include="AWS.Logger.SeriLog" />
 {{ end }}
 {{ if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
-    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" Version="*" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
 {{ end }}
 {{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="*" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="*" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="*" />
-    <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.15.1-beta.1" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="*" />
-    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="*" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" />
 {{ end }}
-    <PackageReference Include="Asp.Versioning.Http" Version="*" />
-    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="*" />
-    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.*" />
-    <PackageReference Include="BCrypt.Net-Next" Version="*" />
+    <PackageReference Include="Asp.Versioning.Http" />
+    <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="BCrypt.Net-Next" />
 {{- if model.manifest.has_messaging }}
     <PackageReference Include="AWSSDK.SQS" Version="3.*" />
 {{- end }}
