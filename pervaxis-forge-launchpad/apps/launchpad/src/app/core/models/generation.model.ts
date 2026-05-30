@@ -69,6 +69,53 @@ export interface GenerationRequest {
 	database: GenerationDatabaseConfig | null;
 	createGitHubRepo: boolean;
 	enterprise?: EnterpriseScaffoldOptions;
+
+	// Infrastructure toggle fields (optional — omitted when all defaults)
+	auth?: GenerationAuthConfig | null;
+	resilience?: GenerationResilienceConfig | null;
+	observability?: GenerationObservabilityConfig | null;
+	validation?: GenerationValidationConfig | null;
+	backgroundJobs?: GenerationBackgroundJobConfig | null;
+	utilities?: GenerationUtilitiesConfig | null;
+	multiTenancy?: boolean;
+}
+
+// ─── Infrastructure Config Interfaces (match API payload shapes) ─────────────
+
+export interface GenerationAuthConfig {
+	apiKeyEnabled: boolean;
+	jwtEnabled: boolean;
+	mtlsEnabled: boolean;
+}
+
+export interface GenerationResilienceConfig {
+	retryEnabled: boolean;
+	circuitBreakerEnabled: boolean;
+	timeoutEnabled: boolean;
+	internalHttpClient: boolean;
+	externalHttpClient: boolean;
+}
+
+export interface GenerationObservabilityConfig {
+	serilogEnabled: boolean;
+	cloudWatchEnabled: boolean;
+	openTelemetryEnabled: boolean;
+	correlationIdEnabled: boolean;
+	prometheusEnabled: boolean;
+}
+
+export interface GenerationValidationConfig {
+	fluentValidationEnabled: boolean;
+}
+
+export interface GenerationBackgroundJobConfig {
+	provider: string | null;
+}
+
+export interface GenerationUtilitiesConfig {
+	pdfEnabled: boolean;
+	templateEngineEnabled: boolean;
+	hashingEnabled: boolean;
 }
 
 export interface ValidationPreviewResult {
