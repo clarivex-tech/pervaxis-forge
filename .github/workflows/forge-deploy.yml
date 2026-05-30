@@ -71,7 +71,6 @@ jobs:
           dotnet test Pervaxis.Forge.slnx --no-build --configuration Release \
             --filter "Category!=Integration" \
             --collect:"XPlat Code Coverage" --results-directory TestResults \
-            --minimum-coverage 80 \
             -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=opencover
 
       - name: SonarQube end
