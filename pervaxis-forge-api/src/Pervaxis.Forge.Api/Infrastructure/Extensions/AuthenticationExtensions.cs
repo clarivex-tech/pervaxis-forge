@@ -32,24 +32,24 @@ public static class AuthenticationExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        var auth0Options = new ForgeAuth0Options();
-        configuration.GetSection(ForgeAuth0Options.SectionName).Bind(auth0Options);
+        var oidcOptions = new ForgeOidcOptions();
+        configuration.GetSection(ForgeOidcOptions.SectionName).Bind(oidcOptions);
 
         var authOptions = new ForgeAuthenticationOptions();
         configuration.GetSection(ForgeAuthenticationOptions.SectionName).Bind(authOptions);
 
         var scheme = authOptions.Scheme;
 
-        // Validate Auth0 config only when JWT is needed
+        // Validate OIDC config only when JWT is needed
         if (scheme is "Bearer" or "Both")
         {
-            if (string.IsNullOrEmpty(auth0Options.Authority))
+            if (string.IsNullOrEmpty(oidcOptions.Authority))
                 throw new InvalidOperationException(
-                    $"Configuration key '{ForgeAuth0Options.SectionName}:Authority' is required when Scheme is '{scheme}'.");
+                    $"Configuration key '{ForgeOidcOptions.SectionName}:Authority' is required when Scheme is '{scheme}'.");
 
-            if (string.IsNullOrEmpty(auth0Options.Audience))
+            if (string.IsNullOrEmpty(oidcOptions.Audience))
                 throw new InvalidOperationException(
-                    $"Configuration key '{ForgeAuth0Options.SectionName}:Audience' is required when Scheme is '{scheme}'.");
+                    $"Configuration key '{ForgeOidcOptions.SectionName}:Audience' is required when Scheme is '{scheme}'.");
         }
 
         var authBuilder = services.AddAuthentication(options =>
@@ -72,8 +72,8 @@ public static class AuthenticationExtensions
         {
             authBuilder.AddJwtBearer(options =>
             {
-                options.Authority = auth0Options.Authority;
-                options.Audience = auth0Options.Audience;
+                options.Authority = oidcOptions.Authority;
+                options.Audience = oidcOptions.Audience;
                 options.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
