@@ -33,6 +33,7 @@
     <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="*" />
     <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" Version="1.15.1-beta.1" />
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="*" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Runtime" Version="*" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" Version="*" />
     <PackageReference Include="Asp.Versioning.Http" Version="*" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" Version="*" />

@@ -180,6 +180,7 @@ builder.Services.AddSwaggerGen(options =>
 builder.Services.Configure<ForgeResilienceOptions>(
     builder.Configuration.GetSection(ForgeResilienceOptions.SectionName));
 builder.Services.AddForgeTracing(builder.Configuration);
+builder.Services.AddForgeMetrics(builder.Configuration);
 builder.Services.AddForgeValidation();
 builder.Services.AddForgeVersioning();
 
