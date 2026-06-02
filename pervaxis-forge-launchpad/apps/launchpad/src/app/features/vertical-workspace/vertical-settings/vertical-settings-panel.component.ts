@@ -59,7 +59,7 @@ import { UpdateVerticalRequest } from '@core/models/enrollment.model';
 export class VerticalSettingsPanelComponent {
 	readonly vertical = input<VerticalResponse | null>(null);
 	readonly slug = input<string>('');
-	readonly close = output<void>();
+	readonly panelClose = output<void>();
 
 	private readonly fb = inject(FormBuilder);
 	private readonly verticalApiService = inject(VERTICAL_API_SERVICE);
@@ -117,7 +117,7 @@ export class VerticalSettingsPanelComponent {
 		this.verticalApiService.updateVertical(this.slug(), updateRequest).subscribe({
 			next: () => {
 				this.isSaving.set(false);
-				this.close.emit();
+				this.panelClose.emit();
 			},
 			error: () => {
 				this.isSaving.set(false);
@@ -136,7 +136,7 @@ export class VerticalSettingsPanelComponent {
 			next: () => {
 				this.isSaving.set(false);
 				this.showUnenrollConfirm.set(false);
-				this.close.emit();
+				this.panelClose.emit();
 				void this.router.navigateByUrl('/');
 			},
 			error: () => {
@@ -157,6 +157,6 @@ export class VerticalSettingsPanelComponent {
 	}
 
 	closePanel(): void {
-		this.close.emit();
+		this.panelClose.emit();
 	}
 }
