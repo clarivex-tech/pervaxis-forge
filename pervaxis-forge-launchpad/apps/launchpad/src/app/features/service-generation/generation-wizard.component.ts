@@ -180,7 +180,8 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 					</div>
 				</section>
 
-				<section class="full-width step-section" *ngIf="isCanvasTypeSelected()">
+				@if (isCanvasTypeSelected()) {
+				<section class="full-width step-section">
 					<h3>Architecture Type</h3>
 					<p class="step-description">Select app architecture:</p>
 					<div class="architecture-options">
@@ -197,8 +198,10 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 						}
 					</div>
 				</section>
+				}
 
-				<section class="full-width step-section" *ngIf="isCanvasTypeSelected()">
+				@if (isCanvasTypeSelected()) {
+				<section class="full-width step-section">
 					<h3>User Interfaces</h3>
 					<p class="step-description">Which user interfaces do you need?</p>
 					<div class="architecture-options">
@@ -215,12 +218,15 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 						}
 					</div>
 				</section>
+				}
 
-				<section class="full-width angular-preview" *ngIf="isCanvasTypeSelected() && selectedArchitecture() && selectedUiTarget()">
+				@if (isCanvasTypeSelected() && selectedArchitecture() && selectedUiTarget()) {
+				<section class="full-width angular-preview">
 					<p class="angular-preview-text">
 						Generating: <strong>[{{ selectedArchitectureLabel() }}]</strong> + <strong>[{{ selectedUiTargetLabel() }}]</strong>
 					</p>
 				</section>
+				}
 
 				<section class="full-width step-section">
 					<h3>Step 3: Service Details</h3>
@@ -397,14 +403,18 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 							<span class="review-label">Build Type</span>
 							<span class="review-value">{{ selectedBuildTypeLabel() }}</span>
 						</div>
-						<div class="review-item" *ngIf="isCanvasTypeSelected()">
+						@if (isCanvasTypeSelected()) {
+						<div class="review-item">
 							<span class="review-label">Architecture</span>
 							<span class="review-value">{{ selectedArchitectureLabel() || 'Not selected' }}</span>
 						</div>
-						<div class="review-item" *ngIf="isCanvasTypeSelected()">
+						}
+						@if (isCanvasTypeSelected()) {
+						<div class="review-item">
 							<span class="review-label">UI Target</span>
 							<span class="review-value">{{ selectedUiTargetLabel() || 'Not selected' }}</span>
 						</div>
+						}
 						<div class="review-item">
 							<span class="review-label">Service Name</span>
 							<span class="review-value">{{ form.controls.name.value || 'N/A' }}</span>
