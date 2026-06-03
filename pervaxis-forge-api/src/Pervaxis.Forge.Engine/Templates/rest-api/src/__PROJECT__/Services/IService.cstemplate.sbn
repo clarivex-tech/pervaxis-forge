@@ -22,5 +22,5 @@ namespace {{ model.names.namespace }}.Services;
 
 public interface I{{ model.names.dot_net_class_name }}
 {
-    Task<{{ model.names.dot_net_class_name }}Response> GetAsync(string id, CancellationToken cancellationToken = default);
+    Task<{{ model.names.dot_net_class_name }}Response?> GetAsync(string id, CancellationToken cancellationToken = default);
 }
