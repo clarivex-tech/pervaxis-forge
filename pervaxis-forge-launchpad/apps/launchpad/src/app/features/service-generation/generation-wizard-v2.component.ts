@@ -1679,12 +1679,22 @@ export class GenerationWizardV2Component {
 		this.generationError.set(null);
 
 		this.generationApiService.generateService(request).subscribe({
-			next: (response) => {
-				this.downloadZip(response.zipBlob, response.fileName);
-				this.generatedZipFileName.set(response.fileName);
-				this.generatedAt.set(response.generationTimestamp ?? new Date().toISOString());
-				this.generationGitHubUrl.set(response.gitHubRepoUrl);
-				this.isGenerating.set(false);
+			next: (metadata) => {
+				this.generatedAt.set(metadata.generatedAt);
+				this.generationGitHubUrl.set(metadata.gitHubRepoUrl);
+				this.generatedZipFileName.set(`${metadata.serviceName}-scaffold.zip`);
+
+				// Auto-download the ZIP
+				this.generationApiService.downloadServiceZip(request).subscribe({
+					next: (zipResult) => {
+						this.downloadZip(zipResult.zipBlob, zipResult.fileName);
+						this.isGenerating.set(false);
+					},
+					error: () => {
+						this.generationError.set('Generation succeeded but ZIP download failed. You can retry the download.');
+						this.isGenerating.set(false);
+					},
+				});
 			},
 			error: (error) => this.handleGenerationError(error),
 		});
