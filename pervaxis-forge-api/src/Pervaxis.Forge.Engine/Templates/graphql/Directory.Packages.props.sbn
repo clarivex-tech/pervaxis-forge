@@ -7,7 +7,7 @@
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- [2.3.2] AllowDowngrades=false catches accidental version regressions at restore time -->
-    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <!-- ===== Production dependencies ===== -->
@@ -17,14 +17,14 @@
     <PackageVersion Include="HotChocolate.Data"                               Version="14.3.3" />
 
     <!-- OpenTelemetry -->
-    <PackageVersion Include="OpenTelemetry.Extensions.Hosting"                Version="1.15.2" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore"        Version="1.15.2" />
-    <PackageVersion Include="OpenTelemetry.Instrumentation.Http"              Version="1.15.2" />
-    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol"    Version="1.15.2" />
+    <PackageVersion Include="OpenTelemetry.Extensions.Hosting"                Version="1.15.3" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.AspNetCore"        Version="1.15.1" />
+    <PackageVersion Include="OpenTelemetry.Instrumentation.Http"              Version="1.15.1" />
+    <PackageVersion Include="OpenTelemetry.Exporter.OpenTelemetryProtocol"    Version="1.15.3" />
 
     <!-- AWS -->
-    <PackageVersion Include="AWSSDK.SecretsManager"                           Version="4.0.4" />
-    <PackageVersion Include="AWSSDK.Extensions.NETCore.Setup"                 Version="4.0.4.1" />
+    <PackageVersion Include="AWSSDK.SecretsManager"                           Version="3.7.400.67" />
+    <PackageVersion Include="AWSSDK.Extensions.NETCore.Setup"                 Version="3.7.301" />
 
     <!-- EF Core / PostgreSQL (conditionally referenced; harmless if unused) -->
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL"           Version="10.0.0" />
