@@ -30,6 +30,11 @@ public sealed class FileGenerator
             if (model.Manifest.Database is null && normalizedResourceName.Contains("/Data/", StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            // Skip TenantMiddleware when multi-tenancy is not enabled.
+            // The template is always present but should only be emitted when the feature is active.
+            if (!model.Manifest.MultiTenancy && normalizedResourceName.Contains("TenantMiddleware", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var template = await templateLoader.LoadAsync(resourceName, cancellationToken);
             var rendered = templateEngine.Render(template, model);
 

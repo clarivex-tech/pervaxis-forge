@@ -111,6 +111,16 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                         }
                         : null,
                     ["multi_tenancy"] = model.Manifest.MultiTenancy,
+                    ["database"] = model.Manifest.Database is { } db
+                        ? new Scriban.Runtime.ScriptObject
+                        {
+                            ["engine"] = db.Engine,
+                            ["name"] = db.Name,
+                            ["host"] = db.Host,
+                            ["port"] = db.Port,
+                        }
+                        : null,
+                    ["has_messaging"] = model.Manifest.Queue is not null,
                 },
                 ["cloud_provider"] = model.CloudProvider,
                 ["current_year"] = model.CurrentYear,

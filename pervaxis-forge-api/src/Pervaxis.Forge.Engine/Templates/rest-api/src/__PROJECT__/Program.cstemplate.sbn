@@ -46,7 +46,7 @@ using {{ model.names.namespace }}.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// ── Structured Logging (Serilog + CloudWatch) ──────────────────────────────
+// -- Structured Logging (Serilog + CloudWatch) ------------------------------------------
 {{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
 builder.AddForgeSerilog();
 {{ end }}
@@ -66,7 +66,7 @@ builder.Services.AddResponseCompression(options =>
     options.EnableForHttps = true;
 });
 
-// ── Configuration options ──────────────────────────────────────────────────
+// -- Configuration options --------------------------------------------------------
 builder.Services.Configure<ForgeResilienceOptions>(
     builder.Configuration.GetSection(ForgeResilienceOptions.SectionName));
 builder.Services.AddOptions<ForgeDataClassificationOptions>()
@@ -114,7 +114,7 @@ builder.Services.AddCors(options =>
         .AllowAnyHeader()
         .AllowAnyMethod());
 });
-// ── Authentication (API Key + optional JWT/OIDC) ───────────────────────────
+// -- Authentication (API Key + optional JWT/OIDC) ------------------------------------
 builder.Services.AddForgeAuthentication(builder.Configuration);
 builder.Services.Configure<ForgeOidcOptions>(builder.Configuration.GetSection(ForgeOidcOptions.SectionName));
 builder.Services.Configure<ForgeTenantOptions>(builder.Configuration.GetSection(ForgeTenantOptions.SectionName));
@@ -128,20 +128,20 @@ builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>
         npgsql => npgsql.EnableRetryOnFailure(3)));
 {{- end }}
 
-// ── OpenTelemetry Tracing ──────────────────────────────────────────────────
+// -- OpenTelemetry Tracing --------------------------------------------------------
 {{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
 builder.Services.AddForgeTracing(builder.Configuration);
 {{ end }}
 
-// ── FluentValidation ───────────────────────────────────────────────────────
+// -- FluentValidation -------------------------------------------------------------
 {{ if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
 builder.Services.AddForgeValidation();
 {{ end }}
 
-// ── API Versioning ─────────────────────────────────────────────────────────
+// -- API Versioning ---------------------------------------------------------------
 builder.Services.AddForgeVersioning();
 
-// ── HTTP Context + DelegatingHandlers ─────────────────────────────────────
+// -- HTTP Context + DelegatingHandlers --------------------------------------------
 builder.Services.AddHttpContextAccessor();
 {{ if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
 builder.Services.AddTransient<CorrelationIdHandler>();
@@ -181,16 +181,16 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-// ── Middleware pipeline (order is critical) ────────────────────────────────
-// 1. Correlation ID first — establishes request identity for all downstream
+// -- Middleware pipeline (order is critical) ------------------------------------------
+// 1. Correlation ID first -- establishes request identity for all downstream
 {{ if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
 app.UseMiddleware<CorrelationIdMiddleware>();
 {{ end }}
-// 2. JWT propagation � extracts Bearer token before downstream middleware runs
+// 2. JWT propagation -- extracts Bearer token before downstream middleware runs
 app.UseMiddleware<JwtPropagationMiddleware>();
-// 3. Exception handler third � catches errors from all downstream middleware
+// 3. Exception handler third -- catches errors from all downstream middleware
 app.UseMiddleware<ExceptionHandlerMiddleware>();
-// 4. Security headers � applies to all responses including error responses
+// 4. Security headers -- applies to all responses including error responses
 app.UseMiddleware<SecurityHeadersMiddleware>();
 // 5. Tenant resolution (multi-tenant services only)
 {{ if model.manifest.multi_tenancy }}
@@ -233,7 +233,7 @@ app.Use(async (context, next) =>
 app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
-// Health check is anonymous — load balancers must reach it without an API key
+// Health check is anonymous -- load balancers must reach it without an API key
 app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers().RequireAuthorization();
 
