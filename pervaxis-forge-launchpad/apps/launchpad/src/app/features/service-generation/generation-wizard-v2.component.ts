@@ -98,7 +98,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 
 			<form [formGroup]="form" class="wizard-steps">
 				<!-- STEP 1: Select Vertical -->
-				<mat-card class="step-card" [class.active]="activeStep() === 0">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 1: Select Vertical Context</mat-card-title>
 					</mat-card-header>
@@ -128,7 +128,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 2: Choose Build Type -->
-				<mat-card class="step-card" [class.active]="activeStep() === 1">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 2: What Are You Building?</mat-card-title>
 					</mat-card-header>
@@ -189,7 +189,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 3: Service Details -->
-				<mat-card class="step-card" [class.active]="activeStep() === 2">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 3: Service Details</mat-card-title>
 					</mat-card-header>
@@ -220,7 +220,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 4: Modules -->
-				<mat-card class="step-card" [class.active]="activeStep() === 3">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 4: {{ modulesStepTitle() }}</mat-card-title>
 					</mat-card-header>
@@ -278,7 +278,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 5: Production Readiness (Enterprise Scaffold) -->
-				<mat-card class="step-card" [class.active]="activeStep() === 4">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 5: Production Readiness</mat-card-title>
 						<mat-card-subtitle>Enterprise Scaffold Configuration</mat-card-subtitle>
@@ -377,7 +377,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				/>
 
 				<!-- STEP 6: Deployment Settings -->
-				<mat-card class="step-card" [class.active]="activeStep() === 5">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 6: Deployment Settings</mat-card-title>
 					</mat-card-header>
@@ -474,7 +474,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 7: Review & Generate -->
-				<mat-card class="step-card" [class.active]="activeStep() === 6">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 7: Review &amp; Generate</mat-card-title>
 					</mat-card-header>
