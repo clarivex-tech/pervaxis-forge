@@ -27,6 +27,7 @@ import { CanvasModule, GenesisModule } from '../models/generation.model';
 interface ModuleApiDto {
 	id: string;
 	displayName: string;
+	description: string;
 	iamPermissions: string;
 }
 
@@ -53,9 +54,9 @@ export class ModulesApiService implements IModulesApiService {
 	listModules(): Observable<GenesisModule[]> {
 		return this.http.get<ModuleApiDto[]>(this.baseUrl).pipe(
 			map(items => items.map(item => ({
-				name: item.id,
+				name: item.displayName,
 				label: item.displayName,
-				description: item.iamPermissions,
+				description: item.description,
 			})))
 		);
 	}
