@@ -94,6 +94,13 @@ else
 
 builder.Services.AddScoped<IVerticalService, VerticalService>();
 
+builder.Services.AddHttpClient<Pervaxis.Forge.Engine.NuGet.NuGetVersionResolver>(client =>
+{
+    client.DefaultRequestHeaders.Add("User-Agent", "Pervaxis-Forge");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddSingleton<Pervaxis.Forge.Engine.NuGet.INuGetVersionResolver, Pervaxis.Forge.Engine.NuGet.NuGetVersionResolver>();
+
 builder.Services.AddScoped<PrintGenerator>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
 builder.Services.AddScoped<IGenerationService, GenerationService>();

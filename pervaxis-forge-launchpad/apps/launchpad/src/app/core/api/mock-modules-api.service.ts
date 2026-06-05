@@ -36,6 +36,10 @@ export class MockModulesApiService implements IModulesApiService {
 		{ name: 'Workflow', label: 'Workflow', description: 'Step-based workflow via AWS Step Functions' },
 		{ name: 'AIAssistance', label: 'AI Assistance', description: 'Generative AI via Bedrock' },
 		{ name: 'Reporting', label: 'Reporting', description: 'Data exports and scheduled reports' },
+		{ name: 'Idempotency', label: 'Idempotency', description: 'Request deduplication via DynamoDB' },
+		{ name: 'OData', label: 'OData Support', description: 'OData query capabilities for RESTful APIs' },
+		{ name: 'TransactionalLogging', label: 'Transactional Logging', description: 'Structured transactional audit logging via CloudWatch' },
+		{ name: 'FeatureFlags', label: 'Feature Flags', description: 'Feature flag management via AWS AppConfig' },
 	];
 
 	private readonly canvasModules: CanvasModule[] = [

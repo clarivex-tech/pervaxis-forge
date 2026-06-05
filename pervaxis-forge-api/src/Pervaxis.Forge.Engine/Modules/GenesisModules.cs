@@ -1,19 +1,23 @@
 namespace Pervaxis.Forge.Engine.Modules;
 
-public sealed record GenesisModule(string Id, string DisplayName, string IamPermissions);
+public sealed record GenesisModule(string Id, string DisplayName, string Description, string IamPermissions, bool IsCloudAgnostic = false);
 
 public static class GenesisModules
 {
     private static readonly GenesisModule[] Modules =
     [
-        new("caching", "Caching", "elasticache:*"),
-        new("messaging", "Messaging", "sqs:*,sns:*"),
-        new("filestorage", "FileStorage", "s3:*"),
-        new("search", "Search", "opensearch:*"),
-        new("notifications", "Notifications", "sns:*"),
-        new("workflow", "Workflow", "stepfunctions:*"),
-        new("aiassistance", "AIAssistance", "bedrock:*"),
-        new("reporting", "Reporting", "athena:*,quicksight:*"),
+        new("caching", "Caching", "Distributed caching via Redis", "elasticache:*"),
+        new("messaging", "Messaging", "Event-driven messaging via SQS/SNS", "sqs:*,sns:*"),
+        new("filestorage", "FileStorage", "Object storage via S3", "s3:*"),
+        new("search", "Search", "Full-text search via OpenSearch", "opensearch:*"),
+        new("notifications", "Notifications", "Email, SMS and push notifications", "sns:*"),
+        new("workflow", "Workflow", "Step-based workflow via AWS Step Functions", "stepfunctions:*"),
+        new("aiassistance", "AIAssistance", "Generative AI via Bedrock", "bedrock:*"),
+        new("reporting", "Reporting", "Data exports and scheduled reports", "athena:*,quicksight:*"),
+        new("idempotency", "Idempotency", "Request deduplication via DynamoDB", "dynamodb:*"),
+        new("odata", "OData", "OData query capabilities for RESTful APIs", "", IsCloudAgnostic: true),
+        new("transactionallogging", "TransactionalLogging", "Structured transactional audit logging via CloudWatch", "cloudwatch:*"),
+        new("featureflags", "FeatureFlags", "Feature flag management via AWS AppConfig", "appconfig:*"),
     ];
 
     public static IReadOnlyList<GenesisModule> GetAll() => Modules;
@@ -29,6 +33,10 @@ public static class GenesisModules
     {
         var module = GetById(moduleName);
         var segment = module?.DisplayName ?? NormalizeModuleName(moduleName);
+
+        if (module?.IsCloudAgnostic == true)
+            return $"Pervaxis.Genesis.{segment}";
+
         return $"Pervaxis.Genesis.{segment}.{NormalizeCloudProvider(cloudProvider)}";
     }
 

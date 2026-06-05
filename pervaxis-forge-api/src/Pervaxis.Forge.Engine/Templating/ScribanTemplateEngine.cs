@@ -131,6 +131,7 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                     ["name"] = m.Name,
                     ["package_name"] = m.PackageName,
                     ["di_extension_name"] = m.DiExtensionName,
+                    ["version"] = m.Version,
                 }).ToList(),
                 ["selected_canvas_modules"] = model.SelectedCanvasModules.Select(m => new Scriban.Runtime.ScriptObject
                 {
