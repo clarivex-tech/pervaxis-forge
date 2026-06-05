@@ -36,13 +36,8 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="coverlet.msbuild" Version="6.0.2" />
-    <PackageVersion Include="Pervaxis.Genesis.Caching.AWS" Version="2.0.0" />
-    <PackageVersion Include="Pervaxis.Genesis.Messaging.AWS" Version="2.0.0" />
-    <PackageVersion Include="Pervaxis.Genesis.FileStorage.AWS" Version="2.0.0" />
-    <PackageVersion Include="Pervaxis.Genesis.Search.AWS" Version="2.0.0" />
-    <PackageVersion Include="Pervaxis.Genesis.Notifications.AWS" Version="2.0.0" />
-    <PackageVersion Include="Pervaxis.Genesis.Workflow.AWS" Version="2.0.0" />
-    <PackageVersion Include="Pervaxis.Genesis.AIAssistance.AWS" Version="2.0.0" />
-    <PackageVersion Include="Pervaxis.Genesis.Reporting.AWS" Version="2.0.0" />
+{{- for module in model.selected_modules }}
+    <PackageVersion Include="{{ module.package_name }}" Version="{{ module.version }}" />
+{{- end }}
   </ItemGroup>
 </Project>

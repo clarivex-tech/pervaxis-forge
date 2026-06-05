@@ -8,7 +8,7 @@ namespace Pervaxis.Forge.Engine.Generation;
 
 public static class TemplateModelBuilder
 {
-    public static TemplateModel Build(ForgeManifest manifest, string cloudProvider)
+    public static TemplateModel Build(ForgeManifest manifest, string cloudProvider, string genesisVersion = "3.2.0")
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentException.ThrowIfNullOrWhiteSpace(cloudProvider);
@@ -19,6 +19,7 @@ public static class TemplateModelBuilder
                 Name = moduleName,
                 PackageName = GenesisModules.GetPackageName(moduleName, cloudProvider),
                 DiExtensionName = GenesisModules.GetDiExtensionName(moduleName, cloudProvider),
+                Version = genesisVersion,
             })
             .ToList();
 
