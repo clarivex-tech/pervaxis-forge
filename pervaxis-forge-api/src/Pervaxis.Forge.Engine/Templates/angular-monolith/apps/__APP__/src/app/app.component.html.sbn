@@ -68,7 +68,7 @@
   <p-toolbar class="app-header" styleClass="border-noround">
     <ng-template #start>
       <p-button icon="pi pi-bars" [text]="true" (onClick)="toggleSidebar()" severity="secondary" />
-      <span class="app-header__brand">{{ '{{' }} title {{ '}}' }}</span>
+      <span class="app-header__brand" [textContent]="title"></span>
     </ng-template>
     <ng-template #end>
       <p-button icon="pi pi-bell" [text]="true" severity="secondary" pBadge value="3" />
@@ -84,7 +84,7 @@
         <a [routerLink]="item.routerLink" routerLinkActive="active" class="sidebar-item" pRipple>
           <i [class]="item.icon"></i>
           @if (!sidebarCollapsed) {
-            <span>{{ '{{' }} item.label {{ '}}' }}</span>
+            <span [textContent]="item.label"></span>
           }
         </a>
       }
