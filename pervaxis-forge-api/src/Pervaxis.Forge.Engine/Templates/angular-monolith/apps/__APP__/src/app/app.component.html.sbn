@@ -63,21 +63,35 @@
 }
 
 <!-- App Shell Layout -->
-<header class="app-header">
-  <nav class="app-header__nav">
-    <span class="app-header__brand" [textContent]="title"></span>
-    <!-- VERTICAL: Add navigation links here -->
-  </nav>
-</header>
+<div class="app-layout" [class.sidebar-collapsed]="sidebarCollapsed">
+  <!-- Header -->
+  <p-toolbar class="app-header" styleClass="border-noround">
+    <ng-template #start>
+      <p-button icon="pi pi-bars" [text]="true" (onClick)="toggleSidebar()" severity="secondary" />
+      <span class="app-header__brand">{{ '{{' }} title {{ '}}' }}</span>
+    </ng-template>
+    <ng-template #end>
+      <p-button icon="pi pi-bell" [text]="true" severity="secondary" pBadge value="3" />
+      <p-avatar icon="pi pi-user" shape="circle" styleClass="ml-2" />
+    </ng-template>
+  </p-toolbar>
 
-<div class="app-layout">
+  <!-- Sidebar -->
   <aside class="app-sidebar">
-    <!-- VERTICAL: Add sidebar navigation items here -->
     <nav class="app-sidebar__nav">
-      <a routerLink="/dashboard" routerLinkActive="active">Dashboard</a>
+      <!-- VERTICAL: Add navigation items here -->
+      @for (item of menuItems; track item.label) {
+        <a [routerLink]="item.routerLink" routerLinkActive="active" class="sidebar-item" pRipple>
+          <i [class]="item.icon"></i>
+          @if (!sidebarCollapsed) {
+            <span>{{ '{{' }} item.label {{ '}}' }}</span>
+          }
+        </a>
+      }
     </nav>
   </aside>
 
+  <!-- Main Content -->
   <main class="app-content">
     <router-outlet></router-outlet>
   </main>
