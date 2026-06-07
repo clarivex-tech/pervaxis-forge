@@ -3,12 +3,5 @@
   <packageSources>
     <clear />
     <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-    <add key="github-pervaxis" value="https://nuget.pkg.github.com/clarivex-tech/index.json" />
   </packageSources>
-  <packageSourceCredentials>
-    <github-pervaxis>
-      <add key="Username" value="clarivex-tech" />
-      <add key="ClearTextPassword" value="%GH_PACKAGES_PAT%" />
-    </github-pervaxis>
-  </packageSourceCredentials>
 </configuration>

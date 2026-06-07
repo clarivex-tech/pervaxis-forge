@@ -43,7 +43,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="BCrypt.Net-Next" />
 {{- if model.manifest.has_messaging }}
-    <PackageReference Include="AWSSDK.SQS" Version="3.*" />
+    <PackageReference Include="AWSSDK.SQS" />
 {{- end }}
 {{- for module in model.selected_modules }}
     <PackageReference Include="{{ module.package_name }}" />

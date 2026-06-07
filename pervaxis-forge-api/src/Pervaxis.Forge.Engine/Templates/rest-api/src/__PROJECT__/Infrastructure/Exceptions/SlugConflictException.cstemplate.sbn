@@ -16,25 +16,15 @@
  ************************************************************************
  */
 
-namespace {{ model.names.namespace }}.Models.Configuration;
+namespace {{ model.names.namespace }}.Infrastructure.Exceptions;
 
-public sealed class ForgeResilienceOptions
+/// <summary>
+/// Thrown when a slug or unique identifier conflicts with an existing resource.
+/// Maps to HTTP 409 Conflict.
+/// </summary>
+public sealed class SlugConflictException : Exception
 {
-    public const string SectionName = "Resilience";
+    public SlugConflictException(string message) : base(message) { }
 
-    public bool Enabled { get; set; } = true;
-
-    public int RetryCount { get; set; } = 3;
-
-    public int RetryDelayMilliseconds { get; set; } = 1000;
-
-    public int MaxRetryAttempts { get; set; } = 3;
-
-    public int CircuitBreakerFailureThreshold { get; set; } = 5;
-
-    public int CircuitBreakerSamplingWindowSeconds { get; set; } = 30;
-
-    public int CircuitBreakerBreakDurationSeconds { get; set; } = 60;
-
-    public int TimeoutSeconds { get; set; } = 30;
+    public SlugConflictException(string message, Exception innerException) : base(message, innerException) { }
 }

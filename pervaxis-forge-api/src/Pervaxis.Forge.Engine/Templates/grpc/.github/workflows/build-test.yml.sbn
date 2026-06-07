@@ -40,9 +40,6 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      - name: Authenticate GitHub Packages
-        run: dotnet nuget update source github-pervaxis --username clarivex-tech --password ${{ secrets.GH_PACKAGES_PAT }} --store-password-in-clear-text
-
       # [9.2.1] Enforce consistent code formatting
       - name: Check formatting
         run: dotnet format "{{ model.names.project_file }}" --verify-no-changes
