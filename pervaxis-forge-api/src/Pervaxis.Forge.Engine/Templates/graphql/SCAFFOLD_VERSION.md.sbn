@@ -11,9 +11,9 @@
 | **Service** | `{{ model.manifest.service_name }}` |
 | **Namespace** | `{{ model.names.namespace }}` |
 | **Scaffold template** | `graphql` |
-| **Scaffold version** | `{{ model.scaffold_version ?? "1.0.0" }}` |
-| **Generated at** | `{{ model.current_year }}-{{ model.current_month }}-{{ model.current_day }}` |
-| **Forge generator version** | `{{ model.forge_version ?? "unknown" }}` |
+| **Scaffold version** | `{{ model.forge_version }}` |
+| **Generated at** | `{{ model.printed_at }}` |
+| **Forge generator version** | `{{ model.forge_version }}` |
 | **Target framework** | `net10.0` |
 | **Cloud provider** | `{{ model.manifest.cloud_provider }}` |
 | **Database** | `{{ model.manifest.database != null ? model.manifest.database.engine : "none" }}` |

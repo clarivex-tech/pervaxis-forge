@@ -11,7 +11,7 @@ namespace Pervaxis.Forge.Engine.NuGet;
 public sealed class NuGetVersionResolver : INuGetVersionResolver
 {
     private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(15);
-    private static readonly string FallbackVersion = "3.2.0";
+    private static readonly string FallbackVersion = "3.4.1";
 
     private readonly HttpClient httpClient;
     private readonly Dictionary<string, (string Version, DateTime ExpiresAt)> cache = new(StringComparer.OrdinalIgnoreCase);

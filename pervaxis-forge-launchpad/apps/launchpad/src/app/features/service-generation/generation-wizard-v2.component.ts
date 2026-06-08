@@ -45,7 +45,7 @@ import { InfrastructureOptionsComponent } from './steps/infrastructure-step/infr
 
 type BuildTypeOption = {
 	label: string;
-	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe';
+	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe' | 'Monolithic';
 	category: 'Backend Service' | 'Frontend App';
 	live: boolean;
 	note: string;
@@ -371,10 +371,12 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- Infrastructure Options (collapsible, between Production Readiness and Deployment Settings) -->
+				@if (isBackendTypeSelected()) {
 				<forge-infrastructure-options
 					[infraForm]="infraOptionsForm"
 					[databaseConfigured]="form.controls.useDatabase.value"
 				/>
+				}
 
 				<!-- STEP 6: Deployment Settings -->
 				<mat-card class="step-card" [class.active]="true">
@@ -1348,6 +1350,7 @@ export class GenerationWizardV2Component {
 		{ label: 'gRPC', value: 'Grpc', category: 'Backend Service', live: true, note: 'Live now' },
 		{ label: 'Shell App', value: 'AngularShell', category: 'Frontend App', live: true, note: 'Live now' },
 		{ label: 'Micro Frontend (MFE)', value: 'AngularMfe', category: 'Frontend App', live: true, note: 'Live now' },
+		{ label: 'Monolithic App', value: 'Monolithic', category: 'Frontend App', live: true, note: 'Live now' },
 	];
 
 	readonly backendTypeOptions = this.buildTypeOptions.filter((option) => option.category === 'Backend Service');
@@ -1515,7 +1518,7 @@ export class GenerationWizardV2Component {
 	}
 
 	isCanvasTypeSelected(): boolean {
-		return ['AngularShell', 'AngularMfe'].includes(this.form.controls.type.value);
+		return ['AngularShell', 'AngularMfe', 'Monolithic'].includes(this.form.controls.type.value);
 	}
 
 	canGenerate(): boolean {
@@ -1540,6 +1543,7 @@ export class GenerationWizardV2Component {
 	modulesStepTitle(): string {
 		if (this.form.controls.type.value === 'AngularShell') return 'Canvas Modules (Shell)';
 		if (this.form.controls.type.value === 'AngularMfe') return 'Canvas Modules (Micro Frontend)';
+		if (this.form.controls.type.value === 'Monolithic') return 'Canvas Modules (Monolithic)';
 		return 'Genesis Modules (Backend)';
 	}
 
@@ -1774,6 +1778,7 @@ export class GenerationWizardV2Component {
 			description: value.description.trim(),
 			version: value.version.trim(),
 			type: value.type,
+			...(value.type === 'Monolithic' ? { uiTargets: ['web'] } : {}),
 			genesisModules: this.isBackendTypeSelected() ? this.selectedModules() : [],
 			canvasModules: this.isCanvasTypeSelected() ? this.selectedCanvasModules() : undefined,
 			database: value.useDatabase ? {
@@ -1833,7 +1838,7 @@ export class GenerationWizardV2Component {
 	}
 
 	private allowedCanvasModuleNamesForCurrentType(): string[] {
-		if (this.form.controls.type.value === 'AngularShell') {
+		if (this.form.controls.type.value === 'AngularShell' || this.form.controls.type.value === 'Monolithic') {
 			return [...SHELL_PRESELECTED_CANVAS_MODULES, ...SHARED_CANVAS_MODULES];
 		}
 		if (this.form.controls.type.value === 'AngularMfe') {
@@ -1843,7 +1848,7 @@ export class GenerationWizardV2Component {
 	}
 
 	private syncCanvasModulesToType(type: BuildTypeOption['value']): void {
-		if (!['AngularShell', 'AngularMfe'].includes(type)) {
+		if (!['AngularShell', 'AngularMfe', 'Monolithic'].includes(type)) {
 			this.clearCanvasModules();
 			return;
 		}
@@ -1851,7 +1856,7 @@ export class GenerationWizardV2Component {
 		const allowed = new Set(this.allowedCanvasModuleNamesForCurrentType());
 		const next = this.selectedCanvasModules().filter((name) => allowed.has(name));
 
-		if (type === 'AngularShell') {
+		if (type === 'AngularShell' || type === 'Monolithic') {
 			for (const moduleName of SHELL_PRESELECTED_CANVAS_MODULES) {
 				if (!next.includes(moduleName)) next.push(moduleName);
 			}
