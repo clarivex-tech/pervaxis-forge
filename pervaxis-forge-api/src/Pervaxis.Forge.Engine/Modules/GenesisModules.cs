@@ -18,6 +18,7 @@ public static class GenesisModules
         new("odata", "OData", "OData query capabilities for RESTful APIs", "", IsCloudAgnostic: true),
         new("transactionallogging", "TransactionalLogging", "Structured transactional audit logging via CloudWatch", "cloudwatch:*"),
         new("featureflags", "FeatureFlags", "Feature flag management via AWS AppConfig", "appconfig:*"),
+        new("sanitization", "Sanitization", "Server-side input sanitization and XSS prevention", "", IsCloudAgnostic: true),
     ];
 
     public static IReadOnlyList<GenesisModule> GetAll() => Modules;
