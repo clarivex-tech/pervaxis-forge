@@ -5,9 +5,8 @@
  ************************************************************************
  */
 
-using System.Reflection;
-using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 
 namespace {{ model.names.namespace }}.Controllers;
@@ -21,23 +20,26 @@ namespace {{ model.names.namespace }}.Controllers;
 [AllowAnonymous]
 public sealed class MetaController : ControllerBase
 {
-    private static readonly Lazy<JsonDocument> PrintMetadata = new(() =>
+    private readonly IWebHostEnvironment _env;
+
+    public MetaController(IWebHostEnvironment env)
     {
-        var assembly = Assembly.GetExecutingAssembly();
-        var resourceName = assembly.GetManifestResourceNames()
-            .FirstOrDefault(n => n.EndsWith(".forge-print.json"));
-
-        if (resourceName is null)
-            return JsonDocument.Parse("{}");
-
-        using var stream = assembly.GetManifestResourceStream(resourceName)!;
-        return JsonDocument.Parse(stream);
-    });
+        _env = env;
+    }
 
     [HttpGet]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     public IActionResult GetMeta()
     {
-        return Ok(PrintMetadata.Value.RootElement);
+        // .forge-print.json lives at solution root (3 levels up from src/Project/)
+        var contentRoot = _env.ContentRootPath;
+        var solutionRoot = Path.GetFullPath(Path.Combine(contentRoot, "..", ".."));
+        var printFile = Path.Combine(solutionRoot, ".forge-print.json");
+
+        if (!System.IO.File.Exists(printFile))
+            return Ok(new { error = "Scaffold metadata not found", searchedPath = printFile });
+
+        var json = System.IO.File.ReadAllText(printFile);
+        return Content(json, "application/json");
     }
 }
