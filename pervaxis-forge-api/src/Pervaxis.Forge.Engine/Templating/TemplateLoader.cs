@@ -26,7 +26,7 @@ public sealed class TemplateLoader
         await using var stream = assembly.GetManifestResourceStream(resourceName)
             ?? throw new FileNotFoundException($"Template resource '{resourceSuffix}' could not be opened.");
 
-        using var reader = new StreamReader(stream);
+        using var reader = new StreamReader(stream, System.Text.Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
         return await reader.ReadToEndAsync(cancellationToken);
     }
 

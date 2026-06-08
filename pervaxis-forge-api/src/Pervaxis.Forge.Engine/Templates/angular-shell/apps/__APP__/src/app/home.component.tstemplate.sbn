@@ -1,0 +1,32 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component, ChangeDetectionStrategy } from '@angular/core';
+
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-home',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <main>
+      <h1>Welcome to {{ model.manifest.service_name }}</h1>
+      <p>This is the home page placeholder. Replace this with your domain content.</p>
+    </main>
+  `
+})
+export class HomeComponent {}

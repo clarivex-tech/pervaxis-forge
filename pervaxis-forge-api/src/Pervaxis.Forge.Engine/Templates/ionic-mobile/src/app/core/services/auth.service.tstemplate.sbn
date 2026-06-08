@@ -1,0 +1,63 @@
+import { Injectable, signal, computed } from '@angular/core';
+import { Router } from '@angular/router';
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+}
+
+/**
+ * HORIZONTAL: Core authentication service.
+ * Manages token storage, refresh, and authentication state.
+ *
+ * VERTICAL: Integrate with your identity provider (Cognito, Auth0, Azure AD)
+ * by implementing the login() and refreshToken() methods.
+ */
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private readonly tokenState = signal<AuthTokens | null>(this.loadTokens());
+
+  readonly isAuthenticated = computed(() => {
+    const tokens = this.tokenState();
+    if (!tokens) return false;
+    return Date.now() < tokens.expiresAt;
+  });
+
+  readonly accessToken = computed(() => this.tokenState()?.accessToken ?? null);
+
+  constructor(private readonly router: Router) {}
+
+  setTokens(tokens: AuthTokens): void {
+    this.tokenState.set(tokens);
+    sessionStorage.setItem('auth_tokens', JSON.stringify(tokens));
+  }
+
+  logout(): void {
+    this.tokenState.set(null);
+    sessionStorage.removeItem('auth_tokens');
+    this.router.navigate(['/login']);
+  }
+
+  async refreshToken(): Promise<boolean> {
+    const tokens = this.tokenState();
+    if (!tokens?.refreshToken) {
+      this.logout();
+      return false;
+    }
+    this.logout();
+    return false;
+  }
+
+  private loadTokens(): AuthTokens | null {
+    try {
+      const stored = sessionStorage.getItem('auth_tokens');
+      if (!stored) return null;
+      const tokens: AuthTokens = JSON.parse(stored);
+      if (Date.now() >= tokens.expiresAt) return null;
+      return tokens;
+    } catch {
+      return null;
+    }
+  }
+}

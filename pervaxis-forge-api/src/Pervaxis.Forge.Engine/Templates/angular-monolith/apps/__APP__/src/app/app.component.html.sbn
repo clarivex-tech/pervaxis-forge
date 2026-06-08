@@ -1,0 +1,99 @@
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+<ion-app>
+  <!-- Loading indicator (horizontal — do not remove) -->
+  @if (loading.isLoading()) {
+    <ion-progress-bar type="indeterminate" color="primary"></ion-progress-bar>
+  }
+
+  <!-- Notifications toast (horizontal — do not remove) -->
+  @for (notification of notifications(); track notification.id) {
+    <ion-toast
+      [isOpen]="true"
+      [message]="notification.message"
+      [duration]="notification.duration"
+      [color]="notification.type === 'error' ? 'danger' : notification.type === 'success' ? 'success' : 'primary'"
+      position="top"
+      (didDismiss)="dismissNotification(notification.id)"
+    ></ion-toast>
+  }
+
+  <!-- Confirmation dialog (horizontal — do not remove) -->
+  @if (confirmDialog()) {
+    <ion-alert
+      [isOpen]="true"
+      [header]="confirmDialog()!.title"
+      [message]="confirmDialog()!.message"
+      [buttons]="[
+        { text: confirmDialog()!.cancelLabel || 'Cancel', role: 'cancel', handler: onConfirmCancel },
+        { text: confirmDialog()!.confirmLabel || 'Confirm', role: 'confirm', handler: onConfirmOk }
+      ]"
+    ></ion-alert>
+  }
+
+  <ion-router-outlet></ion-router-outlet>
+</ion-app>
+{{ else }}
+<!-- Loading indicator (horizontal — do not remove) -->
+@if (loading.isLoading()) {
+  <div class="global-loading-bar" aria-label="Loading"></div>
+}
+
+<!-- Notifications toast (horizontal — do not remove) -->
+<div class="notification-container" aria-live="polite">
+  @for (notification of notifications(); track notification.id) {
+    <div class="notification-toast" [class]="'notification-toast--' + notification.type">
+      <span [textContent]="notification.message"></span>
+      <button (click)="dismissNotification(notification.id)" aria-label="Dismiss">&times;</button>
+    </div>
+  }
+</div>
+
+<!-- Confirmation dialog (horizontal — do not remove) -->
+@if (confirmDialog()) {
+  <div class="confirm-overlay" (click)="onConfirmCancel()">
+    <div class="confirm-dialog" (click)="$event.stopPropagation()">
+      <h3 [textContent]="confirmDialog()?.title"></h3>
+      <p [textContent]="confirmDialog()?.message"></p>
+      <div class="confirm-actions">
+        <button class="btn" (click)="onConfirmCancel()" [textContent]="confirmDialog()?.cancelLabel || 'Cancel'"></button>
+        <button class="btn" [class.btn--danger]="confirmDialog()?.destructive" (click)="onConfirmOk()" [textContent]="confirmDialog()?.confirmLabel || 'Confirm'"></button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- App Shell Layout -->
+<div class="app-layout" [class.sidebar-collapsed]="sidebarCollapsed">
+  <!-- Header -->
+  <p-toolbar class="app-header" styleClass="border-noround">
+    <ng-template #start>
+      <p-button icon="pi pi-bars" [text]="true" (onClick)="toggleSidebar()" severity="secondary" />
+      <span class="app-header__brand" [textContent]="title"></span>
+    </ng-template>
+    <ng-template #end>
+      <p-button icon="pi pi-bell" [text]="true" severity="secondary" pBadge value="3" />
+      <p-avatar icon="pi pi-user" shape="circle" styleClass="ml-2" />
+    </ng-template>
+  </p-toolbar>
+
+  <!-- Sidebar -->
+  <aside class="app-sidebar">
+    <nav class="app-sidebar__nav">
+      <!-- VERTICAL: Add navigation items here -->
+      @for (item of menuItems; track item.label) {
+        <a [routerLink]="item.routerLink" routerLinkActive="active" class="sidebar-item" pRipple>
+          <i [class]="item.icon"></i>
+          @if (!sidebarCollapsed) {
+            <span [textContent]="item.label"></span>
+          }
+        </a>
+      }
+    </nav>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="app-content">
+    <router-outlet></router-outlet>
+  </main>
+</div>
+{{ end }}

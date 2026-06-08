@@ -1,0 +1,123 @@
+import { Component, inject } from '@angular/core';
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+import { NavController } from '@ionic/angular/standalone';
+{{ else }}
+import { Router } from '@angular/router';
+{{ end }}
+import { FormsModule } from '@angular/forms';
+import { AuthService, AuthTokens } from '../../core/services/auth.service';
+
+/**
+ * VERTICAL: Replace this placeholder login with your identity provider integration.
+ * This component demonstrates the AuthService contract — call setTokens() after
+ * successful authentication from your IdP (Cognito, Auth0, Azure AD, etc.).
+ */
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-login',
+  standalone: true,
+  imports: [FormsModule],
+  template: `
+    <div class="login-container">
+      <div class="login-card">
+        <h1>{{ model.manifest.service_name }}</h1>
+        <p class="login-subtitle">Sign in to continue</p>
+
+        <form (ngSubmit)="onLogin()">
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input
+              id="username"
+              type="text"
+              [(ngModel)]="username"
+              name="username"
+              required
+              autocomplete="username"
+            />
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input
+              id="password"
+              type="password"
+              [(ngModel)]="password"
+              name="password"
+              required
+              autocomplete="current-password"
+            />
+          </div>
+          <button type="submit" class="btn-primary">Sign In</button>
+        </form>
+      </div>
+    </div>
+  `,
+  styles: [`
+    .login-container {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: #f8fafc;
+    }
+    .login-card {
+      background: white;
+      padding: var(--spacing-2xl);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 400px;
+    }
+    h1 { margin-bottom: var(--spacing-xs); }
+    .login-subtitle { color: var(--color-secondary); margin-bottom: var(--spacing-xl); }
+    .form-group { margin-bottom: var(--spacing-md); }
+    label { display: block; margin-bottom: var(--spacing-xs); font-weight: 500; }
+    input {
+      width: 100%;
+      padding: var(--spacing-sm) var(--spacing-md);
+      border: 1px solid #e2e8f0;
+      border-radius: var(--radius-md);
+      font-size: 1rem;
+    }
+    input:focus { outline: 2px solid var(--color-primary); border-color: transparent; }
+    .btn-primary {
+      width: 100%;
+      padding: var(--spacing-sm) var(--spacing-md);
+      background: var(--color-primary);
+      color: white;
+      border: none;
+      border-radius: var(--radius-md);
+      font-size: 1rem;
+      font-weight: 500;
+      cursor: pointer;
+      margin-top: var(--spacing-md);
+    }
+    .btn-primary:hover { background: var(--color-primary-dark); }
+  `],
+})
+export class LoginComponent {
+  private readonly auth = inject(AuthService);
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+  private readonly navCtrl = inject(NavController);
+{{ else }}
+  private readonly router = inject(Router);
+{{ end }}
+
+  username = '';
+  password = '';
+
+  onLogin(): void {
+    // VERTICAL: Replace this mock with your actual IdP authentication call.
+    // After successful auth, call this.auth.setTokens() with real tokens.
+    const mockTokens: AuthTokens = {
+      accessToken: 'mock-access-token',
+      refreshToken: 'mock-refresh-token',
+      expiresAt: Date.now() + 3600000, // 1 hour
+    };
+
+    this.auth.setTokens(mockTokens);
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+    this.navCtrl.navigateRoot('/dashboard');
+{{ else }}
+    this.router.navigate(['/dashboard']);
+{{ end }}
+  }
+}

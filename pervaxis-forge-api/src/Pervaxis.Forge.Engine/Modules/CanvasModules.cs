@@ -42,4 +42,12 @@ public static class CanvasModules
         var segment = module?.DisplayName ?? moduleName;
         return $"Canvas{segment}Module";
     }
+
+    public static string GetVersion(string moduleName)
+    {
+        // Canvas modules are pre-1.0; all use the same platform baseline version.
+        // When Canvas reaches 1.0, this can be extended to per-module version lookup.
+        _ = moduleName; // Suppress unused parameter warning
+        return "^0.1.0";
+    }
 }

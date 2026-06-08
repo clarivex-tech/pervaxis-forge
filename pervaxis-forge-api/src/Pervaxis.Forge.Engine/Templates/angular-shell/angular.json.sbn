@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
   "version": 1,
-  "newProjectRoot": "projects",
+  "newProjectRoot": "libs",
   "projects": {
     "{{ model.manifest.service_name }}": {
       "projectType": "application",
@@ -24,7 +24,7 @@
             "polyfills": ["zone.js"],
             "tsConfig": "apps/{{ model.manifest.service_name }}/tsconfig.app.json",
             "assets": [
-              "apps/{{ model.manifest.service_name }}/src/favicon.ico",
+              "apps/{{ model.manifest.service_name }}/src/favicon.svg",
               "apps/{{ model.manifest.service_name }}/src/assets"
             ],
             "styles": ["apps/{{ model.manifest.service_name }}/src/styles.scss"],
@@ -36,7 +36,13 @@
                 { "type": "initial", "maximumWarning": "500kb", "maximumError": "1mb" },
                 { "type": "anyComponentStyle", "maximumWarning": "2kb", "maximumError": "4kb" }
               ],
-              "outputHashing": "all"
+              "outputHashing": "all",
+              "fileReplacements": [
+                {
+                  "replace": "apps/{{ model.manifest.service_name }}/src/environments/environment.ts",
+                  "with": "apps/{{ model.manifest.service_name }}/src/environments/environment.prod.ts"
+                }
+              ]
             },
             "development": {
               "optimization": false,
@@ -55,16 +61,18 @@
           "defaultConfiguration": "development"
         },
         "test": {
-          "builder": "@angular-devkit/build-angular:karma",
+          "builder": "@nx/jest:jest",
           "options": {
-            "polyfills": ["zone.js", "zone.js/testing"],
-            "tsConfig": "apps/{{ model.manifest.service_name }}/tsconfig.spec.json",
-            "assets": [
-              "apps/{{ model.manifest.service_name }}/src/favicon.ico",
-              "apps/{{ model.manifest.service_name }}/src/assets"
-            ],
-            "styles": ["apps/{{ model.manifest.service_name }}/src/styles.scss"],
-            "scripts": []
+            "jestConfig": "apps/{{ model.manifest.service_name }}/jest.config.ts"
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": [
+              "apps/{{ model.manifest.service_name }}/src/**/*.ts",
+              "apps/{{ model.manifest.service_name }}/src/**/*.html"
+            ]
           }
         }
       }

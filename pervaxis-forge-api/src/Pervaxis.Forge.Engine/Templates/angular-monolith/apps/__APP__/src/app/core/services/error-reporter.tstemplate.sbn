@@ -1,0 +1,48 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Injectable } from '@angular/core';
+import { environment } from '../../../environments/environment';
+
+/**
+ * HORIZONTAL: Error reporting abstraction.
+ *
+ * Default implementation is a no-op in production (errors are logged via LoggerService).
+ *
+ * VERTICAL: To integrate with a real error reporting service (Sentry, CloudWatch RUM,
+ * Datadog), extend this class or provide a custom implementation:
+ *
+ *   { provide: ErrorReporter, useClass: SentryErrorReporter }
+ */
+@Injectable({ providedIn: 'root' })
+export class ErrorReporter {
+  /**
+   * Report an error to the remote error tracking service.
+   * Override this method with your integration.
+   */
+  report(error: unknown): void {
+    if (!environment.production) {
+      return;
+    }
+
+    // Production: no-op by default — error is available for your integration.
+    // VERTICAL: Replace with your error reporting integration, e.g.:
+    // Sentry.captureException(error);
+    void error;
+  }
+}

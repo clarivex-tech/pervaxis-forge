@@ -1,0 +1,65 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ ************************************************************************
+ */
+
+import { Injectable, inject, NgZone } from '@angular/core';
+import { AuthService } from './auth.service';
+import { LoggerService } from './logger.service';
+
+const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
+const USER_EVENTS = ['mousedown', 'keydown', 'touchstart', 'scroll'] as const;
+
+/**
+ * HORIZONTAL: Auto-logout after user inactivity.
+ * Resets the timer on any user interaction.
+ *
+ * Call start() once in AppComponent or after login.
+ * Call stop() on logout to clean up listeners.
+ *
+ * VERTICAL: Adjust INACTIVITY_TIMEOUT_MS for your security requirements.
+ */
+@Injectable({ providedIn: 'root' })
+export class InactivityService {
+  private readonly auth = inject(AuthService);
+  private readonly logger = inject(LoggerService);
+  private readonly zone = inject(NgZone);
+  private timerId: ReturnType<typeof setTimeout> | null = null;
+  private listening = false;
+
+  start(): void {
+    if (this.listening) return;
+    this.listening = true;
+
+    this.zone.runOutsideAngular(() => {
+      for (const event of USER_EVENTS) {
+        document.addEventListener(event, this.resetTimer, { passive: true });
+      }
+    });
+
+    this.resetTimer();
+  }
+
+  stop(): void {
+    this.listening = false;
+    if (this.timerId) {
+      clearTimeout(this.timerId);
+      this.timerId = null;
+    }
+    for (const event of USER_EVENTS) {
+      document.removeEventListener(event, this.resetTimer);
+    }
+  }
+
+  private readonly resetTimer = (): void => {
+    if (this.timerId) {
+      clearTimeout(this.timerId);
+    }
+    this.timerId = setTimeout(() => {
+      this.logger.warn('Session expired due to inactivity');
+      this.auth.logout();
+    }, INACTIVITY_TIMEOUT_MS);
+  };
+}

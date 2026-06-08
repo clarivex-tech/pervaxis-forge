@@ -687,7 +687,37 @@ Follow this exact order every time:
 
 ---
 
-## 12. Quick Reference
+## 12. Switching OIDC Provider
+
+Pervaxis supports any OIDC-compliant identity provider. Change `Forge:Oidc:Provider` and set `Authority` + `Audience` accordingly. No code changes required — configuration only.
+
+| Provider | Authority URL | Audience |
+|---|---|---|
+| Auth0 | `https://{domain}/` | `https://your-api` |
+| Supabase | `https://{project}.supabase.co/auth/v1` | `authenticated` |
+| Okta | `https://{domain}/oauth2/default` | `api://default` |
+| Cognito | `https://cognito-idp.{region}.amazonaws.com/{pool-id}` | `{client-id}` |
+
+Example (`appsettings.json`):
+
+```json
+{
+  "Forge": {
+    "Oidc": {
+      "Provider": "Okta",
+      "Authority": "https://dev-123456.okta.com/oauth2/default",
+      "Audience": "api://default",
+      "Domain": ""
+    }
+  }
+}
+```
+
+The `Domain` property is retained for Auth0 management API compatibility and can be left empty for other providers.
+
+---
+
+## 13. Quick Reference
 
 | Topic | Guide |
 |---|---|

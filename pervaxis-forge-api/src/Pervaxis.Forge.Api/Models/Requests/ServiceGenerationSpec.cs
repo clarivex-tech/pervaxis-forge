@@ -16,6 +16,8 @@
  ************************************************************************
  */
 
+using Pervaxis.Forge.Engine.Manifest;
+
 namespace Pervaxis.Forge.Api.Models.Requests;
 
 public record ServiceGenerationSpec
@@ -30,4 +32,11 @@ public record ServiceGenerationSpec
     public GenerationDatabaseConfig? Database { get; init; }
     public List<GenerationQueueConfig> Queues { get; init; } = [];
     public GenerationMetadata Metadata { get; init; } = new();
+    public AuthConfig? Auth { get; init; }
+    public ResilienceConfig? Resilience { get; init; }
+    public ObservabilityConfig? Observability { get; init; }
+    public ValidationConfig? Validation { get; init; }
+    public BackgroundJobConfig? BackgroundJobs { get; init; }
+    public UtilitiesConfig? Utilities { get; init; }
+    public bool MultiTenancy { get; init; } = false;
 }

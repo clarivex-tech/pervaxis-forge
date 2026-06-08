@@ -68,6 +68,15 @@ public sealed class ManifestValidator
         if (string.IsNullOrWhiteSpace(manifest.CloudProvider))
             errors.Add("CloudProvider is required.");
 
+        if (manifest.Observability is { CloudWatchEnabled: true, SerilogEnabled: false })
+            errors.Add("Observability.CloudWatchEnabled requires Observability.SerilogEnabled — CloudWatch is a Serilog sink.");
+
+        if (manifest.MultiTenancy && manifest.Database is null)
+            errors.Add("MultiTenancy requires a Database configuration (tenant-scoped DbContext needs a DB).");
+
+        if (manifest.BackgroundJobs?.Provider is { } provider && provider is not ("EventBridge" or "SqsLambda"))
+            errors.Add($"BackgroundJobs.Provider '{provider}' is not recognized. Accepted values: EventBridge, SqsLambda.");
+
         return new ValidationResult { Errors = errors };
     }
 

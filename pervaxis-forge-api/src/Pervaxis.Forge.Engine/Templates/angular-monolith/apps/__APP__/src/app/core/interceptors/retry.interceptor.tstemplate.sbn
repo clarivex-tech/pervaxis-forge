@@ -1,0 +1,48 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { HttpInterceptorFn } from '@angular/common/http';
+import { retry, timeout, timer } from 'rxjs';
+
+const TIMEOUT_MS = 30_000;
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1_000;
+
+/**
+ * HORIZONTAL: Applies a timeout and exponential-backoff retry to all HTTP requests.
+ * - Timeout: 30 seconds (configurable via TIMEOUT_MS)
+ * - Retries: up to 2 times with 1s base delay (only on 5xx or network errors)
+ * - Does NOT retry 4xx client errors
+ *
+ * Vertical teams should NOT implement their own retry logic.
+ */
+export const retryInterceptor: HttpInterceptorFn = (req, next) => {
+  return next(req).pipe(
+    timeout(TIMEOUT_MS),
+    retry({
+      count: MAX_RETRIES,
+      delay: (error, retryCount) => {
+        // Only retry server errors (5xx) and network failures (status 0)
+        if (error.status && error.status > 0 && error.status < 500) {
+          throw error;
+        }
+        return timer(RETRY_DELAY_MS * retryCount);
+      },
+    })
+  );
+};

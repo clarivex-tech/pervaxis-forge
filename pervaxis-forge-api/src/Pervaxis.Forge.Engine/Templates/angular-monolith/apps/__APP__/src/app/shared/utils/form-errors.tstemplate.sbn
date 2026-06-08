@@ -1,0 +1,51 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { AbstractControl } from '@angular/forms';
+
+/**
+ * HORIZONTAL: Reusable form error message resolver.
+ * Returns a human-readable error string for the first validation error on a control.
+ *
+ * Usage in templates:
+ *   @if (form.controls.email.invalid && form.controls.email.touched) {
+ *     <small class="field-error">getFormFieldError(form.controls.email, 'Email')</small>
+ *   }
+ *
+ * Vertical teams: extend the errorMessages map for custom validators.
+ */
+export function getFormFieldError(control: AbstractControl, fieldLabel: string): string {
+  if (!control.errors) return '';
+
+  const errorMessages: Record<string, (params: Record<string, unknown>) => string> = {
+    required: () => `${fieldLabel} is required`,
+    minlength: (p) => `${fieldLabel} must be at least ${p['requiredLength']} characters`,
+    maxlength: (p) => `${fieldLabel} must be at most ${p['requiredLength']} characters`,
+    email: () => `${fieldLabel} must be a valid email address`,
+    pattern: () => `${fieldLabel} format is invalid`,
+    min: (p) => `${fieldLabel} must be at least ${p['min']}`,
+    max: (p) => `${fieldLabel} must be at most ${p['max']}`,
+  };
+
+  const [errorKey, errorParams] = Object.entries(control.errors)[0];
+  const messageFn = errorMessages[errorKey];
+
+  return messageFn
+    ? messageFn(errorParams as Record<string, unknown>)
+    : `${fieldLabel} is invalid`;
+}

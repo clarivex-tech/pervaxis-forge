@@ -1,0 +1,69 @@
+/* CSS Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  height: 100%;
+  font-family: var(--ion-font-family, var(--font-family-base));
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Design Tokens */
+:root {
+  --color-primary: #3b82f6;
+  --color-primary-dark: #2563eb;
+  --color-primary-light: #93c5fd;
+  --color-secondary: #64748b;
+  --color-success: #22c55e;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Oxygen, Ubuntu, Cantarell, sans-serif;
+  --font-family-mono: 'Fira Code', 'Cascadia Code', Consolas, monospace;
+
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+  --spacing-2xl: 3rem;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-full: 9999px;
+}
+
+/* Ionic Theme Variables */
+:root {
+  --ion-color-primary: var(--color-primary);
+  --ion-color-primary-shade: var(--color-primary-dark);
+  --ion-color-primary-tint: var(--color-primary-light);
+  --ion-color-secondary: var(--color-secondary);
+  --ion-color-success: var(--color-success);
+  --ion-color-warning: var(--color-warning);
+  --ion-color-danger: var(--color-danger);
+  --ion-font-family: var(--font-family-base);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ion-background-color: #1a1a2e;
+    --ion-text-color: #ffffff;
+    --ion-toolbar-background: #16213e;
+    --ion-item-background: #1a1a2e;
+  }
+}

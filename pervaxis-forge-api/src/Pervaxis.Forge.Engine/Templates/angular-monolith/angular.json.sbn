@@ -1,3 +1,115 @@
 {
-  "version": 1
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "apps",
+  "projects": {
+    "{{ model.manifest.service_name }}": {
+      "projectType": "application",
+      "root": "apps/{{ model.manifest.service_name }}",
+      "sourceRoot": "apps/{{ model.manifest.service_name }}/src",
+      "prefix": "{{ model.manifest.component_prefix }}",
+      "architect": {
+        "build": {
+          "builder": "@angular-devkit/build-angular:application",
+          "options": {
+            "outputPath": "dist/{{ model.manifest.service_name }}",
+            "index": "apps/{{ model.manifest.service_name }}/src/index.html",
+            "browser": "apps/{{ model.manifest.service_name }}/src/main.ts",
+            "polyfills": ["zone.js"],
+            "tsConfig": "apps/{{ model.manifest.service_name }}/tsconfig.app.json",
+            "inlineStyleLanguage": "scss",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/{{ model.manifest.service_name }}/src/assets",
+                "output": "assets"
+              }
+            ],
+            "styles": ["apps/{{ model.manifest.service_name }}/src/styles.scss"],
+            "scripts": []
+          },
+          "configurations": {
+            "production": {
+              "optimization": true,
+              "extractLicenses": true,
+              "sourceMap": false,
+              "outputHashing": "all",
+              "namedChunks": false,
+              "budgets": [
+                {
+                  "type": "initial",
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+                  "maximumWarning": "750kB",
+                  "maximumError": "1.5MB"
+{{ else }}
+                  "maximumWarning": "500kB",
+                  "maximumError": "1MB"
+{{ end }}
+                },
+                {
+                  "type": "anyComponentStyle",
+                  "maximumWarning": "4kB",
+                  "maximumError": "8kB"
+                }
+              ],
+              "fileReplacements": [
+                {
+                  "replace": "apps/{{ model.manifest.service_name }}/src/environments/environment.ts",
+                  "with": "apps/{{ model.manifest.service_name }}/src/environments/environment.prod.ts"
+                }
+              ]
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular-devkit/build-angular:dev-server",
+          "options": {
+            "buildTarget": "{{ model.manifest.service_name }}:build:development"
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "{{ model.manifest.service_name }}:build:production"
+            },
+            "development": {
+              "buildTarget": "{{ model.manifest.service_name }}:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "test": {
+          "builder": "@angular-devkit/build-angular:karma",
+          "options": {
+            "polyfills": ["zone.js", "zone.js/testing"],
+            "tsConfig": "apps/{{ model.manifest.service_name }}/tsconfig.spec.json",
+            "karmaConfig": "apps/{{ model.manifest.service_name }}/karma.conf.js",
+            "inlineStyleLanguage": "scss",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "apps/{{ model.manifest.service_name }}/src/assets",
+                "output": "assets"
+              }
+            ],
+            "styles": ["apps/{{ model.manifest.service_name }}/src/styles.scss"],
+            "scripts": []
+          }
+        },
+        "lint": {
+          "builder": "@angular-eslint/builder:lint",
+          "options": {
+            "lintFilePatterns": [
+              "apps/{{ model.manifest.service_name }}/src/**/*.ts",
+              "apps/{{ model.manifest.service_name }}/src/**/*.html"
+            ]
+          }
+        }
+      }
+    }
+  }
 }

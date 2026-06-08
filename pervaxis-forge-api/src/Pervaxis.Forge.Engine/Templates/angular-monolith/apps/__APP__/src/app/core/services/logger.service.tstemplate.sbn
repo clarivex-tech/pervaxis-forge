@@ -1,0 +1,71 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Injectable } from '@angular/core';
+import { environment } from '../../../environments/environment';
+
+export enum LogLevel {
+  Debug = 0,
+  Info = 1,
+  Warn = 2,
+  Error = 3,
+}
+
+/**
+ * HORIZONTAL: Structured logging service with environment-aware level suppression.
+ *
+ * - Development: all levels output to console
+ * - Production: only warn and error output
+ *
+ * VERTICAL: To add remote log shipping (CloudWatch, Datadog, etc.),
+ * extend this service or provide a custom LogTransport:
+ *
+ *   export abstract class LogTransport {
+ *     abstract ship(level: LogLevel, message: string, args: unknown[]): void;
+ *   }
+ */
+@Injectable({ providedIn: 'root' })
+export class LoggerService {
+  private readonly minLevel: LogLevel = environment.production
+    ? LogLevel.Warn
+    : LogLevel.Debug;
+
+  debug(message: string, ...args: unknown[]): void {
+    if (this.minLevel <= LogLevel.Debug) {
+      console.debug(`[DEBUG] ${message}`, ...args);
+    }
+  }
+
+  info(message: string, ...args: unknown[]): void {
+    if (this.minLevel <= LogLevel.Info) {
+      console.info(`[INFO] ${message}`, ...args);
+    }
+  }
+
+  warn(message: string, ...args: unknown[]): void {
+    if (this.minLevel <= LogLevel.Warn) {
+      console.warn(`[WARN] ${message}`, ...args);
+    }
+  }
+
+  error(message: string, ...args: unknown[]): void {
+    if (this.minLevel <= LogLevel.Error) {
+      console.error(`[ERROR] ${message}`, ...args);
+    }
+  }
+}

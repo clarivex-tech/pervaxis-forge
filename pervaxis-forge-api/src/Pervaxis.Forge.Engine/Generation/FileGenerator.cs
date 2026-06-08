@@ -30,8 +30,20 @@ public sealed class FileGenerator
             if (model.Manifest.Database is null && normalizedResourceName.Contains("/Data/", StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            // Skip TenantMiddleware when multi-tenancy is not enabled.
+            // The template is always present but should only be emitted when the feature is active.
+            if (!model.Manifest.MultiTenancy && normalizedResourceName.Contains("TenantMiddleware", StringComparison.OrdinalIgnoreCase))
+                continue;
+
             var template = await templateLoader.LoadAsync(resourceName, cancellationToken);
             var rendered = templateEngine.Render(template, model);
+
+            // Skip templates that render to empty/whitespace content.
+            // This enables conditional file emission via Scriban {{ if }} guards —
+            // e.g., platform.service.ts only emitted for web+mobile targets.
+            if (string.IsNullOrWhiteSpace(rendered))
+                continue;
+
             var relativeSuffix = TemplateLoader.GetRelativeSuffix(resourceName, templateRoot);
             // Render the path itself so filename tokens like {{ model.names.solution_file }} are resolved.
             var renderedPath = templateEngine.Render(relativeSuffix, model);

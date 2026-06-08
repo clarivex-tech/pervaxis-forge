@@ -1,0 +1,51 @@
+<div class="sample-list">
+  <header class="sample-list__header">
+    <h1>Samples</h1>
+    <a routerLink="../new" class="btn btn--primary">Create New</a>
+  </header>
+
+  @if (loading()) {
+    <p class="sample-list__loading">Loading...</p>
+  }
+
+  @if (error(); as errorMsg) {
+    <p class="sample-list__error" [textContent]="errorMsg"></p>
+  }
+
+  @if (!loading() && !error()) {
+    @if (items().length === 0) {
+      <p class="sample-list__empty">No items found. Create your first sample.</p>
+    } @else {
+      <table class="sample-list__table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (item of items(); track item.id) {
+            <tr>
+              <td [textContent]="item.id"></td>
+              <td>
+                <a [routerLink]="['../', item.id]" [textContent]="item.name"></a>
+              </td>
+              <td>
+                <span class="badge" [class.badge--active]="item.status === 'active'"
+                      [class.badge--inactive]="item.status === 'inactive'"
+                      [textContent]="item.status">
+                </span>
+              </td>
+              <td class="sample-list__actions">
+                <a [routerLink]="['../', item.id, 'edit']" class="btn btn--small">Edit</a>
+                <button (click)="deleteItem(item.id)" class="btn btn--small btn--danger">Delete</button>
+              </td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    }
+  }
+</div>

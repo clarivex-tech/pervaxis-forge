@@ -1,0 +1,51 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { CanActivateFn } from '@angular/router';
+import { inject } from '@angular/core';
+import { AuthService } from '../services/auth.service';
+import { LoggerService } from '../services/logger.service';
+
+/**
+ * HORIZONTAL: Permission-based route guard factory.
+ *
+ * Usage in routes:
+ *   { path: 'orders', canActivate: [permissionGuard('orders:read')], ... }
+ *   { path: 'admin', canActivate: [permissionGuard('admin:access')], ... }
+ *
+ * VERTICAL: Implement AuthService.hasPermission() with your IdP's
+ * claims/roles/scopes to make this guard functional.
+ */
+export function permissionGuard(requiredPermission: string): CanActivateFn {
+  return () => {
+    const auth = inject(AuthService);
+    const logger = inject(LoggerService);
+
+    if (!auth.isAuthenticated()) {
+      logger.warn('Permission guard: user not authenticated');
+      return false;
+    }
+
+    const hasPermission = auth.hasPermission(requiredPermission);
+    if (!hasPermission) {
+      logger.warn(`Permission guard: missing permission '${requiredPermission}'`);
+    }
+
+    return hasPermission;
+  };
+}

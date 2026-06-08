@@ -11,7 +11,7 @@ public class GenesisModulesTests
     {
         var modules = GenesisModules.GetAll();
 
-        modules.Should().HaveCount(8);
+        modules.Should().HaveCount(12);
         modules.Select(module => module.DisplayName).Should().BeEquivalentTo(new[]
         {
             "Caching",
@@ -22,12 +22,17 @@ public class GenesisModulesTests
             "Workflow",
             "AIAssistance",
             "Reporting",
+            "Idempotency",
+            "OData",
+            "TransactionalLogging",
+            "FeatureFlags",
         });
     }
 
     [Theory]
     [InlineData("Caching", "AWS", "Pervaxis.Genesis.Caching.AWS", "AddGenesisCaching")]
     [InlineData("FileStorage", "Azure", "Pervaxis.Genesis.FileStorage.Azure", "AddGenesisFileStorage")]
+    [InlineData("OData", "AWS", "Pervaxis.Genesis.OData", "AddGenesisOData")]
     public void PackageAndDiNames_AreDerivedCorrectly(string moduleName, string cloudProvider, string expectedPackage, string expectedDi)
     {
         GenesisModules.GetPackageName(moduleName, cloudProvider).Should().Be(expectedPackage);

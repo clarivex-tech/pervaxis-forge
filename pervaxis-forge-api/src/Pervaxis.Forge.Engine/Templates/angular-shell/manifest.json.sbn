@@ -1,4 +1,5 @@
 {
+  "$schema": "./manifest.schema.json",
   "product": "{{ model.manifest.product }}",
   "verticalSlug": "{{ model.manifest.vertical_slug }}",
   "serviceName": "{{ model.manifest.service_name }}",

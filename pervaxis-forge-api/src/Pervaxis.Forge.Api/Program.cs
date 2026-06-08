@@ -20,8 +20,6 @@ using Amazon.Extensions.NETCore.Setup;
 using Amazon.AspNetCore.DataProtection.SSM;
 using Amazon.SecretsManager;
 using Amazon.SecurityToken;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.ResponseCompression;
@@ -32,12 +30,15 @@ using System.Threading.RateLimiting;
 using Octokit;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
+using Pervaxis.Forge.Api.Infrastructure.Extensions;
+using Pervaxis.Forge.Api.Infrastructure.Http;
+using Pervaxis.Forge.Api.Infrastructure.Middleware;
+using Pervaxis.Forge.Api.Infrastructure.Security;
 using Pervaxis.Forge.Api.Models.Configuration;
 using Pervaxis.Forge.Api.Models.Requests;
 using Pervaxis.Forge.Api.Services;
 using Pervaxis.Forge.Engine.Generation;
 using Amazon.Lambda.AspNetCoreServer;
-using System.Text.Json;
 using System.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -45,7 +46,8 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddAWSLambdaHosting(LambdaEventSource.HttpApi);
 
 var isRunningInLambda = !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("AWS_LAMBDA_FUNCTION_NAME"));
-var dataProtectionEnabled = !isRunningInLambda && builder.Configuration.GetValue<bool>("Forge:DataProtection:Enabled");
+var isLocalMode = builder.Configuration.GetValue<bool>("Forge:LocalMode");
+var dataProtectionEnabled = !isRunningInLambda && !isLocalMode && builder.Configuration.GetValue<bool>("Forge:DataProtection:Enabled");
 var dataProtectionPrefix = builder.Configuration["Forge:DataProtection:Prefix"] ?? "/Pervaxis/Forge/DataProtection";
 var dataProtectionKmsKeyId = builder.Configuration["Forge:DataProtection:KmsKeyId"];
 
@@ -62,7 +64,7 @@ if (dataProtectionEnabled)
         });
 }
 
-builder.Logging.AddConsole();
+builder.AddForgeSerilog();
 builder.Logging.AddFilter("Microsoft.AspNetCore.DataProtection", LogLevel.Information);
 builder.Logging.AddFilter("Amazon.AspNetCore.DataProtection.SSM", LogLevel.Information);
 builder.Logging.AddFilter("Microsoft.AspNetCore.DataProtection.Repositories.EphemeralXmlRepository", LogLevel.Warning);
@@ -73,16 +75,31 @@ builder.Services.AddResponseCompression(options =>
     options.EnableForHttps = true;
 });
 
-builder.Services.AddDbContextPool<ForgeDbContext>(options =>
-    options.UseNpgsql(
-        builder.Configuration.GetConnectionString("ForgeDb"),
-        npgsql =>
-        {
-            npgsql.EnableRetryOnFailure(3);
-            npgsql.CommandTimeout(10);
-        }));
+if (isLocalMode)
+{
+    builder.Services.AddDbContext<ForgeDbContext>(options =>
+        options.UseInMemoryDatabase("forge-local"));
+}
+else
+{
+    builder.Services.AddDbContextPool<ForgeDbContext>(options =>
+        options.UseNpgsql(
+            builder.Configuration.GetConnectionString("ForgeDb"),
+            npgsql =>
+            {
+                npgsql.EnableRetryOnFailure(3);
+                npgsql.CommandTimeout(10);
+            }));
+}
 
 builder.Services.AddScoped<IVerticalService, VerticalService>();
+
+builder.Services.AddHttpClient<Pervaxis.Forge.Engine.NuGet.NuGetVersionResolver>(client =>
+{
+    client.DefaultRequestHeaders.Add("User-Agent", "Pervaxis-Forge");
+    client.Timeout = TimeSpan.FromSeconds(10);
+});
+builder.Services.AddSingleton<Pervaxis.Forge.Engine.NuGet.INuGetVersionResolver, Pervaxis.Forge.Engine.NuGet.NuGetVersionResolver>();
 
 builder.Services.AddScoped<PrintGenerator>();
 builder.Services.AddScoped<IGitHubService, GitHubService>();
@@ -124,19 +141,11 @@ builder.Services.AddRateLimiter(limiterOptions =>
                 }));
     }
 });
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = "ForgeApiKey";
-    options.DefaultChallengeScheme = "ForgeApiKey";
-})
-    .AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>("ForgeApiKey", _ => { });
-builder.Services.AddAuthorization(options =>
-{
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .AddAuthenticationSchemes("ForgeApiKey")
-        .RequireAuthenticatedUser()
-        .Build();
-});
+builder.Services.AddForgeAuthentication(builder.Configuration);
+builder.Services.Configure<ForgeOidcOptions>(builder.Configuration.GetSection(ForgeOidcOptions.SectionName));
+builder.Services.Configure<ForgeTenantOptions>(builder.Configuration.GetSection(ForgeTenantOptions.SectionName));
+builder.Services.Configure<ForgeOutboxOptions>(builder.Configuration.GetSection(ForgeOutboxOptions.SectionName));
+builder.Services.AddSingleton<IForgeHashingService, ForgeHashingService>();
 builder.Services.AddSingleton<Func<string, IGitHubClient>>(
     _ => token => new GitHubClient(new ProductHeaderValue("pervaxis-forge"))
     {
@@ -174,6 +183,50 @@ builder.Services.AddSwaggerGen(options =>
     });
 });
 
+// Cross-cutting concerns: resilience options, tracing, validation, versioning
+builder.Services.Configure<ForgeResilienceOptions>(
+    builder.Configuration.GetSection(ForgeResilienceOptions.SectionName));
+builder.Services.AddForgeTracing(builder.Configuration);
+builder.Services.AddForgeMetrics(builder.Configuration);
+builder.Services.AddForgeValidation();
+builder.Services.AddForgeVersioning();
+
+// HTTP infrastructure: context accessor, delegating handlers, typed clients
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTransient<CorrelationIdHandler>();
+builder.Services.AddTransient<JwtPropagationHandler>();
+builder.Services.AddTransient<ExternalAuthHandler>();
+builder.Services.AddTransient<HttpLoggingHandler>();
+
+builder.Services.AddHttpClient<IGitHubHttpClient, GitHubHttpClient>(client =>
+{
+    client.BaseAddress = new Uri(builder.Configuration["GitHub:BaseUrl"] ?? "https://api.github.com");
+    client.DefaultRequestHeaders.Add("Accept", "application/vnd.github+json");
+})
+.AddHttpMessageHandler<CorrelationIdHandler>()
+.AddHttpMessageHandler<HttpLoggingHandler>()
+.AddForgeResilience(builder.Configuration.GetSection("Resilience:GitHub"));
+
+builder.Services.AddHttpClient<IForgeInternalHttpClient, ForgeInternalHttpClient>(client =>
+{
+    // Base address configured per deployment
+})
+.AddHttpMessageHandler<CorrelationIdHandler>()
+.AddHttpMessageHandler<JwtPropagationHandler>()
+.AddHttpMessageHandler<HttpLoggingHandler>()
+.AddForgeResilience(builder.Configuration.GetSection("Resilience:Internal"));
+
+builder.Services.AddHttpClient<IForgeExternalHttpClient, ForgeExternalHttpClient>(client =>
+{
+    var baseUrl = builder.Configuration["ExternalServices:BaseUrl"];
+    if (!string.IsNullOrEmpty(baseUrl))
+        client.BaseAddress = new Uri(baseUrl);
+})
+.AddHttpMessageHandler<CorrelationIdHandler>()
+.AddHttpMessageHandler<ExternalAuthHandler>()
+.AddHttpMessageHandler<HttpLoggingHandler>()
+.AddForgeResilience(builder.Configuration.GetSection("Resilience:External"));
+
 var app = builder.Build();
 
 app.Logger.LogInformation(
@@ -183,36 +236,11 @@ app.Logger.LogInformation(
     dataProtectionPrefix,
     string.IsNullOrWhiteSpace(dataProtectionKmsKeyId) ? "<default AWS-managed SSM encryption>" : dataProtectionKmsKeyId);
 
-app.Use(async (context, next) =>
-{
-    try
-    {
-        await next();
-    }
-    catch (Exception ex)
-    {
-        app.Logger.LogError(ex, "Unhandled exception while processing {Method} {Path}", context.Request.Method, context.Request.Path);
-
-        if (context.Response.HasStarted)
-        {
-            throw;
-        }
-
-        context.Response.Clear();
-        context.Response.StatusCode = StatusCodes.Status500InternalServerError;
-        context.Response.ContentType = "application/problem+json";
-
-        var payload = JsonSerializer.Serialize(new
-        {
-            type = "about:blank",
-            title = "Internal Server Error",
-            status = StatusCodes.Status500InternalServerError,
-            detail = "The request pipeline failed unexpectedly.",
-        });
-
-        await context.Response.WriteAsync(payload);
-    }
-});
+// Cross-cutting middleware (order is critical)
+app.UseMiddleware<CorrelationIdMiddleware>();
+app.UseMiddleware<ExceptionHandlerMiddleware>();
+app.UseMiddleware<JwtPropagationMiddleware>();
+app.UseMiddleware<SecurityHeadersMiddleware>();
 
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:EnableSwagger"))
 {
@@ -245,32 +273,13 @@ app.Use(async (context, next) =>
         actor,
         context.TraceIdentifier);
 });
-app.Use(async (context, next) =>
-{
-    context.Response.OnStarting(() =>
-    {
-        var headers = context.Response.Headers;
-        headers["X-Content-Type-Options"] = "nosniff";
-        headers["X-Frame-Options"] = "DENY";
-        headers["Referrer-Policy"] = "no-referrer";
-
-        if (!app.Environment.IsDevelopment())
-        {
-            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
-        }
-
-        return Task.CompletedTask;
-    });
-
-    await next();
-});
 app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
 
 // Keep Lambda startup lean: schema migrations must run out of band because
 // they can exceed the cold-start budget and cause INIT timeouts.
-if (!isRunningInLambda && app.Environment.IsDevelopment())
+if (!isLocalMode && !isRunningInLambda && app.Environment.IsDevelopment())
 {
     await ApplyPendingMigrationsAsync(app.Services);
 }

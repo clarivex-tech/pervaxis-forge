@@ -17,6 +17,15 @@
  */
 
 using {{ model.names.namespace }}.Extensions;
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Infrastructure.Http;
+using {{ model.names.namespace }}.Infrastructure.Middleware;
+using {{ model.names.namespace }}.Infrastructure.Security;
+using {{ model.names.namespace }}.Infrastructure.Tenancy;
+{{- if model.manifest.has_messaging }}
+using {{ model.names.namespace }}.Infrastructure.Outbox;
+{{- end }}
+using {{ model.names.namespace }}.Models.Configuration;
 {{- for module in model.selected_modules }}
 using {{ module.package_name }}.Extensions;
 {{- end }}
@@ -33,10 +42,14 @@ using System.Diagnostics;
 using System.Threading.RateLimiting;
 using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Auth;
-using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// -- Structured Logging (Serilog + CloudWatch) ------------------------------------------
+{{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
+builder.AddForgeSerilog();
+{{ end }}
 
 builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
@@ -52,6 +65,10 @@ builder.Services.AddResponseCompression(options =>
 {
     options.EnableForHttps = true;
 });
+
+// -- Configuration options --------------------------------------------------------
+builder.Services.Configure<ForgeResilienceOptions>(
+    builder.Configuration.GetSection(ForgeResilienceOptions.SectionName));
 builder.Services.AddOptions<ForgeDataClassificationOptions>()
     .BindConfiguration(ForgeDataClassificationOptions.SectionName);
 builder.Services.AddOptions<ForgeAuthenticationOptions>()
@@ -84,6 +101,7 @@ builder.Services.AddRateLimiter(limiterOptions =>
                 }));
     }
 });
+
 const string ForgeUiCorsPolicy = "ForgeUi";
 builder.Services.AddCors(options =>
 {
@@ -96,25 +114,60 @@ builder.Services.AddCors(options =>
         .AllowAnyHeader()
         .AllowAnyMethod());
 });
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = "ForgeApiKey";
-    options.DefaultChallengeScheme = "ForgeApiKey";
-})
-    .AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>("ForgeApiKey", _ => { });
-builder.Services.AddAuthorization(options =>
-{
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
-        .AddAuthenticationSchemes("ForgeApiKey")
-        .RequireAuthenticatedUser()
-        .Build();
-});
+// -- Authentication (API Key + optional JWT/OIDC) ------------------------------------
+builder.Services.AddForgeAuthentication(builder.Configuration);
+builder.Services.Configure<ForgeOidcOptions>(builder.Configuration.GetSection(ForgeOidcOptions.SectionName));
+builder.Services.Configure<ForgeTenantOptions>(builder.Configuration.GetSection(ForgeTenantOptions.SectionName));
+{{- if model.manifest.has_messaging }}
+builder.Services.Configure<ForgeOutboxOptions>(builder.Configuration.GetSection(ForgeOutboxOptions.SectionName));
+{{- end }}
 {{- if model.manifest.database != null }}
 builder.Services.AddDbContextPool<{{ model.names.dot_net_class_name }}DbContext>(options =>
     options.UseNpgsql(
         builder.Configuration.GetConnectionString("{{ model.names.dot_net_class_name }}Db"),
         npgsql => npgsql.EnableRetryOnFailure(3)));
 {{- end }}
+
+// -- OpenTelemetry Tracing --------------------------------------------------------
+{{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
+builder.Services.AddForgeTracing(builder.Configuration);
+{{ end }}
+
+// -- FluentValidation -------------------------------------------------------------
+{{ if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
+builder.Services.AddForgeValidation();
+{{ end }}
+
+// -- API Versioning ---------------------------------------------------------------
+builder.Services.AddForgeVersioning();
+
+// -- HTTP Context + DelegatingHandlers --------------------------------------------
+builder.Services.AddHttpContextAccessor();
+{{ if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
+builder.Services.AddTransient<CorrelationIdHandler>();
+{{ end }}
+{{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
+builder.Services.AddTransient<HttpLoggingHandler>();
+{{ end }}
+builder.Services.AddTransient<ExternalAuthHandler>();
+builder.Services.AddSingleton<IForgeHashingService, ForgeHashingService>();
+builder.Services.AddScoped<ITenantContext, TenantContext>();
+{{- if model.manifest.has_messaging }}
+builder.Services.AddScoped<IOutboxPublisher, OutboxPublisher>();
+builder.Services.AddHostedService<OutboxRelayService>();
+{{- end }}
+
+builder.Services.AddHttpClient<IForgeExternalHttpClient, ForgeExternalHttpClient>(client =>
+{
+    var baseUrl = builder.Configuration["ExternalServices:BaseUrl"];
+    if (!string.IsNullOrEmpty(baseUrl))
+        client.BaseAddress = new Uri(baseUrl);
+})
+.AddHttpMessageHandler<CorrelationIdHandler>()
+.AddHttpMessageHandler<ExternalAuthHandler>()
+.AddHttpMessageHandler<HttpLoggingHandler>()
+.AddForgeResilience(builder.Configuration.GetSection("Resilience:External"));
+
 builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
@@ -128,7 +181,23 @@ builder.Services.AddHealthChecks();
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
+// -- Middleware pipeline (order is critical) ------------------------------------------
+// 1. Correlation ID first -- establishes request identity for all downstream
+{{ if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
+app.UseMiddleware<CorrelationIdMiddleware>();
+{{ end }}
+// 2. JWT propagation -- extracts Bearer token before downstream middleware runs
+app.UseMiddleware<JwtPropagationMiddleware>();
+// 3. Exception handler third -- catches errors from all downstream middleware
+app.UseMiddleware<ExceptionHandlerMiddleware>();
+// 4. Security headers -- applies to all responses including error responses
+app.UseMiddleware<SecurityHeadersMiddleware>();
+// 5. Tenant resolution (multi-tenant services only)
+{{ if model.manifest.multi_tenancy }}
+app.UseMiddleware<TenantMiddleware>();
+{{ end }}
+
+if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:EnableSwagger"))
 {
     app.UseSwagger();
     app.UseSwaggerUI(options =>
@@ -152,38 +221,21 @@ app.Use(async (context, next) =>
         : "anonymous";
 
     app.Logger.LogInformation(
-        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {TraceId}",
+        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {CorrelationId}",
         "request",
         context.Request.Method,
         context.Request.Path.Value,
         context.Response.StatusCode,
         elapsedMs,
         actor,
-        context.TraceIdentifier);
-});
-app.Use(async (context, next) =>
-{
-    context.Response.OnStarting(() =>
-    {
-        var headers = context.Response.Headers;
-        headers["X-Content-Type-Options"] = "nosniff";
-        headers["X-Frame-Options"] = "DENY";
-        headers["Referrer-Policy"] = "no-referrer";
-
-        if (!app.Environment.IsDevelopment())
-        {
-            headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains";
-        }
-
-        return Task.CompletedTask;
-    });
-
-    await next();
+        context.Items["CorrelationId"]?.ToString() ?? context.TraceIdentifier);
 });
 app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
 app.UseAuthorization();
-app.MapHealthChecks("/health").RequireAuthorization();
+// Health check is anonymous -- load balancers must reach it without an API key
+app.MapHealthChecks("/health").AllowAnonymous();
 app.MapControllers().RequireAuthorization();
 
 app.Run();
+

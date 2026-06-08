@@ -16,10 +16,10 @@
  ************************************************************************
  */
 
-import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -38,10 +38,14 @@ import { IVerticalApiService, VERTICAL_API_SERVICE } from '@core/api/vertical-ap
 import { MODULES_API_SERVICE, IModulesApiService } from '@core/api/modules-api.service';
 import { CanvasModule, EnterpriseScaffoldOptions, GenerationRequest, GenesisModule, ValidationPreviewResult } from '@core/models/generation.model';
 import { VerticalSummaryResponse } from '@core/models/vertical.model';
+import { InfraOptionsFormControls, INFRA_OPTIONS_DEFAULTS } from './utils/infra-options-defaults';
+import { mapInfraOptionsToRequest, getInfraReviewSummary } from './utils/infra-options-mapping';
+import { infraOptionsValidator } from './utils/infra-options-validator';
+import { InfrastructureOptionsComponent } from './steps/infrastructure-step/infrastructure-options.component';
 
 type BuildTypeOption = {
 	label: string;
-	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe';
+	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe' | 'Monolithic';
 	category: 'Backend Service' | 'Frontend App';
 	live: boolean;
 	note: string;
@@ -67,6 +71,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 		MatButtonModule,
 		MatIconModule,
 		MatSlideToggleModule,
+		InfrastructureOptionsComponent,
 	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
 	template: `
@@ -93,7 +98,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 
 			<form [formGroup]="form" class="wizard-steps">
 				<!-- STEP 1: Select Vertical -->
-				<mat-card class="step-card" [class.active]="activeStep() === 0">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 1: Select Vertical Context</mat-card-title>
 					</mat-card-header>
@@ -123,7 +128,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 2: Choose Build Type -->
-				<mat-card class="step-card" [class.active]="activeStep() === 1">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 2: What Are You Building?</mat-card-title>
 					</mat-card-header>
@@ -184,7 +189,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 3: Service Details -->
-				<mat-card class="step-card" [class.active]="activeStep() === 2">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 3: Service Details</mat-card-title>
 					</mat-card-header>
@@ -215,7 +220,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 4: Modules -->
-				<mat-card class="step-card" [class.active]="activeStep() === 3">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 4: {{ modulesStepTitle() }}</mat-card-title>
 					</mat-card-header>
@@ -273,7 +278,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 5: Production Readiness (Enterprise Scaffold) -->
-				<mat-card class="step-card" [class.active]="activeStep() === 4">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 5: Production Readiness</mat-card-title>
 						<mat-card-subtitle>Enterprise Scaffold Configuration</mat-card-subtitle>
@@ -365,8 +370,16 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 					</mat-card-content>
 				</mat-card>
 
+				<!-- Infrastructure Options (collapsible, between Production Readiness and Deployment Settings) -->
+				@if (isBackendTypeSelected()) {
+				<forge-infrastructure-options
+					[infraForm]="infraOptionsForm"
+					[databaseConfigured]="form.controls.useDatabase.value"
+				/>
+				}
+
 				<!-- STEP 6: Deployment Settings -->
-				<mat-card class="step-card" [class.active]="activeStep() === 5">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 6: Deployment Settings</mat-card-title>
 					</mat-card-header>
@@ -463,7 +476,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 7: Review & Generate -->
-				<mat-card class="step-card" [class.active]="activeStep() === 6">
+				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 7: Review &amp; Generate</mat-card-title>
 					</mat-card-header>
@@ -511,6 +524,30 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 										<span class="value">{{ form.controls.deployInfrastructure.value ? 'Deploy enabled' : 'Deploy disabled' }}</span>
 									</div>
 								</div>
+							</div>
+
+							<!-- Infrastructure Options Summary -->
+							<div class="review-section">
+								<h4>Infrastructure Options</h4>
+								@if (infraReviewSummary().length === 0) {
+									<div class="review-all-defaults">
+										<mat-icon>check_circle</mat-icon>
+										<span>All defaults</span>
+									</div>
+								} @else {
+									@for (group of infraReviewSummary(); track group.label) {
+										<div class="review-infra-group">
+											<span class="review-infra-group-label">{{ group.label }}</span>
+											<div class="review-infra-items">
+												@for (item of group.items; track item.name) {
+													<span class="review-infra-item" [class.non-default]="item.isNonDefault">
+														{{ item.name }}: <strong>{{ item.value }}</strong>
+													</span>
+												}
+											</div>
+										</div>
+									}
+								}
 							</div>
 						</div>
 
@@ -1097,6 +1134,51 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				word-break: break-word;
 			}
 
+			.review-all-defaults {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				color: #4caf50;
+				font-size: 0.85rem;
+			}
+
+			.review-all-defaults mat-icon {
+				font-size: 16px;
+				width: 16px;
+				height: 16px;
+			}
+
+			.review-infra-group {
+				margin-bottom: 0.5rem;
+			}
+
+			.review-infra-group-label {
+				font-size: 0.75rem;
+				font-weight: 600;
+				text-transform: uppercase;
+				color: #64748b;
+				letter-spacing: 0.5px;
+			}
+
+			.review-infra-items {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 0.5rem;
+				margin-top: 0.25rem;
+			}
+
+			.review-infra-item {
+				font-size: 0.8rem;
+				padding: 2px 8px;
+				border-radius: 4px;
+				background: #f1f5f9;
+			}
+
+			.review-infra-item.non-default {
+				background: #e3f2fd;
+				color: #1565c0;
+			}
+
 			.preview-card {
 				border: 1px solid #d1e7dd;
 				border-radius: 0.5rem;
@@ -1268,6 +1350,7 @@ export class GenerationWizardV2Component {
 		{ label: 'gRPC', value: 'Grpc', category: 'Backend Service', live: true, note: 'Live now' },
 		{ label: 'Shell App', value: 'AngularShell', category: 'Frontend App', live: true, note: 'Live now' },
 		{ label: 'Micro Frontend (MFE)', value: 'AngularMfe', category: 'Frontend App', live: true, note: 'Live now' },
+		{ label: 'Monolithic App', value: 'Monolithic', category: 'Frontend App', live: true, note: 'Live now' },
 	];
 
 	readonly backendTypeOptions = this.buildTypeOptions.filter((option) => option.category === 'Backend Service');
@@ -1297,6 +1380,35 @@ export class GenerationWizardV2Component {
 		piiClassificationEnabled: [false],
 		outputCachingEnabled: [false],
 	});
+
+	/** Nested FormGroup for infrastructure toggle options */
+	readonly infraOptionsForm = new FormGroup<InfraOptionsFormControls>({
+		apiKeyEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.apiKeyEnabled, { nonNullable: true }),
+		jwtEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.jwtEnabled, { nonNullable: true }),
+		mtlsEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.mtlsEnabled, disabled: true }, { nonNullable: true }),
+		retryEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.retryEnabled, { nonNullable: true }),
+		circuitBreakerEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.circuitBreakerEnabled, { nonNullable: true }),
+		timeoutEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.timeoutEnabled, { nonNullable: true }),
+		internalHttpClient: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.internalHttpClient, { nonNullable: true }),
+		externalHttpClient: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.externalHttpClient, { nonNullable: true }),
+		serilogEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.serilogEnabled, { nonNullable: true }),
+		cloudWatchEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.cloudWatchEnabled, { nonNullable: true }),
+		openTelemetryEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.openTelemetryEnabled, { nonNullable: true }),
+		correlationIdEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.correlationIdEnabled, { nonNullable: true }),
+		prometheusEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.prometheusEnabled, disabled: true }, { nonNullable: true }),
+		multiTenancy: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.multiTenancy, { nonNullable: true }),
+		fluentValidationEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.fluentValidationEnabled, { nonNullable: true }),
+		backgroundJobProvider: new FormControl<string | null>(INFRA_OPTIONS_DEFAULTS.backgroundJobProvider),
+		pdfEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.pdfEnabled, disabled: true }, { nonNullable: true }),
+		templateEngineEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.templateEngineEnabled, disabled: true }, { nonNullable: true }),
+		hashingEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.hashingEnabled, { nonNullable: true }),
+	}, { validators: [infraOptionsValidator(() => this.form.controls.useDatabase.value)] });
+
+	/** Whether a database is configured (derived from Deployment Settings) */
+	readonly databaseConfigured = computed(() => this.form.controls.useDatabase.value);
+
+	/** Infrastructure review summary for the review step */
+	readonly infraReviewSummary = computed(() => getInfraReviewSummary(this.infraOptionsForm.getRawValue()));
 
 	readonly verticals = signal<VerticalSummaryResponse[]>([]);
 	readonly selectedVertical = signal<VerticalSummaryResponse | null>(null);
@@ -1406,7 +1518,7 @@ export class GenerationWizardV2Component {
 	}
 
 	isCanvasTypeSelected(): boolean {
-		return ['AngularShell', 'AngularMfe'].includes(this.form.controls.type.value);
+		return ['AngularShell', 'AngularMfe', 'Monolithic'].includes(this.form.controls.type.value);
 	}
 
 	canGenerate(): boolean {
@@ -1431,6 +1543,7 @@ export class GenerationWizardV2Component {
 	modulesStepTitle(): string {
 		if (this.form.controls.type.value === 'AngularShell') return 'Canvas Modules (Shell)';
 		if (this.form.controls.type.value === 'AngularMfe') return 'Canvas Modules (Micro Frontend)';
+		if (this.form.controls.type.value === 'Monolithic') return 'Canvas Modules (Monolithic)';
 		return 'Genesis Modules (Backend)';
 	}
 
@@ -1570,12 +1683,22 @@ export class GenerationWizardV2Component {
 		this.generationError.set(null);
 
 		this.generationApiService.generateService(request).subscribe({
-			next: (response) => {
-				this.downloadZip(response.zipBlob, response.fileName);
-				this.generatedZipFileName.set(response.fileName);
-				this.generatedAt.set(response.generationTimestamp ?? new Date().toISOString());
-				this.generationGitHubUrl.set(response.gitHubRepoUrl);
-				this.isGenerating.set(false);
+			next: (metadata) => {
+				this.generatedAt.set(metadata.generatedAt);
+				this.generationGitHubUrl.set(metadata.gitHubRepoUrl);
+				this.generatedZipFileName.set(`${metadata.serviceName}-scaffold.zip`);
+
+				// Auto-download the ZIP
+				this.generationApiService.downloadServiceZip(request).subscribe({
+					next: (zipResult) => {
+						this.downloadZip(zipResult.zipBlob, zipResult.fileName);
+						this.isGenerating.set(false);
+					},
+					error: () => {
+						this.generationError.set('Generation succeeded but ZIP download failed. You can retry the download.');
+						this.isGenerating.set(false);
+					},
+				});
 			},
 			error: (error) => this.handleGenerationError(error),
 		});
@@ -1655,6 +1778,7 @@ export class GenerationWizardV2Component {
 			description: value.description.trim(),
 			version: value.version.trim(),
 			type: value.type,
+			...(value.type === 'Monolithic' ? { uiTargets: ['web'] } : {}),
 			genesisModules: this.isBackendTypeSelected() ? this.selectedModules() : [],
 			canvasModules: this.isCanvasTypeSelected() ? this.selectedCanvasModules() : undefined,
 			database: value.useDatabase ? {
@@ -1663,6 +1787,7 @@ export class GenerationWizardV2Component {
 			} : null,
 			createGitHubRepo: value.createGitHubRepo,
 			enterprise,
+			...mapInfraOptionsToRequest(this.infraOptionsForm.getRawValue()),
 		};
 	}
 
@@ -1713,7 +1838,7 @@ export class GenerationWizardV2Component {
 	}
 
 	private allowedCanvasModuleNamesForCurrentType(): string[] {
-		if (this.form.controls.type.value === 'AngularShell') {
+		if (this.form.controls.type.value === 'AngularShell' || this.form.controls.type.value === 'Monolithic') {
 			return [...SHELL_PRESELECTED_CANVAS_MODULES, ...SHARED_CANVAS_MODULES];
 		}
 		if (this.form.controls.type.value === 'AngularMfe') {
@@ -1723,7 +1848,7 @@ export class GenerationWizardV2Component {
 	}
 
 	private syncCanvasModulesToType(type: BuildTypeOption['value']): void {
-		if (!['AngularShell', 'AngularMfe'].includes(type)) {
+		if (!['AngularShell', 'AngularMfe', 'Monolithic'].includes(type)) {
 			this.clearCanvasModules();
 			return;
 		}
@@ -1731,7 +1856,7 @@ export class GenerationWizardV2Component {
 		const allowed = new Set(this.allowedCanvasModuleNamesForCurrentType());
 		const next = this.selectedCanvasModules().filter((name) => allowed.has(name));
 
-		if (type === 'AngularShell') {
+		if (type === 'AngularShell' || type === 'Monolithic') {
 			for (const moduleName of SHELL_PRESELECTED_CANVAS_MODULES) {
 				if (!next.includes(moduleName)) next.push(moduleName);
 			}

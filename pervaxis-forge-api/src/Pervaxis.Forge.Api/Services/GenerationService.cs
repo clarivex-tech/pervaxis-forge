@@ -145,7 +145,14 @@ public sealed class GenerationService : IGenerationService
                     GenesisModules = serviceSpec.GenesisModules,
                     Database = serviceSpec.Database,
                     Queues = serviceSpec.Queues,
-                    Metadata = serviceSpec.Metadata
+                    Metadata = serviceSpec.Metadata,
+                    Auth = serviceSpec.Auth,
+                    Resilience = serviceSpec.Resilience,
+                    Observability = serviceSpec.Observability,
+                    Validation = serviceSpec.Validation,
+                    BackgroundJobs = serviceSpec.BackgroundJobs,
+                    Utilities = serviceSpec.Utilities,
+                    MultiTenancy = serviceSpec.MultiTenancy
                 };
 
                 var manifest = BuildManifest(fullRequest, vertical);
@@ -350,7 +357,14 @@ public sealed class GenerationService : IGenerationService
             {
                 Version = request.Version,
                 CreatedAtUtc = DateTimeOffset.UtcNow
-            }
+            },
+            Auth = request.Auth,
+            Resilience = request.Resilience,
+            Observability = request.Observability,
+            Validation = request.Validation,
+            BackgroundJobs = request.BackgroundJobs,
+            Utilities = request.Utilities,
+            MultiTenancy = request.MultiTenancy
         };
 
         if (isBackend && request.Database != null)
@@ -375,6 +389,7 @@ public sealed class GenerationService : IGenerationService
 
         var log = new GenerationLog
         {
+            Id = Guid.NewGuid(),
             VerticalId = verticalId,
             Manifest = jsonDoc,
             ServiceCount = serviceCount,
@@ -395,6 +410,7 @@ public sealed class GenerationService : IGenerationService
 
         db.GeneratedServices.Add(new GeneratedService
         {
+            Id = Guid.NewGuid(),
             VerticalId = verticalId,
             ServiceName = manifest.ServiceName,
             ServiceType = manifest.ServiceType.ToString(),

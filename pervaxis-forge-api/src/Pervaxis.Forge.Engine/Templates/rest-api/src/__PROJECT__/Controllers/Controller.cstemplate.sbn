@@ -39,6 +39,9 @@ public sealed class {{ model.names.dot_net_class_name }}Controller : ControllerB
     public async Task<IActionResult> GetAsync(string id, CancellationToken cancellationToken)
     {
         var result = await service.GetAsync(id, cancellationToken);
+        if (result is null)
+            return NotFound();
+
         return Ok(result);
     }
 }
