@@ -1,0 +1,22 @@
+{
+  "product": "{{ model.manifest.product }}",
+  "service": "{{ model.manifest.service_name }}",
+  "type": "RestApi",
+  "namespace": "{{ model.names.namespace }}",
+  "template": "rest-api",
+  "forge": {
+    "version": "{{ model.forge_version }}",
+    "build": "{{ model.forge_build }}"
+  },
+  "printedAt": "{{ model.printed_at }}",
+  "genesis": {
+    "version": "{{ model.genesis_version }}"
+  },
+  "cloud": "{{ model.cloud_provider }}",
+  "framework": "net10.0",
+  "modules": [
+{{- for module in model.selected_modules }}
+    "{{ module.name }}"{{ if !for.last }},{{ end }}
+{{- end }}
+  ]
+}

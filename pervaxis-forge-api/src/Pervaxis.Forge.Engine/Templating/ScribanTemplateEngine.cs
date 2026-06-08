@@ -126,6 +126,10 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                 ["current_year"] = model.CurrentYear,
                 ["current_month"] = DateTime.UtcNow.ToString("MM"),
                 ["current_day"] = DateTime.UtcNow.ToString("dd"),
+                ["forge_version"] = model.ForgeVersion,
+                ["forge_build"] = model.ForgeBuild,
+                ["printed_at"] = model.PrintedAt,
+                ["genesis_version"] = model.GenesisVersion,
                 ["selected_modules"] = model.SelectedModules.Select(m => new Scriban.Runtime.ScriptObject
                 {
                     ["name"] = m.Name,

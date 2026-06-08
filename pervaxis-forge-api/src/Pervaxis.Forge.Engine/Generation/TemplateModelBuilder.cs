@@ -41,6 +41,7 @@ public static class TemplateModelBuilder
             SelectedModules = selectedModules,
             SelectedCanvasModules = selectedCanvasModules,
             CurrentYear = DateTime.UtcNow.Year.ToString(),
+            GenesisVersion = genesisVersion,
         };
     }
 
