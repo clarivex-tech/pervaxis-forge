@@ -37,4 +37,26 @@ export class PlatformService {
     return Capacitor.getPlatform();
   }
 }
+{{ else }}
+import { Injectable } from '@angular/core';
+
+/**
+ * PlatformService — web-only stub.
+ *
+ * Detects whether the app is running in a browser context.
+ * When the mobile target is added (uiTargets includes "mobile"),
+ * this service is replaced with a Capacitor-backed implementation.
+ */
+@Injectable({ providedIn: 'root' })
+export class PlatformService {
+  /** Always false for web-only builds. */
+  get isNative(): boolean {
+    return false;
+  }
+
+  /** Always returns 'web' for web-only builds. */
+  get platform(): string {
+    return 'web';
+  }
+}
 {{ end }}
