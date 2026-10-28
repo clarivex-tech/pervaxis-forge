@@ -112,10 +112,15 @@ export class VerticalWorkspaceComponent {
 		this.isLoadingGenerations.set(true);
 		this.generationApiService.getRecentGenerations(slug, 10).subscribe({
 			next: (response) => {
-				this.recentGenerations.set(response.generations);
+				// API returns array directly; handle both array and wrapped { generations: [] } shape
+				const entries = Array.isArray(response)
+					? response
+					: (response as any).generations ?? [];
+				this.recentGenerations.set(entries);
 				this.isLoadingGenerations.set(false);
 			},
 			error: () => {
+				this.recentGenerations.set([]);
 				this.isLoadingGenerations.set(false);
 			},
 		});
