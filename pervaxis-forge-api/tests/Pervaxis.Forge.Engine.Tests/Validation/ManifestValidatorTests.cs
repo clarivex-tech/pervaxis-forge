@@ -80,7 +80,7 @@ public class ManifestValidatorTests
     {
         var modules = GenesisModules.GetAll();
 
-        modules.Should().HaveCount(12);
+        modules.Should().HaveCount(13);
         modules.Select(module => module.DisplayName).Should().Contain(new[]
         {
             "Caching",
@@ -95,6 +95,7 @@ public class ManifestValidatorTests
             "OData",
             "TransactionalLogging",
             "FeatureFlags",
+            "Sanitization",
         });
     }
 
