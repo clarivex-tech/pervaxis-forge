@@ -1,0 +1,146 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
+using {{ model.names.namespace }}.Models.Configuration;
+
+namespace {{ model.names.namespace }}.Infrastructure.Extensions;
+
+/// <summary>
+/// Builds the authorization policies from configuration. The platform owns the mechanism;
+/// each service decides the policy names and which endpoints use them.
+/// </summary>
+public static class AuthorizationPolicyExtensions
+{
+    /// <summary>The built-in policy that requires the configured admin group.</summary>
+    public const string AdminOnlyPolicy = "AdminOnly";
+
+    private const string DefaultAdminGroup = "Admin";
+    private const string CognitoGroupClaim = "cognito:groups";
+    private const string DefaultGroupClaim = "groups";
+
+    // Providers differ: Cognito and Auth0 use "scope" (space separated), some others use "scp".
+    private static readonly string[] ScopeClaimTypes = ["scope", "scp"];
+
+    /// <summary>
+    /// The claim that lists the user's groups. A configured value wins; otherwise the provider default is used.
+    /// </summary>
+    public static string ResolveGroupClaimType(string? provider, string? configuredClaimType)
+    {
+        if (!string.IsNullOrWhiteSpace(configuredClaimType))
+            return configuredClaimType.Trim();
+
+        return string.Equals(provider?.Trim(), "Cognito", StringComparison.OrdinalIgnoreCase)
+            ? CognitoGroupClaim
+            : DefaultGroupClaim;
+    }
+
+    /// <summary>
+    /// Adds <c>AdminOnly</c> and every policy defined under <c>Forge:Authorization:Policies</c>.
+    /// Throws at startup for settings that would silently weaken security.
+    /// </summary>
+    public static void AddForgePolicies(
+        this AuthorizationOptions options,
+        ForgeAuthorizationOptions authorization,
+        string? provider)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(authorization);
+
+        var groupClaim = ResolveGroupClaimType(provider, authorization.GroupClaimType);
+        var adminGroup = string.IsNullOrWhiteSpace(authorization.AdminGroup)
+            ? DefaultAdminGroup
+            : authorization.AdminGroup.Trim();
+
+        options.AddPolicy(AdminOnlyPolicy, policy => policy
+            .RequireAuthenticatedUser()
+            .RequireClaim(groupClaim, adminGroup));
+
+        var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (rawName, definition) in authorization.Policies)
+        {
+            if (string.IsNullOrWhiteSpace(rawName))
+                throw new InvalidOperationException(
+                    $"'{ForgeAuthorizationOptions.SectionName}:Policies' contains a policy with an empty name.");
+
+            // Normalise before every check so a name like " AdminOnly " cannot slip past the reserved-name
+            // guard and then register (and overwrite the built-in policy) under its trimmed form.
+            var name = rawName.Trim();
+
+            if (string.Equals(name, AdminOnlyPolicy, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"'{AdminOnlyPolicy}' is built in. Use '{ForgeAuthorizationOptions.SectionName}:AdminGroup' to change it.");
+
+            if (!seenNames.Add(name))
+                throw new InvalidOperationException(
+                    $"Policy '{name}' is defined more than once in '{ForgeAuthorizationOptions.SectionName}:Policies' (names are compared without case or surrounding spaces).");
+
+            var groups = Clean(definition?.Groups);
+            var scopes = Clean(definition?.Scopes);
+
+            // A policy with no rules would only check "signed in", which the fallback policy already does.
+            if (groups.Length == 0 && scopes.Length == 0)
+                throw new InvalidOperationException(
+                    $"Policy '{name}' in '{ForgeAuthorizationOptions.SectionName}:Policies' needs at least one group or scope.");
+
+            options.AddPolicy(name, policy =>
+            {
+                policy.RequireAuthenticatedUser();
+
+                // RequireClaim with several values means: the user has ANY of them.
+                if (groups.Length > 0)
+                    policy.RequireClaim(groupClaim, groups);
+
+                if (scopes.Length > 0)
+                    policy.RequireAssertion(context => HasAnyScope(context.User, scopes));
+            });
+        }
+    }
+
+    /// <summary>
+    /// True when the user has at least one of the wanted scopes. Scope claims hold a space-separated
+    /// list in a single value, so each value is split before comparing.
+    /// </summary>
+    public static bool HasAnyScope(ClaimsPrincipal user, IReadOnlyCollection<string> wanted)
+    {
+        ArgumentNullException.ThrowIfNull(user);
+        ArgumentNullException.ThrowIfNull(wanted);
+
+        foreach (var claimType in ScopeClaimTypes)
+        {
+            foreach (var claim in user.FindAll(claimType))
+            {
+                var granted = claim.Value.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                if (granted.Any(scope => wanted.Contains(scope, StringComparer.Ordinal)))
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string[] Clean(IEnumerable<string>? values) =>
+        values?
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Select(value => value.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToArray()
+        ?? [];
+}

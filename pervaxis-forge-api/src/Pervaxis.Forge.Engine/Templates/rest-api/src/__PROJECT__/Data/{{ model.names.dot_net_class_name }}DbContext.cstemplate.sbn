@@ -16,6 +16,7 @@
  ************************************************************************
  */
 
+{{ if !model.manifest.multi_tenancy }}
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using {{ model.names.namespace }}.Infrastructure.Tenancy;
@@ -23,7 +24,7 @@ using {{ model.names.namespace }}.Models.Tenancy;
 
 namespace {{ model.names.namespace }}.Data;
 
-public class {{ model.names.dot_net_class_name }}DbContext : DbContext
+public partial class {{ model.names.dot_net_class_name }}DbContext : DbContext
 {
     private readonly ITenantContext _tenantContext;
 
@@ -38,6 +39,11 @@ public class {{ model.names.dot_net_class_name }}DbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+        // Domain teams add an IEntityTypeConfiguration<T> class next to their entity
+        // (for example under Domains/Billing/Data). Every one in this project is picked up here,
+        // so nobody edits this file to add a table.
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof({{ model.names.dot_net_class_name }}DbContext).Assembly);
 
         // Apply global query filter to all ITenantEntity types
         foreach (var entityType in modelBuilder.Model.GetEntityTypes())
@@ -83,3 +89,35 @@ public class {{ model.names.dot_net_class_name }}DbContext : DbContext
         return await base.SaveChangesAsync(cancellationToken);
     }
 }
+{{ else }}
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.Data.EntityFrameworkCore;
+
+namespace {{ model.names.namespace }}.Data;
+
+/// <summary>
+/// Tenant-isolated data context. Entities that derive from <c>TenantEntity&lt;TId&gt;</c> are filtered by the
+/// current tenant on every read, stamped on insert, and protected on update and delete by the composite
+/// <c>(TenantId, Id)</c> key. Entities that are shared by all tenants must carry <c>[SharedEntity]</c>.
+/// Register this context with AddDbContext only (never AddDbContextPool).
+/// </summary>
+public partial class {{ model.names.dot_net_class_name }}DbContext : TenantDbContext
+{
+    public {{ model.names.dot_net_class_name }}DbContext(
+        DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> options,
+        ITenantContext tenantContext)
+        : base(options, tenantContext)
+    {
+    }
+
+    protected override void OnTenantModelCreating(ModelBuilder modelBuilder)
+    {
+        // Domain teams add an IEntityTypeConfiguration<T> class next to their entity
+        // (for example under Domains/Billing/Data). Every one in this project is picked up here,
+        // so nobody edits this file to add a table. Relationships between tenant-owned entities use
+        // a tenant-inclusive foreign key: HasForeignKey("TenantId", "ParentId").
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof({{ model.names.dot_net_class_name }}DbContext).Assembly);
+    }
+}
+{{ end }}

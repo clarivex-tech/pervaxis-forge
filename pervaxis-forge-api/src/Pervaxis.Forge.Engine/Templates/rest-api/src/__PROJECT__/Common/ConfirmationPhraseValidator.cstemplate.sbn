@@ -1,0 +1,115 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+namespace {{ model.names.namespace }}.Common;
+
+/// <summary>
+/// Typed confirmation-phrase pattern for destructive admin operations.
+///
+/// Pattern:
+///   1. Define a constant phrase in your service (e.g. "RESET ALL DATA").
+///   2. Expose a preview endpoint that returns the phrase in its response body.
+///   3. The execute endpoint requires the caller to echo the phrase exactly.
+///   4. Validate using <see cref="IsConfirmed"/> before executing the destructive action.
+///
+/// This gives a clear UX contract — the UI displays the phrase to the user,
+/// the user types it, and the API enforces it — without custom confirmation infrastructure.
+/// </summary>
+/// <example>
+/// <code>
+/// // In your service, define the phrase as a public constant:
+/// public sealed class DataResetService
+/// {
+///     public const string ConfirmationPhrase = "RESET ALL DATA";
+///
+///     public async Task&lt;DataResetPreviewResponse&gt; PreviewAsync(CancellationToken ct)
+///     {
+///         var count = await dbContext.Records.CountAsync(ct);
+///         return new DataResetPreviewResponse
+///         {
+///             RecordCount = count,
+///             ConfirmationPhrase = ConfirmationPhrase,  // ← UI shows this to the user
+///         };
+///     }
+///
+///     public async Task ExecuteAsync(string confirmation, CancellationToken ct)
+///     {
+///         ConfirmationPhraseValidator.Require(confirmation, ConfirmationPhrase);
+///         await dbContext.Records.ExecuteDeleteAsync(ct);
+///     }
+/// }
+///
+/// // In your controller:
+/// [HttpPost("reset")]
+/// public async Task&lt;IActionResult&gt; ResetAsync(
+///     [FromBody] DataResetRequest request,
+///     CancellationToken cancellationToken)
+/// {
+///     try
+///     {
+///         await _service.ExecuteAsync(request.Confirmation, cancellationToken);
+///         return NoContent();
+///     }
+///     catch (ConfirmationRequiredException)
+///     {
+///         return BadRequest(new ProblemDetails { Detail = "Confirmation phrase did not match." });
+///     }
+/// }
+/// </code>
+/// </example>
+public static class ConfirmationPhraseValidator
+{
+    /// <summary>
+    /// Validates that <paramref name="provided"/> exactly matches <paramref name="expected"/>
+    /// using ordinal (case-sensitive) comparison.
+    /// Throws <see cref="ConfirmationRequiredException"/> if they do not match.
+    /// </summary>
+    /// <exception cref="ConfirmationRequiredException">
+    ///   Thrown when the provided phrase does not match the expected phrase.
+    /// </exception>
+    public static void Require(string? provided, string expected)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(expected, nameof(expected));
+
+        if (!string.Equals(provided, expected, StringComparison.Ordinal))
+            throw new ConfirmationRequiredException(expected);
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="provided"/> exactly matches
+    /// <paramref name="expected"/> using ordinal (case-sensitive) comparison.
+    /// </summary>
+    public static bool IsConfirmed(string? provided, string expected) =>
+        string.Equals(provided, expected, StringComparison.Ordinal);
+}
+
+/// <summary>
+/// Thrown when a destructive operation is attempted without the required confirmation phrase.
+/// Map this to HTTP 400 Bad Request at the controller boundary.
+/// </summary>
+public sealed class ConfirmationRequiredException : Exception
+{
+    /// <summary>The exact phrase that was required.</summary>
+    public string RequiredPhrase { get; }
+
+    public ConfirmationRequiredException(string requiredPhrase)
+        : base($"Confirmation phrase did not match. Expected: \"{requiredPhrase}\".")
+    {
+        RequiredPhrase = requiredPhrase;
+    }
+}

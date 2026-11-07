@@ -1,0 +1,42 @@
+{{ if model.manifest.database != null }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+namespace {{ model.names.namespace }}.Models.Configuration;
+
+/// <summary>
+/// Database settings that sit next to <c>ConnectionStrings:Default</c>.
+/// </summary>
+public sealed class ForgeDatabaseOptions
+{
+    public const string SectionName = "Forge:Database";
+
+    /// <summary>
+    /// AWS Secrets Manager secret (name or ARN) that holds <c>{"username": "...", "password": "..."}</c>.
+    /// Leave empty to use the user name and password inside <c>ConnectionStrings:Default</c> (local development).
+    /// When set, the credentials come from the secret and are refreshed automatically after a password rotation.
+    /// </summary>
+    public string? SecretId { get; init; }
+
+    /// <summary>
+    /// Path to the CA certificate file used to verify the database server, for example the RDS global bundle.
+    /// Use it together with <c>SSL Mode=VerifyFull</c> in the connection string.
+    /// </summary>
+    public string? RootCertificate { get; init; }
+}
+{{ end }}

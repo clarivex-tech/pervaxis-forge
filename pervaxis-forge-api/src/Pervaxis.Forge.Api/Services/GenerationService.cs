@@ -152,7 +152,8 @@ public sealed class GenerationService : IGenerationService
                     Validation = serviceSpec.Validation,
                     BackgroundJobs = serviceSpec.BackgroundJobs,
                     Utilities = serviceSpec.Utilities,
-                    MultiTenancy = serviceSpec.MultiTenancy
+                    MultiTenancy = serviceSpec.MultiTenancy,
+                    Cognito = serviceSpec.Cognito
                 };
 
                 var manifest = BuildManifest(fullRequest, vertical);
@@ -364,7 +365,8 @@ public sealed class GenerationService : IGenerationService
             Validation = request.Validation,
             BackgroundJobs = request.BackgroundJobs,
             Utilities = request.Utilities,
-            MultiTenancy = request.MultiTenancy
+            MultiTenancy = request.MultiTenancy,
+            Cognito = request.Cognito
         };
 
         if (isBackend && request.Database != null)

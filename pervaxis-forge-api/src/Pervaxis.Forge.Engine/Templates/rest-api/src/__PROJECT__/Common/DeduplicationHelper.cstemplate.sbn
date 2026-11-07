@@ -1,0 +1,110 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Security.Cryptography;
+
+namespace {{ model.names.namespace }}.Common;
+
+/// <summary>
+/// SHA-256 content hashing utility for exactly-once upload / duplicate detection.
+///
+/// Pattern:
+///   1. Hash the incoming file stream before saving.
+///   2. Query your store for an existing record with the same hash.
+///   3. If found, throw a typed duplicate exception.
+///   4. Save the record with the hash stored.
+///   5. Catch <see cref="Microsoft.EntityFrameworkCore.DbUpdateException"/> on a
+///      unique-constraint violation (race condition) as a second-chance guard —
+///      re-query and throw your typed exception.
+///
+/// This gives exactly-once semantics without distributed locking.
+/// </summary>
+/// <example>
+/// <code>
+/// // In your upload service:
+/// var hash = await DeduplicationHelper.ComputeHashAsync(file.OpenReadStream(), cancellationToken);
+///
+/// var existing = await dbContext.Imports
+///     .FirstOrDefaultAsync(i => i.ContentHash == hash, cancellationToken);
+/// if (existing is not null)
+///     throw new DuplicateImportException(hash, existing.Id);
+///
+/// var import = new ImportEntity { ContentHash = hash, ... };
+/// dbContext.Imports.Add(import);
+///
+/// try
+/// {
+///     await dbContext.SaveChangesAsync(cancellationToken);
+/// }
+/// catch (DbUpdateException ex) when (DeduplicationHelper.IsUniqueConstraintViolation(ex))
+/// {
+///     // Race condition: another request saved the same file concurrently
+///     var concurrent = await dbContext.Imports
+///         .AsNoTracking()
+///         .FirstOrDefaultAsync(i => i.ContentHash == hash, cancellationToken);
+///     throw new DuplicateImportException(hash, concurrent?.Id);
+/// }
+/// </code>
+/// </example>
+public static class DeduplicationHelper
+{
+    /// <summary>
+    /// Computes the SHA-256 hash of <paramref name="stream"/> and returns it as a lowercase hex string.
+    /// The stream position is reset to 0 after hashing so it can be read again for further processing.
+    /// </summary>
+    public static async Task<string> ComputeHashAsync(Stream stream, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        var hashBytes = await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false);
+        var hex = Convert.ToHexString(hashBytes).ToLowerInvariant();
+
+        if (stream.CanSeek)
+            stream.Position = 0;
+
+        return hex;
+    }
+
+    /// <summary>
+    /// Returns <see langword="true"/> when <paramref name="ex"/> wraps a database unique-constraint
+    /// violation, indicating a concurrent duplicate insert race.
+    ///
+    /// Supports PostgreSQL (Npgsql <c>UniqueViolation</c>) and SQL Server
+    /// (<c>SqlException.Number == 2627 || 2601</c>). Add more providers as needed.
+    /// </summary>
+    public static bool IsUniqueConstraintViolation(Microsoft.EntityFrameworkCore.DbUpdateException ex)
+    {
+        ArgumentNullException.ThrowIfNull(ex);
+
+        return ex.InnerException switch
+        {
+            // PostgreSQL — Npgsql.PostgresException
+            { } inner when inner.GetType().FullName == "Npgsql.PostgresException"
+                        && inner.GetType().GetProperty("SqlState")?.GetValue(inner) as string == "23505"
+                => true,
+
+            // SQL Server — Microsoft.Data.SqlClient.SqlException
+            { } inner when inner.GetType().FullName == "Microsoft.Data.SqlClient.SqlException"
+                        && inner.GetType().GetProperty("Number")?.GetValue(inner) is int n
+                        && (n == 2627 || n == 2601)
+                => true,
+
+            _ => false,
+        };
+    }
+}

@@ -1,0 +1,65 @@
+{{ if model.manifest.multi_tenancy }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Security.Claims;
+using Pervaxis.Core.MultiTenancy;
+
+namespace {{ model.names.namespace }}.Auth;
+
+/// <summary>
+/// Checks the tenant claim in the raw JWT payload. A <see cref="ClaimsPrincipal"/> flattens a one-element
+/// JSON array into a plain string claim and hides duplicate JSON properties, so the tenant middleware cannot
+/// detect those shapes. This guard runs from the JwtBearer <c>TokenValidated</c> event, where the raw payload
+/// is still available.
+/// </summary>
+public static class TenantClaimGuard
+{
+    /// <summary>
+    /// Accepts the tenant claim only when the raw payload holds exactly one valid scalar tenant GUID string.
+    /// Otherwise every tenant claim is removed from the principal, so the tenant middleware answers 403
+    /// on tenant-protected endpoints. The token itself stays authenticated.
+    /// </summary>
+    /// <param name="principal">The principal built from the validated token.</param>
+    /// <param name="rawPayloadJson">The decoded JWT payload JSON.</param>
+    /// <param name="claimType">The tenant claim name (Forge:Tenant:ClaimType).</param>
+    /// <returns><see langword="true"/> when the tenant claim is acceptable.</returns>
+    public static bool Enforce(ClaimsPrincipal? principal, string? rawPayloadJson, string claimType)
+    {
+        if (principal is null)
+            return false;
+
+        var accepted = !string.IsNullOrWhiteSpace(rawPayloadJson)
+            && TenantClaimPayloadValidator.Validate(rawPayloadJson, claimType).Status == TenantClaimStatus.Resolved;
+
+        if (!accepted)
+            RemoveTenantClaims(principal, claimType);
+
+        return accepted;
+    }
+
+    private static void RemoveTenantClaims(ClaimsPrincipal principal, string claimType)
+    {
+        foreach (var identity in principal.Identities)
+        {
+            foreach (var claim in identity.FindAll(claimType).ToList())
+                identity.RemoveClaim(claim);
+        }
+    }
+}
+{{ end }}

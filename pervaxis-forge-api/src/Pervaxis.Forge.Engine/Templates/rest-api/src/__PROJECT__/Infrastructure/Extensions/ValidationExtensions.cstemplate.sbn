@@ -18,19 +18,37 @@
  */
 
 using FluentValidation;
+using Microsoft.AspNetCore.Mvc;
 using {{ model.names.namespace }}.Infrastructure.Validation;
 
 namespace {{ model.names.namespace }}.Infrastructure.Extensions;
 
 public static class ValidationExtensions
 {
+    /// <summary>
+    /// Registers FluentValidation validators discovered from the assembly and runs them for
+    /// MVC controller actions (via <see cref="ValidationActionFilter"/>) and for minimal API
+    /// endpoint groups (via <see cref="ValidationEndpointFilter"/>).
+    /// </summary>
     public static IServiceCollection AddForgeValidation(this IServiceCollection services)
     {
+        // Scan the assembly for all IValidator<T> implementations and register them.
         services.AddValidatorsFromAssemblyContaining<Program>();
+
+        // Controllers: validate action arguments before the action runs.
+        // FluentValidation 12 no longer ships an MVC auto-validation package, so the platform provides this filter.
+        services.Configure<MvcOptions>(options => options.Filters.Add<ValidationActionFilter>());
+
+        // Minimal API route groups.
         services.AddScoped<ValidationEndpointFilter>();
+
         return services;
     }
 
+    /// <summary>
+    /// Applies <see cref="ValidationEndpointFilter"/> to a minimal API route group.
+    /// Not needed for MVC controllers: <see cref="ValidationActionFilter"/> covers those.
+    /// </summary>
     public static RouteGroupBuilder WithValidation(this RouteGroupBuilder group)
     {
         group.AddEndpointFilter<ValidationEndpointFilter>();

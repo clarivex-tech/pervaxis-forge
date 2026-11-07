@@ -1,0 +1,72 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Design;
+{{- if !model.manifest.multi_tenancy }}
+using {{ model.names.namespace }}.Infrastructure.Tenancy;
+{{- else }}
+using Pervaxis.Core.Data.EntityFrameworkCore;
+{{- end }}
+
+namespace {{ model.names.namespace }}.Data;
+
+/// <summary>
+/// Lets the <c>dotnet ef</c> tools create the DbContext without starting the whole service.
+/// It is used only by the tools (migrations add, migrations script, database update). The running
+/// service builds its DbContext through <c>AddForgeDatabase</c>.
+///
+/// The connection string comes from appsettings.json, appsettings.Development.json or the
+/// ConnectionStrings__Default environment variable. Generating a migration or a SQL script never
+/// connects, so any value works for those. <c>database update</c> connects to the database you point it at.
+/// </summary>
+internal sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<{{ model.names.dot_net_class_name }}DbContext>
+{
+    public {{ model.names.dot_net_class_name }}DbContext CreateDbContext(string[] args)
+    {
+        var configuration = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: true)
+            .AddJsonFile("appsettings.Development.json", optional: true)
+            .AddEnvironmentVariables()
+            .Build();
+
+        var connectionString = configuration.GetConnectionString("Default");
+        if (string.IsNullOrWhiteSpace(connectionString))
+            connectionString = "Host=localhost;Database=design_time";
+
+        var options = new DbContextOptionsBuilder<{{ model.names.dot_net_class_name }}DbContext>()
+            .UseNpgsql(connectionString)
+            .Options;
+
+{{- if !model.manifest.multi_tenancy }}
+        return new {{ model.names.dot_net_class_name }}DbContext(options, new DesignTimeTenantContext());
+{{- else }}
+        // Never resolved: model construction works, tenant data stays unreachable.
+        return new {{ model.names.dot_net_class_name }}DbContext(options, Pervaxis.Core.Data.EntityFrameworkCore.DesignTimeTenantContext.Instance);
+{{- end }}
+    }
+
+{{- if !model.manifest.multi_tenancy }}
+
+    private sealed class DesignTimeTenantContext : ITenantContext
+    {
+        public string? TenantId => null;
+    }
+{{- end }}
+}

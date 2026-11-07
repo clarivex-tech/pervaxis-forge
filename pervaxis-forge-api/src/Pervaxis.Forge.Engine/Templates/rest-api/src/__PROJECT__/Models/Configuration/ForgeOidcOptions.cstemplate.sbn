@@ -27,9 +27,22 @@ public sealed class ForgeOidcOptions
     /// </summary>
     public string Provider { get; init; } = "Auth0";
 
+    /// <summary>
+    /// The token issuer. For Cognito: https://cognito-idp.{region}.amazonaws.com/{user-pool-id}.
+    /// </summary>
     public string? Authority { get; set; }
 
+    /// <summary>
+    /// The API audience for providers that put an <c>aud</c> claim in access tokens (Auth0, Okta, Supabase).
+    /// Not used for Cognito: use <see cref="ClientIds"/> instead.
+    /// </summary>
     public string? Audience { get; set; }
+
+    /// <summary>
+    /// Cognito only. The app client IDs allowed to call this service (for example one for the web app
+    /// and one for the mobile app). Access tokens issued to any other app client are rejected.
+    /// </summary>
+    public List<string> ClientIds { get; init; } = [];
 
     /// <summary>
     /// Retained for Auth0 management API compatibility.
