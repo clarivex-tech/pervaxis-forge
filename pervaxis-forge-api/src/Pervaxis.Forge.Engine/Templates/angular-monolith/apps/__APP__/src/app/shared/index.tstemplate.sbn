@@ -1,0 +1,32 @@
+/**
+ * Shared module barrel export.
+ *
+ * Place reusable components, directives, and pipes in this folder.
+ * Export them from this file so features can import from '@shared'.
+ *
+ * Convention:
+ *   - shared/components/   — Reusable UI components
+ *   - shared/directives/   — Custom directives
+ *   - shared/pipes/        — Custom pipes
+ *   - shared/models/       — Shared interfaces and types
+ *   - shared/utils/        — Reusable utility functions
+ *
+ * Example:
+ *   export { ConfirmDialogComponent } from './components/confirm-dialog/confirm-dialog.component';
+ */
+
+// Angular built-in directives recommended for all image usage
+export { NgOptimizedImage } from '@angular/common';
+
+// Form error utility — use in all reactive form templates
+export { getFormFieldError } from './utils/form-errors';
+
+// Shared UI components
+export { SkeletonLoaderComponent } from './components/skeleton-loader/skeleton-loader.component';
+export { EmptyStateComponent } from './components/empty-state/empty-state.component';
+
+// Shared services
+export { ConfirmDialogService } from './services/confirm-dialog.service';
+
+// Shared models
+export { PaginatedResponse, PaginationParams, DEFAULT_PAGE_SIZE, buildPaginationParams } from './models/pagination.model';

@@ -16,7 +16,7 @@
  ************************************************************************
  */
 
-import { Component, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 {{- for m in model.selected_canvas_modules }}
 import { {{ m.import_name }} } from '{{ m.package_name }}';
@@ -32,10 +32,12 @@ import { {{ model.names.angular_mfe_component_name }}ApiService } from './api.se
     {{ m.import_name }},
 {{- end }}
   ],
-  templateUrl: './component.html'
+  templateUrl: './component.html',
+  changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class {{ model.names.angular_mfe_component_name }} implements OnInit {
-  constructor(private readonly apiService: {{ model.names.angular_mfe_component_name }}ApiService) {}
-
-  ngOnInit(): void {}
+export class {{ model.names.angular_mfe_component_name }} {
+  // VERTICAL: Use apiService to load domain data. Example:
+  // readonly items = signal<DomainItem[]>([]);
+  // constructor() { this.apiService.getAll().subscribe(data => this.items.set(data)); }
+  protected readonly apiService = inject({{ model.names.angular_mfe_component_name }}ApiService);
 }

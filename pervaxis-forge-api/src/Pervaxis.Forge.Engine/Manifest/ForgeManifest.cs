@@ -29,4 +29,20 @@ public sealed record ForgeManifest
     public AngularConfig? Angular { get; init; }
 
     public ManifestMetadata? Metadata { get; init; }
+
+    public AuthConfig? Auth { get; init; }
+
+    public ResilienceConfig? Resilience { get; init; }
+
+    public ObservabilityConfig? Observability { get; init; }
+
+    public ValidationConfig? Validation { get; init; }
+
+    public BackgroundJobConfig? BackgroundJobs { get; init; }
+
+    public UtilitiesConfig? Utilities { get; init; }
+
+    public bool MultiTenancy { get; init; } = false;
+
+    public CognitoConfig? Cognito { get; init; }
 }

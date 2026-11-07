@@ -1,0 +1,57 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Routes } from '@angular/router';
+import { authGuard } from '../../../core/guards/auth.guard';
+
+export const SAMPLE_ROUTES: Routes = [
+  {
+    path: '',
+    canActivate: [authGuard],
+    children: [
+      {
+        path: '',
+        loadComponent: () =>
+          import('../pages/sample-list/sample-list.component').then(
+            (m) => m.SampleListComponent
+          ),
+      },
+      {
+        path: 'new',
+        loadComponent: () =>
+          import('../pages/sample-form/sample-form.component').then(
+            (m) => m.SampleFormComponent
+          ),
+      },
+      {
+        path: ':id',
+        loadComponent: () =>
+          import('../pages/sample-detail/sample-detail.component').then(
+            (m) => m.SampleDetailComponent
+          ),
+      },
+      {
+        path: ':id/edit',
+        loadComponent: () =>
+          import('../pages/sample-form/sample-form.component').then(
+            (m) => m.SampleFormComponent
+          ),
+      },
+    ],
+  },
+];

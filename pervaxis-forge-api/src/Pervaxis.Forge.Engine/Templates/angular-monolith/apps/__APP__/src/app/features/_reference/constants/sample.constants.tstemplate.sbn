@@ -1,0 +1,36 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+/** API endpoint path for sample resources */
+export const SAMPLE_API_PATH = '/api/samples';
+
+/** Route paths used in sample feature routing */
+export const SAMPLE_ROUTE_PATHS = {
+  list: 'samples',
+  create: 'samples/new',
+  edit: 'samples/:id/edit',
+  detail: 'samples/:id',
+} as const;
+
+/** Permission keys for sample feature access control */
+export const SAMPLE_PERMISSIONS = {
+  read: 'samples:read',
+  create: 'samples:create',
+  update: 'samples:update',
+  delete: 'samples:delete',
+} as const;

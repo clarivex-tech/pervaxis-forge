@@ -1,0 +1,119 @@
+[
+  {
+    "workItemType": "Epic",
+    "title": "Phase 0 — Foundation",
+    "description": "Repo setup, shared /core contracts, EF Core scaffolding, auth wiring, and local dev environment. All other work streams depend on this phase.",
+    "tags": "phase-0, foundation",
+    "state": "New",
+    "priority": 1,
+    "effort": 6,
+    "acceptanceCriteria": "<ul><li>Solution builds with zero warnings</li><li>ITenantEntity query filter provably blocks cross-tenant queries in a unit test</li><li>JWT with a valid tenantId claim populates ITenantContext correctly</li><li>IManifestReader returns activePacks from Redis; falls back to file on cold start</li><li>All /core interfaces are defined; no implementation leaks into /core</li><li>Docker Compose starts BFF, Postgres, Redis, and LocalStack SQS cleanly</li></ul>"
+  },
+  {
+    "workItemType": "User Story",
+    "title": "01-T1: Repo & solution structure",
+    "description": "Create solution with /core, /features, /vertical, /bff, /engine folders per A.2 folder spec.",
+    "tags": "phase-0, foundation, setup",
+    "state": "New",
+    "priority": 1,
+    "effort": 4,
+    "parentTitle": "Phase 0 — Foundation",
+    "acceptanceCriteria": "<ul><li>Solution file created with all project references</li><li>Folder structure matches A.2 specification</li><li>dotnet build succeeds with zero warnings</li><li>Directory.Build.props configured (Nullable, TreatWarningsAsErrors, LangVersion)</li></ul>"
+  },
+  {
+    "workItemType": "User Story",
+    "title": "01-T2: /core contracts",
+    "description": "Define AuditEvent, TenantContext, IMessaging, IManifestReader, IAdminOverride, INotification, ComplianceProjection, DisputeRaisedEvent, DisputeResolvedEvent interfaces and types.",
+    "tags": "phase-0, foundation, contracts",
+    "state": "New",
+    "priority": 1,
+    "effort": 8,
+    "parentTitle": "Phase 0 — Foundation",
+    "dependsOn": "01-T1",
+    "acceptanceCriteria": "<ul><li>All 9 interfaces/types defined in /core project</li><li>No implementation code in /core — interfaces and records only</li><li>/core project has zero external package dependencies</li><li>All types are documented with XML comments</li></ul>"
+  },
+  {
+    "workItemType": "User Story",
+    "title": "01-T3: ServiceDbContext & EF setup",
+    "description": "Create ServiceDbContext, global ITenantEntity query filter, IEntityTypeConfiguration<T> auto-discovery, LocalStack + Docker Compose wiring.",
+    "tags": "phase-0, foundation, data",
+    "state": "New",
+    "priority": 1,
+    "effort": 8,
+    "parentTitle": "Phase 0 — Foundation",
+    "dependsOn": "01-T1",
+    "acceptanceCriteria": "<ul><li>ServiceDbContext created with global tenant query filter</li><li>ITenantEntity filter provably blocks cross-tenant queries in unit test</li><li>IEntityTypeConfiguration auto-discovered from assembly</li><li>Docker Compose includes PostgreSQL with health check</li></ul>"
+  },
+  {
+    "workItemType": "User Story",
+    "title": "01-T4: Initial DB migrations",
+    "description": "Run Admin-first migration order per A.8: Tenant, User, TenantUser, BlueprintActivation.",
+    "tags": "phase-0, foundation, data, migrations",
+    "state": "New",
+    "priority": 1,
+    "effort": 4,
+    "parentTitle": "Phase 0 — Foundation",
+    "dependsOn": "01-T3",
+    "acceptanceCriteria": "<ul><li>Migration applies cleanly to fresh PostgreSQL</li><li>Entity dependency chain: Tenant → User → TenantUser → BlueprintActivation</li><li>No FK constraint errors on fresh apply</li><li>Migration is idempotent (re-run doesn't fail)</li></ul>"
+  },
+  {
+    "workItemType": "User Story",
+    "title": "01-T5: Auth middleware",
+    "description": "Wire JWT Bearer + API Key dual-scheme policy, ITenantContext extraction from JWT tenantId claim, BFF middleware stack.",
+    "tags": "phase-0, foundation, auth, security",
+    "state": "New",
+    "priority": 1,
+    "effort": 8,
+    "parentTitle": "Phase 0 — Foundation",
+    "dependsOn": "01-T2",
+    "acceptanceCriteria": "<ul><li>JWT Bearer validates against configured OIDC authority</li><li>API Key scheme validates X-Api-Key header</li><li>Dual-scheme policy auto-selects based on Authorization header prefix</li><li>ITenantContext correctly populated from JWT tenantId claim</li><li>/health endpoint accessible without authentication</li></ul>"
+  },
+  {
+    "workItemType": "User Story",
+    "title": "01-T6: IMessaging (SQS) wiring",
+    "description": "Implement SQS publisher for /core event bus; stub consumer base for workspace modules.",
+    "tags": "phase-0, foundation, messaging",
+    "state": "New",
+    "priority": 2,
+    "effort": 4,
+    "parentTitle": "Phase 0 — Foundation",
+    "dependsOn": "01-T2",
+    "acceptanceCriteria": "<ul><li>IMessaging implementation publishes to SQS queue</li><li>Consumer base class exists for workspace modules to extend</li><li>LocalStack SQS queue reachable from Docker Compose</li><li>Published message retrievable from queue in integration test</li></ul>"
+  },
+  {
+    "workItemType": "User Story",
+    "title": "01-T7: IManifestReader",
+    "description": "Implement forge.manifest.json reader backed by Redis; fallback to file on cache miss.",
+    "tags": "phase-0, foundation, configuration",
+    "state": "New",
+    "priority": 2,
+    "effort": 4,
+    "parentTitle": "Phase 0 — Foundation",
+    "dependsOn": "01-T2",
+    "acceptanceCriteria": "<ul><li>IManifestReader reads from Redis cache first</li><li>Falls back to file-based read on cache miss</li><li>Returns activePacks correctly</li><li>Redis connection configured via appsettings</li></ul>"
+  },
+  {
+    "workItemType": "User Story",
+    "title": "01-T8: Error middleware & taxonomy",
+    "description": "Wire global exception handler returning error categories per A.5: Validation, Engine Rejection, Pack Inactive (423), Authorization, Amendment Conflict, System Error.",
+    "tags": "phase-0, foundation, error-handling",
+    "state": "New",
+    "priority": 1,
+    "effort": 4,
+    "parentTitle": "Phase 0 — Foundation",
+    "dependsOn": "01-T5",
+    "acceptanceCriteria": "<ul><li>Global exception handler catches all unhandled exceptions</li><li>Returns RFC 7807 Problem Details format</li><li>Maps to correct HTTP status: Validation→400, Authorization→403, Pack Inactive→423, Amendment Conflict→409, System Error→500</li><li>Engine Rejection returns structured error with rejection reason</li></ul>"
+  },
+  {
+    "workItemType": "User Story",
+    "title": "01-T9: Local dev smoke test",
+    "description": "docker compose up → /health returns 200; JWT auth round-trip works; SQS local queue reachable.",
+    "tags": "phase-0, foundation, testing, devex",
+    "state": "New",
+    "priority": 1,
+    "effort": 4,
+    "parentTitle": "Phase 0 — Foundation",
+    "dependsOn": "01-T6, 01-T7, 01-T8",
+    "acceptanceCriteria": "<ul><li>docker compose up starts BFF, Postgres, Redis, LocalStack SQS</li><li>GET /health returns 200 within 30 seconds of startup</li><li>JWT auth round-trip: get token → call authenticated endpoint → 200</li><li>SQS local queue reachable and message publish/receive works</li><li>All services healthy in docker compose ps</li></ul>"
+  }
+]

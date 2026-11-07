@@ -6,22 +6,108 @@
     }
   },
   "AllowedHosts": "*",
-  "Forge": {
-    "EnableSwagger": false,
-    "Authentication": {
-      "ApiKey": ""
+{{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
+  "Serilog": {
+    "MinimumLevel": {
+      "Default": "Information",
+      "Override": {
+        "Microsoft.AspNetCore": "Warning",
+        "Microsoft.EntityFrameworkCore": "Warning",
+        "System.Net.Http": "Warning"
+      }
     },
+    "CloudWatch": {
+      "LogGroup": "/pervaxis/{{ model.manifest.vertical_slug }}/{{ model.manifest.service_name }}",
+      "LogStreamPrefix": "{{ model.manifest.service_name }}"
+    }
+  },
+{{ end }}
+  "Resilience": {
+    "Default": {
+      "MaxRetryAttempts": 3,
+      "CircuitBreakerFailureThreshold": 5,
+      "CircuitBreakerSamplingWindowSeconds": 30,
+      "CircuitBreakerBreakDurationSeconds": 60,
+      "TimeoutSeconds": 30
+    },
+    "External": {
+      "MaxRetryAttempts": 2,
+      "CircuitBreakerFailureThreshold": 3,
+      "CircuitBreakerSamplingWindowSeconds": 60,
+      "CircuitBreakerBreakDurationSeconds": 120,
+      "TimeoutSeconds": 15
+    }
+  },
+  "ExternalServices": {
+    "BaseUrl": ""
+  },
+{{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
+  "OpenTelemetry": {
+    "OtlpEndpoint": "http://localhost:4317"
+  },
+{{ end }}
+  "Forge": {
+    "ServiceName": "{{ model.manifest.service_name }}",
+    "EnableSwagger": false,
+    "Oidc": {
+{{- if model.manifest.cognito != null }}
+      "Provider": "Cognito",
+      "Authority": "{{ model.manifest.cognito.authority }}",
+      "Audience": "",
+      "ClientIds": [{{ for client_id in model.manifest.cognito.client_ids }}"{{ client_id }}"{{ if !for.last }}, {{ end }}{{ end }}],
+{{- else }}
+      "Provider": "Auth0",
+      "Authority": "",
+      "Audience": "",
+      "ClientIds": [],
+{{- end }}
+      "Domain": ""
+    },
+    "Authentication": {
+      "ApiKey": "",
+{{- if model.manifest.cognito != null }}
+      "Scheme": "{{ model.manifest.cognito.scheme }}"
+{{- else }}
+      "Scheme": "ApiKey"
+{{- end }}
+    },
+    "Authorization": {
+{{- if model.manifest.cognito != null }}
+      "AdminGroup": "{{ model.manifest.cognito.admin_group }}",
+{{- else }}
+      "AdminGroup": "Admin",
+{{- end }}
+      "GroupClaimType": "",
+      "Policies": {}
+    },
+{{- if model.manifest.multi_tenancy }}
+    "Tenant": {
+      "ClaimType": "tenant_id",
+      "EnableDirectoryChecks": false,
+      "DirectoryCacheTtl": "00:01:00"
+    },
+{{- else }}
+    "Tenant": {
+      "Required": false
+    },
+{{- end }}
+{{- if model.manifest.has_messaging }}
+    "Outbox": {
+      "MaxRetries": 5,
+      "PollingIntervalSeconds": 10
+    },
+{{- end }}
     "Secrets": {
       "UseSecretsManager": false,
       "SecretId": "",
       "ApiKeySecretKey": "Forge:Authentication:ApiKey"
     },
-    "Resilience": {
-      "Enabled": true,
-      "RetryCount": 3,
-      "RetryDelayMilliseconds": 1000,
-      "TimeoutSeconds": 30
+{{- if model.manifest.database != null }}
+    "Database": {
+      "SecretId": "",
+      "RootCertificate": ""
     },
+{{- end }}
     "AuditLogging": {
       "Enabled": true
     },

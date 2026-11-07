@@ -1,0 +1,48 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Injectable, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { Observable } from 'rxjs';
+import { SampleItem, CreateSampleDto, UpdateSampleDto } from '../models/sample.model';
+import { SAMPLE_API_PATH } from '../constants/sample.constants';
+
+@Injectable({ providedIn: 'root' })
+export class SampleService {
+  private readonly http = inject(HttpClient);
+
+  getAll(): Observable<SampleItem[]> {
+    return this.http.get<SampleItem[]>(SAMPLE_API_PATH);
+  }
+
+  getById(id: number): Observable<SampleItem> {
+    return this.http.get<SampleItem>(`${SAMPLE_API_PATH}/${id}`);
+  }
+
+  create(dto: CreateSampleDto): Observable<SampleItem> {
+    return this.http.post<SampleItem>(SAMPLE_API_PATH, dto);
+  }
+
+  update(id: number, dto: UpdateSampleDto): Observable<SampleItem> {
+    return this.http.put<SampleItem>(`${SAMPLE_API_PATH}/${id}`, dto);
+  }
+
+  delete(id: number): Observable<void> {
+    return this.http.delete<void>(`${SAMPLE_API_PATH}/${id}`);
+  }
+}

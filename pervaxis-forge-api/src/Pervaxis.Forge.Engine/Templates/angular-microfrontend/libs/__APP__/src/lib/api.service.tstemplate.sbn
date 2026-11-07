@@ -16,21 +16,26 @@
  ************************************************************************
  */
 
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+
+/** Domain model — replace with your actual DTO interface */
+export interface DomainItem {
+  id: string;
+  [key: string]: unknown;
+}
 
 @Injectable({ providedIn: 'root' })
 export class {{ model.names.angular_mfe_component_name }}ApiService {
   private readonly baseUrl = '{{ model.names.api_base_route }}';
+  private readonly http = inject(HttpClient);
 
-  constructor(private readonly http: HttpClient) {}
-
-  getAll(): Observable<unknown[]> {
-    return this.http.get<unknown[]>(this.baseUrl);
+  getAll(): Observable<DomainItem[]> {
+    return this.http.get<DomainItem[]>(this.baseUrl);
   }
 
-  getById(id: string): Observable<unknown> {
-    return this.http.get<unknown>(`${this.baseUrl}/${id}`);
+  getById(id: string): Observable<DomainItem> {
+    return this.http.get<DomainItem>(`${this.baseUrl}/${id}`);
   }
 }

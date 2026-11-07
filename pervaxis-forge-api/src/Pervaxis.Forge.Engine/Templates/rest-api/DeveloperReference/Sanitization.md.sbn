@@ -1,0 +1,125 @@
+{{- has_sanitization = false -}}
+{{- for module in model.selected_modules -}}
+{{- if (module.name | string.downcase) == "sanitization" -}}{{- has_sanitization = true -}}{{- end -}}
+{{- end -}}
+{{- if has_sanitization -}}
+# Sanitization: cleaning user input (XSS prevention)
+
+Package: `Pervaxis.Genesis.Sanitization` (already referenced and registered in this service).
+
+Sanitize every free-text value that comes from a user and is later stored or shown, such as comments, notes, names and descriptions. Do not sanitize IDs, enums or numbers.
+
+## Profiles
+
+| Profile | Result |
+|---|---|
+| `PlainText` | All HTML removed. This is the default. |
+| `SafeHtml` | Safe tags such as bold, italic, links and lists are kept. Scripts, event handlers and iframes are removed. |
+| `Markdown` | Everything in `SafeHtml`, plus code blocks, headings, blockquotes, tables and images. |
+
+Custom profiles can be added in configuration (`CustomProfiles`).
+
+## Settings
+
+Read from the `Genesis:Sanitization` configuration section. All values are optional. The defaults are shown.
+
+```json
+{
+  "Genesis": {
+    "Sanitization": {
+      "DefaultProfile": "PlainText",
+      "AllowCustomProfiles": true,
+      "MaxInputLength": 1000000,
+      "EnableMiddleware": false
+    }
+  }
+}
+```
+
+## Option 1: mark the property on the request model (simplest)
+
+The package runs a filter before validation and cleans every property marked with `[Sanitize]`.
+
+```csharp
+using Pervaxis.Genesis.Sanitization.Filters;
+
+namespace {{ model.names.namespace }}.Domains.Comments.Models;
+
+public sealed record CreateCommentRequest
+{
+    // SafeHtml keeps simple formatting.
+    [Sanitize(Profile = "SafeHtml")]
+    public required string Body { get; init; }
+
+    // No profile means the default profile (PlainText).
+    [Sanitize]
+    public required string AuthorName { get; init; }
+}
+```
+
+Limits of Option 1:
+- It only cleans **top-level string properties** of the action's arguments. A string inside a nested object or a list is not touched, even if it has `[Sanitize]`. Option 3 (`Sanitized`) also only works on top-level properties. Use Option 2 for nested values.
+- It only runs for values that are not `null`.
+
+## Option 2: call the sanitizer in the service
+
+Use this when the value does not come straight from a request model.
+
+```csharp
+using Pervaxis.Genesis.Sanitization.Abstractions;
+
+namespace {{ model.names.namespace }}.Domains.Comments.Services;
+
+public sealed class CommentService(ISanitizer sanitizer, CommentDbContext dbContext) : ICommentService
+{
+    public async Task CreateAsync(string body, string title, CancellationToken cancellationToken)
+    {
+        var safeBody = sanitizer.SanitizeHtml(body);               // keeps safe HTML
+        var safeTitle = sanitizer.StripAll(title);                 // plain text only
+        var custom = sanitizer.Sanitize(body, "MyCustomProfile");  // named profile
+
+        // ... store the sanitized values
+    }
+}
+```
+
+`ISanitizer` methods: `StripAll`, `SanitizeHtml`, `Sanitize(input, profileName)` and `Sanitize(input, profile)`. All of them return `null` for `null` input.
+
+## Option 3: inside a FluentValidation validator
+
+Two modes: clean the value (`Sanitized`) or reject dirty input (`MustBeSanitized`).
+
+```csharp
+using FluentValidation;
+using Pervaxis.Genesis.Sanitization.Abstractions;
+using Pervaxis.Genesis.Sanitization.Extensions;
+
+namespace {{ model.names.namespace }}.Domains.Comments.Validators;
+
+public sealed class CreateCommentRequestValidator : AbstractValidator<CreateCommentRequest>
+{
+    public CreateCommentRequestValidator(ISanitizer sanitizer)
+    {
+        // Clean the value, then validate the cleaned value.
+        RuleFor(x => x.Body)
+            .Sanitized(sanitizer, "SafeHtml")
+            .NotEmpty();
+
+        // Reject the request if the value contains anything that would be removed.
+        RuleFor(x => x.AuthorName)
+            .MustBeSanitized(sanitizer);
+    }
+}
+```
+
+## Which option to use
+
+- Request models from the API: Option 1.
+- Values built or loaded inside a service: Option 2.
+- You already have a validator and want the rule next to the others: Option 3.
+- Do not apply the same property to more than one option. It is wasted work.
+
+## Not enabled by default
+
+A middleware can clean every POST, PUT and PATCH body automatically (`UseGenesisSanitization()` together with `EnableMiddleware: true`). It is off by default and is **not** added to `Program.cs` in this service. Ask the platform team before turning it on, because it changes every endpoint.
+{{- end -}}

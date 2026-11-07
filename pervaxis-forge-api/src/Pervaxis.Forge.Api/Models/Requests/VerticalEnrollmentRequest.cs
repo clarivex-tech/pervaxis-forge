@@ -16,6 +16,8 @@
  ************************************************************************
  */
 
+using Pervaxis.Forge.Engine.Manifest;
+
 namespace Pervaxis.Forge.Api.Models.Requests;
 
 public record VerticalEnrollmentRequest
@@ -29,4 +31,11 @@ public record VerticalEnrollmentRequest
     public required CloudProviderConfig CloudProvider { get; init; }
     public required SourceControlConfig SourceControl { get; init; }
     public required VerticalTechDefaults TechDefaults { get; init; }
+    public AuthConfig? Auth { get; init; }
+    public ResilienceConfig? Resilience { get; init; }
+    public ObservabilityConfig? Observability { get; init; }
+    public ValidationConfig? Validation { get; init; }
+    public BackgroundJobConfig? BackgroundJobs { get; init; }
+    public UtilitiesConfig? Utilities { get; init; }
+    public bool MultiTenancy { get; init; } = false;
 }

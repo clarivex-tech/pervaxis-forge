@@ -71,7 +71,7 @@ export class GenerationApiService implements IGenerationApiService {
 			.pipe(
 				map((response) => {
 					const contentDisposition = response.headers.get('content-disposition') ?? '';
-					const fileNameMatch = /filename="?([^\";]+)"?/i.exec(contentDisposition);
+					const fileNameMatch = /filename="?([^";]+)"?/i.exec(contentDisposition);
 					const fileName = fileNameMatch?.[1] ?? `${request.name}-scaffold.zip`;
 
 					return {
@@ -116,7 +116,7 @@ export class GenerationApiService implements IGenerationApiService {
 			.pipe(
 				map((response) => {
 					const contentDisposition = response.headers.get('content-disposition') ?? '';
-					const fileNameMatch = /filename="?([^\";]+)"?/i.exec(contentDisposition);
+					const fileNameMatch = /filename="?([^";]+)"?/i.exec(contentDisposition);
 					const fileName = fileNameMatch?.[1] ?? `service-${serviceId}-regenerated.zip`;
 
 					return {

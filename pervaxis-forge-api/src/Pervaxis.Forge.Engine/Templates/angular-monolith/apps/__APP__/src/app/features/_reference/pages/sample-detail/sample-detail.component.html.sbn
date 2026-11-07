@@ -1,0 +1,46 @@
+<div class="sample-detail">
+  @if (loading()) {
+    <p class="sample-detail__loading">Loading...</p>
+  }
+
+  @if (error(); as errorMsg) {
+    <p class="sample-detail__error" [textContent]="errorMsg"></p>
+  }
+
+  @if (item(); as item) {
+    <header class="sample-detail__header">
+      <h1 [textContent]="item.name"></h1>
+      <a [routerLink]="['edit']" class="btn btn--primary">Edit</a>
+    </header>
+
+    <dl class="sample-detail__fields">
+      <div class="sample-detail__field">
+        <dt>ID</dt>
+        <dd [textContent]="item.id"></dd>
+      </div>
+      <div class="sample-detail__field">
+        <dt>Name</dt>
+        <dd [textContent]="item.name"></dd>
+      </div>
+      <div class="sample-detail__field">
+        <dt>Description</dt>
+        <dd [textContent]="item.description"></dd>
+      </div>
+      <div class="sample-detail__field">
+        <dt>Status</dt>
+        <dd>
+          <span class="badge" [class.badge--active]="item.status === 'active'"
+                [class.badge--inactive]="item.status === 'inactive'"
+                [textContent]="item.status">
+          </span>
+        </dd>
+      </div>
+      <div class="sample-detail__field">
+        <dt>Created At</dt>
+        <dd [textContent]="item.createdAt"></dd>
+      </div>
+    </dl>
+
+    <a routerLink="../" class="btn">Back to List</a>
+  }
+</div>

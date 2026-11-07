@@ -1,0 +1,421 @@
+{{ if model.manifest.database != null }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Data.Common;
+using Amazon.SecretsManager;
+using Amazon.SecretsManager.Model;
+using FluentAssertions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Moq;
+using Npgsql;
+using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Infrastructure.Database;
+{{- if !model.manifest.multi_tenancy }}
+using {{ model.names.namespace }}.Infrastructure.Tenancy;
+{{- else }}
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.Data.EntityFrameworkCore;
+{{- end }}
+using Xunit;
+
+namespace {{ model.names.test_project_name }};
+
+// These tests cover the platform database code (password rotation, secret credentials, registration,
+// readiness check). None of them needs a running database. Keep them. Add your own tests for your queries
+// in separate files.
+
+public sealed class DatabaseConnectionOpenerTests
+{
+    private const string Settings = "Host=localhost;Database=test;Username=test;Password=old";
+
+    [Fact]
+    public async Task SuccessfulOpenDoesNotReadSecrets()
+    {
+        using var source = NpgsqlDataSource.Create(Settings);
+        var refreshes = 0;
+        using var opener = new DatabaseConnectionOpener(source, _ =>
+        {
+            refreshes++;
+            return Task.FromResult(new NpgsqlConnectionStringBuilder(Settings));
+        });
+        var connection = new Mock<DbConnection>();
+        connection.Setup(x => x.OpenAsync(It.IsAny<CancellationToken>())).Returns(Task.CompletedTask);
+
+        await opener.OpenAsync(connection.Object);
+
+        Assert.Equal(0, refreshes);
+        connection.Verify(x => x.OpenAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AuthenticationFailureRefreshesAndRetriesExactlyOnce()
+    {
+        using var source = NpgsqlDataSource.Create(Settings);
+        var refreshes = 0;
+        using var opener = new DatabaseConnectionOpener(source, _ =>
+        {
+            refreshes++;
+            return Task.FromResult(new NpgsqlConnectionStringBuilder(Settings) { Password = "new" });
+        });
+        var connection = new Mock<DbConnection>();
+        connection.SetupSequence(x => x.OpenAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(InvalidPassword()).Returns(Task.CompletedTask);
+
+        await opener.OpenAsync(connection.Object);
+
+        Assert.Equal(1, refreshes);
+        connection.Verify(x => x.OpenAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task WithoutASecret_AuthenticationFailureIsNotRetried()
+    {
+        using var source = NpgsqlDataSource.Create(Settings);
+        using var opener = new DatabaseConnectionOpener(source, null);
+        var connection = new Mock<DbConnection>();
+        connection.Setup(x => x.OpenAsync(It.IsAny<CancellationToken>())).ThrowsAsync(InvalidPassword());
+
+        await Assert.ThrowsAsync<PostgresException>(() => opener.OpenAsync(connection.Object));
+
+        connection.Verify(x => x.OpenAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("08006")]
+    [InlineData("42501")]
+    public async Task OtherPostgresErrorsDoNotRefreshOrRetry(string sqlState)
+    {
+        using var source = NpgsqlDataSource.Create(Settings);
+        var refreshes = 0;
+        using var opener = new DatabaseConnectionOpener(source, _ =>
+        {
+            refreshes++;
+            return Task.FromResult(new NpgsqlConnectionStringBuilder(Settings));
+        });
+        var connection = new Mock<DbConnection>();
+        connection.Setup(x => x.OpenAsync(It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new PostgresException("failure", "ERROR", "ERROR", sqlState));
+
+        await Assert.ThrowsAsync<PostgresException>(() => opener.OpenAsync(connection.Object));
+
+        Assert.Equal(0, refreshes);
+        connection.Verify(x => x.OpenAsync(It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ConcurrentFailuresShareOneRefresh()
+    {
+        using var source = NpgsqlDataSource.Create(Settings);
+        var clock = new TestClock();
+        var allStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var refreshStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseRefresh = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var refreshes = 0;
+        using var opener = new DatabaseConnectionOpener(source, async _ =>
+        {
+            Interlocked.Increment(ref refreshes);
+            refreshStarted.SetResult();
+            await releaseRefresh.Task;
+            return new NpgsqlConnectionStringBuilder(Settings) { Password = "new" };
+        }, clock);
+
+        var started = 0;
+        var connections = Enumerable.Range(0, 10).Select(_ =>
+        {
+            var connection = new Mock<DbConnection>();
+            var calls = 0;
+            connection.Setup(x => x.OpenAsync(It.IsAny<CancellationToken>())).Returns(async () =>
+            {
+                if (Interlocked.Increment(ref calls) == 1)
+                {
+                    if (Interlocked.Increment(ref started) == 10)
+                        allStarted.SetResult();
+
+                    await allStarted.Task;
+                    throw InvalidPassword();
+                }
+            });
+            return connection;
+        }).ToArray();
+
+        var attempts = connections.Select(x => opener.OpenAsync(x.Object)).ToArray();
+        await refreshStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        releaseRefresh.SetResult();
+        await Task.WhenAll(attempts);
+
+        Assert.Equal(1, refreshes);
+        foreach (var connection in connections)
+            connection.Verify(x => x.OpenAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task RejectedRefreshedPasswordIsRetriedOnceAndRefreshIsThrottled()
+    {
+        using var source = NpgsqlDataSource.Create(Settings);
+        var clock = new TestClock();
+        var refreshes = 0;
+        using var opener = new DatabaseConnectionOpener(source, _ =>
+        {
+            refreshes++;
+            return Task.FromResult(new NpgsqlConnectionStringBuilder(Settings));
+        }, clock);
+        var connection = new Mock<DbConnection>();
+        connection.Setup(x => x.OpenAsync(It.IsAny<CancellationToken>())).ThrowsAsync(InvalidPassword());
+
+        await Assert.ThrowsAsync<PostgresException>(() => opener.OpenAsync(connection.Object));
+        await Assert.ThrowsAsync<PostgresException>(() => opener.OpenAsync(connection.Object));
+
+        Assert.Equal(1, refreshes);
+        connection.Verify(x => x.OpenAsync(It.IsAny<CancellationToken>()), Times.Exactly(3));
+
+        clock.Advance();
+        await Assert.ThrowsAsync<PostgresException>(() => opener.OpenAsync(connection.Object));
+        Assert.Equal(2, refreshes);
+    }
+
+    [Fact]
+    public async Task SecretLookupFailuresAreThrottled()
+    {
+        using var source = NpgsqlDataSource.Create(Settings);
+        var refreshes = 0;
+        using var opener = new DatabaseConnectionOpener(source, _ =>
+        {
+            refreshes++;
+            throw new InvalidOperationException("Secret unavailable");
+        }, new TestClock());
+        var connection = new Mock<DbConnection>();
+        connection.Setup(x => x.OpenAsync(It.IsAny<CancellationToken>())).ThrowsAsync(InvalidPassword());
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => opener.OpenAsync(connection.Object));
+        await Assert.ThrowsAsync<PostgresException>(() => opener.OpenAsync(connection.Object));
+
+        Assert.Equal(1, refreshes);
+        connection.Verify(x => x.OpenAsync(It.IsAny<CancellationToken>()), Times.Exactly(2));
+    }
+
+    [Fact]
+    public async Task CancellationDoesNotRefreshOrRetry()
+    {
+        using var source = NpgsqlDataSource.Create(Settings);
+        var refreshes = 0;
+        using var opener = new DatabaseConnectionOpener(source, _ =>
+        {
+            refreshes++;
+            return Task.FromResult(new NpgsqlConnectionStringBuilder(Settings));
+        });
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        var connection = new Mock<DbConnection>();
+        connection.Setup(x => x.OpenAsync(cancellation.Token)).Returns(Task.FromCanceled(cancellation.Token));
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => opener.OpenAsync(connection.Object, cancellation.Token));
+
+        Assert.Equal(0, refreshes);
+    }
+
+    private static PostgresException InvalidPassword() => new("Invalid password", "ERROR", "ERROR", "28P01");
+
+    private sealed class TestClock : TimeProvider
+    {
+        private DateTimeOffset _now = DateTimeOffset.UtcNow;
+
+        public override DateTimeOffset GetUtcNow() => _now;
+
+        public void Advance() => _now = _now.AddSeconds(6);
+    }
+}
+
+public sealed class DatabaseCredentialsReaderTests
+{
+    private static NpgsqlConnectionStringBuilder Base() => new("Host=db.example.com;Database=app;Port=5432");
+
+    private static Mock<IAmazonSecretsManager> SecretReturning(string secretString)
+    {
+        var client = new Mock<IAmazonSecretsManager>();
+        client
+            .Setup(x => x.GetSecretValueAsync(It.IsAny<GetSecretValueRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GetSecretValueResponse { SecretString = secretString });
+        return client;
+    }
+
+    [Fact]
+    public async Task ReadAsync_CombinesSecretCredentialsWithConfiguredSettings()
+    {
+        var client = SecretReturning("{\"username\":\"app_user\",\"password\":\"s3cret\",\"engine\":\"postgres\"}");
+        var reader = new DatabaseCredentialsReader(client.Object, "db-secret", Base());
+
+        var settings = await reader.ReadAsync(CancellationToken.None);
+
+        settings.Host.Should().Be("db.example.com");
+        settings.Database.Should().Be("app");
+        settings.Username.Should().Be("app_user");
+        settings.Password.Should().Be("s3cret");
+        client.Verify(x => x.GetSecretValueAsync(
+            It.Is<GetSecretValueRequest>(r => r.SecretId == "db-secret" && r.VersionStage == "AWSCURRENT"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"username\":\"u\"}")]
+    [InlineData("{\"password\":\"p\"}")]
+    [InlineData("{\"username\":\"\",\"password\":\"p\"}")]
+    [InlineData("{\"username\":1,\"password\":\"p\"}")]
+    [InlineData("[]")]
+    public void ApplyCredentials_RejectsIncompleteSecrets(string secret)
+    {
+        var act = () => DatabaseCredentialsReader.ApplyCredentials(Base(), secret);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*username*password*");
+    }
+
+    [Fact]
+    public void ApplyCredentials_DoesNotRevealTheSecretWhenItIsNotJson()
+    {
+        var act = () => DatabaseCredentialsReader.ApplyCredentials(Base(), "password=hunter2");
+
+        act.Should().Throw<InvalidOperationException>().Which.Message.Should().NotContain("hunter2");
+    }
+
+    [Fact]
+    public void GetRefreshedPassword_ReturnsTheNewPassword()
+    {
+        var original = new NpgsqlConnectionStringBuilder("Host=h;Database=d;Username=u;Password=old");
+        var refreshed = new NpgsqlConnectionStringBuilder("Host=h;Database=d;Username=u;Password=new");
+
+        DatabaseCredentialsReader.GetRefreshedPassword(original, refreshed).Should().Be("new");
+    }
+
+    [Fact]
+    public void GetRefreshedPassword_RequiresARestartWhenTheUserNameChanged()
+    {
+        var original = new NpgsqlConnectionStringBuilder("Host=h;Database=d;Username=user_a;Password=old");
+        var refreshed = new NpgsqlConnectionStringBuilder("Host=h;Database=d;Username=user_b;Password=new");
+
+        var act = () => DatabaseCredentialsReader.GetRefreshedPassword(original, refreshed);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*Restart*");
+    }
+}
+
+public sealed class DatabaseRegistrationTests
+{
+{{- if !model.manifest.multi_tenancy }}
+    private sealed class FakeTenantContext : ITenantContext
+    {
+        public string? TenantId => "tenant-1";
+    }
+{{- end }}
+
+    private static ServiceProvider Build(Dictionary<string, string?> settings, IAmazonSecretsManager? secrets = null)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+{{- if !model.manifest.multi_tenancy }}
+        services.AddScoped<ITenantContext, FakeTenantContext>();
+{{- else }}
+        services.AddSingleton<ITenantContext>(DesignTimeTenantContext.Instance);
+{{- end }}
+
+        if (secrets is not null)
+            services.AddSingleton(secrets);
+
+        services.AddForgeDatabase<{{ model.names.dot_net_class_name }}DbContext>(configuration);
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    }
+
+    [Fact]
+    public void DbContext_CanBeResolvedFromARequestScope()
+    {
+        using var provider = Build(new() { ["ConnectionStrings:Default"] = "Host=localhost;Database=test;Username=u;Password=p" });
+        using var scope = provider.CreateScope();
+
+        scope.ServiceProvider.GetRequiredService<{{ model.names.dot_net_class_name }}DbContext>().Should().NotBeNull();
+    }
+
+    [Fact]
+    public void MissingConnectionString_StopsStartup()
+    {
+        var act = () => Build(new());
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*ConnectionStrings:Default*");
+    }
+
+    [Fact]
+    public void WithASecret_UserNameAndPasswordComeFromTheSecret()
+    {
+        var client = new Mock<IAmazonSecretsManager>();
+        client
+            .Setup(x => x.GetSecretValueAsync(It.IsAny<GetSecretValueRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GetSecretValueResponse { SecretString = "{\"username\":\"secret_user\",\"password\":\"s3cret\"}" });
+
+        using var provider = Build(
+            new()
+            {
+                ["ConnectionStrings:Default"] = "Host=localhost;Database=test",
+                ["Forge:Database:SecretId"] = "db-secret",
+            },
+            client.Object);
+
+        var dataSource = provider.GetRequiredService<NpgsqlDataSource>();
+
+        dataSource.ConnectionString.Should().Contain("Username=secret_user");
+        dataSource.ConnectionString.Should().NotContain("s3cret", "the data source never exposes the password");
+    }
+
+    [Fact]
+    public void WithASecretThatHasNoPassword_TheFirstDatabaseUseFailsClearly()
+    {
+        var client = new Mock<IAmazonSecretsManager>();
+        client
+            .Setup(x => x.GetSecretValueAsync(It.IsAny<GetSecretValueRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new GetSecretValueResponse { SecretString = "{\"username\":\"only_user\"}" });
+
+        using var provider = Build(
+            new()
+            {
+                ["ConnectionStrings:Default"] = "Host=localhost;Database=test",
+                ["Forge:Database:SecretId"] = "db-secret",
+            },
+            client.Object);
+
+        var act = () => provider.GetRequiredService<NpgsqlDataSource>();
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*username*password*");
+    }
+
+    [Fact]
+    public async Task ReadinessCheck_IsUnhealthyWhenTheDatabaseCannotBeReached()
+    {
+        using var provider = Build(new()
+        {
+            ["ConnectionStrings:Default"] = "Host=127.0.0.1;Port=1;Database=x;Username=u;Password=p;Timeout=2;Pooling=false",
+        });
+        var check = ActivatorUtilities.CreateInstance<PostgresHealthCheck>(provider);
+
+        var result = await check.CheckHealthAsync(new HealthCheckContext());
+
+        result.Status.Should().Be(HealthStatus.Unhealthy);
+    }
+}
+{{ end }}

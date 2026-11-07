@@ -1,0 +1,30 @@
+name: PR Check
+
+on:
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  build-test-lint:
+    name: Build · Test · Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Lint
+        run: nx lint {{ model.manifest.service_name }}
+
+      - name: Test with coverage
+        run: nx test {{ model.manifest.service_name }} --coverage --coverageReporters=lcov
+
+      - name: Build
+        run: nx build {{ model.manifest.service_name }} --configuration=production

@@ -29,11 +29,11 @@ public sealed class {{ model.names.dot_net_class_name }}Service : I{{ model.name
         _logger = logger;
     }
 
-    public Task<{{ model.names.dot_net_class_name }}Response> GetAsync(string id, CancellationToken cancellationToken = default)
+    public Task<{{ model.names.dot_net_class_name }}Response?> GetAsync(string id, CancellationToken cancellationToken = default)
     {
         _logger.LogWarning("{{ model.names.dot_net_class_name }}Service.GetAsync is not yet implemented.");
 
-        return Task.FromResult(new {{ model.names.dot_net_class_name }}Response
+        return Task.FromResult<{{ model.names.dot_net_class_name }}Response?>(new {{ model.names.dot_net_class_name }}Response
         {
             Id = id,
             CreatedAt = DateTimeOffset.UtcNow,

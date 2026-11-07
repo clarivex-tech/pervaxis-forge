@@ -1,0 +1,47 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ ************************************************************************
+ */
+
+/**
+ * HORIZONTAL: Standard pagination request/response models.
+ * Use these in all paginated API calls for consistency.
+ */
+
+export interface PaginationParams {
+  page: number;
+  pageSize: number;
+  sortBy?: string;
+  sortDirection?: 'asc' | 'desc';
+}
+
+export interface PaginatedResponse<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+}
+
+export const DEFAULT_PAGE_SIZE = 20;
+
+export function buildPaginationParams(
+  page = 1,
+  pageSize = DEFAULT_PAGE_SIZE,
+  sortBy?: string,
+  sortDirection: 'asc' | 'desc' = 'asc'
+): Record<string, string> {
+  const params: Record<string, string> = {
+    page: page.toString(),
+    pageSize: pageSize.toString(),
+  };
+  if (sortBy) {
+    params['sortBy'] = sortBy;
+    params['sortDirection'] = sortDirection;
+  }
+  return params;
+}

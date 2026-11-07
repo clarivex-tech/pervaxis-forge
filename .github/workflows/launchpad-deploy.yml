@@ -27,7 +27,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: 'npm'
           cache-dependency-path: pervaxis-forge-launchpad/package-lock.json
 
@@ -70,7 +70,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '20.x'
+          node-version: '22.x'
           cache: 'npm'
           cache-dependency-path: pervaxis-forge-launchpad/package-lock.json
 

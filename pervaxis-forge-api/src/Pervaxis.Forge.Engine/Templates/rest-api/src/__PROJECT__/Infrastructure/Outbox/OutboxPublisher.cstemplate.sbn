@@ -1,0 +1,49 @@
+{{ if model.manifest.queue }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Text.Json;
+using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Data.Outbox;
+
+namespace {{ model.names.namespace }}.Infrastructure.Outbox;
+
+public sealed class OutboxPublisher : IOutboxPublisher
+{
+    private readonly {{ model.names.dot_net_class_name }}DbContext _dbContext;
+
+    public OutboxPublisher({{ model.names.dot_net_class_name }}DbContext dbContext)
+    {
+        _dbContext = dbContext;
+    }
+
+    public async Task PublishAsync<T>(T @event, CancellationToken cancellationToken)
+        where T : class
+    {
+        var message = new OutboxMessage
+        {
+            EventType = typeof(T).FullName ?? typeof(T).Name,
+            Payload = JsonSerializer.Serialize(@event),
+        };
+
+        await _dbContext.Set<OutboxMessage>().AddAsync(message, cancellationToken);
+        // Caller is responsible for SaveChangesAsync — this is intentional.
+        // The outbox record and the domain entity are committed atomically by the caller.
+    }
+}
+{{ end }}

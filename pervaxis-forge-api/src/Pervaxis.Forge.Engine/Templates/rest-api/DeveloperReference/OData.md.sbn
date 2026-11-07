@@ -1,0 +1,122 @@
+{{- has_odata = false -}}
+{{- for module in model.selected_modules -}}
+{{- if (module.name | string.downcase) == "odata" -}}{{- has_odata = true -}}{{- end -}}
+{{- end -}}
+{{- if has_odata -}}
+# OData: paginated list endpoints
+
+Package: `Pervaxis.Genesis.OData` (already referenced and registered in this service).
+
+## What the package does
+
+- Reads `$filter`, `$orderby`, `$select`, `$expand`, `$top`, `$skip` and `$count` from the request.
+- **Validates** them against limits (max page size, filter depth, complexity score) and returns an RFC 7807 `400` if a request breaks a limit.
+- Stores the parsed values on the request so your code can read them.
+- Provides the `PageResult<T>` response envelope (`value`, `@odata.count`, `@odata.nextLink`).
+
+## What the package does NOT do
+
+It does **not** turn `$filter` or `$orderby` into database queries. Your service decides what to apply. In the example below only `$top`, `$skip` and `$count` are applied. If you need filtering or sorting, map each allowed field to an explicit LINQ expression yourself. Never build queries from the raw `$filter` string.
+
+## Settings
+
+Limits are read from the `Genesis:OData` configuration section. All values are optional. The defaults are shown.
+
+```json
+{
+  "Genesis": {
+    "OData": {
+      "MaxTop": 100,
+      "DefaultPageSize": 20,
+      "MaxExpandDepth": 2,
+      "MaxFilterDepth": 3,
+      "MaxOrderByProperties": 3,
+      "EnableCount": true,
+      "MaxQueryComplexityScore": 50
+    }
+  }
+}
+```
+
+## Controller
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using Pervaxis.Genesis.OData.Filters;
+using Pervaxis.Genesis.OData.Options;
+using Pervaxis.Genesis.OData.Results;
+using Pervaxis.Genesis.OData.Services;
+
+namespace {{ model.names.namespace }}.Domains.Products.Controllers;
+
+[ApiController]
+[Route("api/v1/products")]
+public sealed class ProductsController(IProductService service) : ControllerBase
+{
+    // Per-endpoint limits override the global settings.
+    [HttpGet]
+    [ODataQueryable(
+        MaxTop = 50,
+        AllowedQueryOptions = ODataQueryOptions.Top | ODataQueryOptions.Skip | ODataQueryOptions.Count)]
+    [ProducesResponseType(typeof(PageResult<ProductResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<PageResult<ProductResponse>>> ListAsync(CancellationToken cancellationToken)
+    {
+        // The OData filter has already validated the query and stored the parsed values here.
+        var query = (ODataQueryContext)HttpContext.Items["Genesis.OData.QueryContext"]!;
+
+        var page = await service.ListAsync(query.Skip, query.EffectiveTop, query.CountRequested, cancellationToken);
+        return Ok(page);
+    }
+}
+```
+
+## Service
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Genesis.OData.Results;
+
+namespace {{ model.names.namespace }}.Domains.Products.Services;
+
+public sealed class ProductService(ProductDbContext dbContext) : IProductService
+{
+    public async Task<PageResult<ProductResponse>> ListAsync(
+        int skip, int top, bool includeCount, CancellationToken cancellationToken)
+    {
+        // Always order before Skip/Take so pages are stable.
+        var query = dbContext.Products.AsNoTracking().OrderBy(p => p.Id);
+
+        long? total = includeCount ? await query.LongCountAsync(cancellationToken) : null;
+
+        var items = await query
+            .Skip(skip)
+            .Take(top)
+            .Select(p => new ProductResponse { Id = p.Id, Name = p.Name })
+            .ToListAsync(cancellationToken);
+
+        return new PageResult<ProductResponse> { Value = items, Count = total };
+    }
+}
+```
+
+## Try it
+
+```
+GET /api/v1/products?$top=10&$skip=20&$count=true
+```
+
+Response shape:
+
+```json
+{
+  "value": [ { "id": "1", "name": "Widget" } ],
+  "@odata.count": 134
+}
+```
+
+## Notes
+
+- `ProductResponse` must be a class or record (the envelope requires a reference type).
+- Use `PageResult<T>` for OData-style endpoints. Use `Common/PagedResult<T>` (page and pageSize style) for plain REST list endpoints. Do not mix them on one endpoint.
+- Per-entity property rules can be registered through `EntityConfigurationRegistry`. See the OData package README.
+{{- end -}}

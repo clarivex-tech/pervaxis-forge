@@ -1,0 +1,29 @@
+import { Injectable, signal, computed } from '@angular/core';
+
+/**
+ * Shared loading state service.
+ * Use this to show/hide loading indicators across the application.
+ *
+ * Usage:
+ *   inject(LoadingService).show();
+ *   // ... async work ...
+ *   inject(LoadingService).hide();
+ *
+ * In templates:
+ *   @if (loadingService.isLoading()) { <ion-spinner /> }
+ */
+@Injectable({ providedIn: 'root' })
+export class LoadingService {
+  private readonly activeRequests = signal(0);
+
+  /** True when at least one async operation is in progress. */
+  readonly isLoading = computed(() => this.activeRequests() > 0);
+
+  show(): void {
+    this.activeRequests.update((count) => count + 1);
+  }
+
+  hide(): void {
+    this.activeRequests.update((count) => Math.max(0, count - 1));
+  }
+}

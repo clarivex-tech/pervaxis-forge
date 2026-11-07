@@ -17,8 +17,13 @@
  */
 
 import { Routes } from '@angular/router';
+import { authGuard } from '@pervaxis/canvas-auth';
 import { {{ model.names.angular_mfe_component_name }} } from './component';
 
 export const MFE_ROUTES: Routes = [
-  { path: '', component: {{ model.names.angular_mfe_component_name }} }
+  {
+    path: '',
+    canActivate: [authGuard],
+    component: {{ model.names.angular_mfe_component_name }},
+  },
 ];

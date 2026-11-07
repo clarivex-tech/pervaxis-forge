@@ -1,0 +1,78 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ ************************************************************************
+ */
+
+import { Component, Input } from '@angular/core';
+
+/**
+ * HORIZONTAL: Reusable skeleton loading placeholder.
+ *
+ * Usage:
+ *   <app-skeleton-loader [lines]="3" [showAvatar]="true"></app-skeleton-loader>
+ */
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-skeleton-loader',
+  standalone: true,
+  template: `
+    <div class="skeleton" [attr.aria-label]="'Loading content'" role="status">
+      @if (showAvatar) {
+        <div class="skeleton__avatar"></div>
+      }
+      <div class="skeleton__content">
+        @for (line of lineArray; track $index) {
+          <div class="skeleton__line" [style.width]="lineWidth($index)"></div>
+        }
+      </div>
+    </div>
+  `,
+  styles: [`
+    .skeleton {
+      display: flex;
+      gap: var(--spacing-md, 1rem);
+      padding: var(--spacing-md, 1rem) 0;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+
+    .skeleton__avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: var(--radius-full, 9999px);
+      background: var(--color-border, #e5e7eb);
+      flex-shrink: 0;
+    }
+
+    .skeleton__content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: var(--spacing-sm, 0.5rem);
+    }
+
+    .skeleton__line {
+      height: 14px;
+      border-radius: var(--radius-sm, 4px);
+      background: var(--color-border, #e5e7eb);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+  `],
+})
+export class SkeletonLoaderComponent {
+  @Input() lines = 3;
+  @Input() showAvatar = false;
+
+  get lineArray(): number[] {
+    return Array.from({ length: this.lines }, (_, i) => i);
+  }
+
+  lineWidth(index: number): string {
+    const widths = ['100%', '85%', '70%', '90%', '60%'];
+    return widths[index % widths.length];
+  }
+}

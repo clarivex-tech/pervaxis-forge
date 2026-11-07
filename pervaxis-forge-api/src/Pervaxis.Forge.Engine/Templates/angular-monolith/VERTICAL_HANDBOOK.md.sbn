@@ -1,0 +1,252 @@
+# Vertical Developer Handbook
+
+> Everything you need to build features in this {{ model.manifest.service_name }} workspace.
+
+---
+
+## Quick Start
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+ng serve
+
+# Run tests
+ng test
+
+# Run linting
+ng lint
+```
+
+The app runs at `http://localhost:4200` by default.
+
+---
+
+## Creating a New Feature Module
+
+1. **Copy** the reference module:
+   ```bash
+   cp -r src/app/features/_reference src/app/features/your-domain
+   ```
+
+2. **Rename** all occurrences:
+   - `sample` → `your-domain` (kebab-case)
+   - `Sample` → `YourDomain` (PascalCase)
+   - `SAMPLE` → `YOUR_DOMAIN` (UPPER_SNAKE_CASE)
+
+3. **Update the model** in `models/your-domain.model.ts` to match your API contract.
+
+4. **Register routes** in `app.routes.ts`:
+   ```typescript
+   {
+     path: 'your-domain',
+     canActivate: [authGuard],
+     loadChildren: () =>
+       import('./features/your-domain/routes/your-domain.routes').then(
+         (m) => m.YOUR_DOMAIN_ROUTES
+       ),
+   },
+   ```
+
+5. **Delete** the `_reference/` folder (it's gitignored anyway).
+
+---
+
+## Folder Structure Convention
+
+```
+src/app/features/your-domain/
+├── models/              # Interfaces and DTOs
+│   └── your-domain.model.ts
+├── services/            # API services and business logic
+│   ├── your-domain.service.ts
+│   └── your-domain.service.spec.ts
+├── pages/               # Routable page components
+│   ├── your-domain-list/
+│   ├── your-domain-form/
+│   └── your-domain-detail/
+├── components/          # Shared presentational components (optional)
+├── mocks/               # Dev-only mock interceptors
+├── constants/           # API paths, route paths, permissions
+├── routes/              # Route definitions
+└── index.ts             # Barrel exports (public API)
+```
+
+---
+
+## API Integration Pattern
+
+Always use `ApiService` — never inject `HttpClient` directly.
+
+```typescript
+import { Injectable, inject } from '@angular/core';
+import { ApiService } from '../../core/services/api.service';
+
+@Injectable({ providedIn: 'root' })
+export class YourDomainService {
+  private readonly api = inject(ApiService);
+
+  getAll() {
+    return this.api.get<YourItem[]>('/api/your-domain');
+  }
+
+  create(dto: CreateYourDto) {
+    return this.api.post<YourItem>('/api/your-domain', dto);
+  }
+}
+```
+
+The `ApiService` automatically prefixes requests with the environment's `apiUrl`.
+
+---
+
+## Authentication
+
+### Route Guards
+
+Apply `authGuard` to all protected routes:
+
+```typescript
+import { authGuard } from '../../core/guards/auth.guard';
+
+export const YOUR_ROUTES: Routes = [
+  {
+    path: '',
+    canActivate: [authGuard],
+    children: [/* ... */],
+  },
+];
+```
+
+### Auth Service
+
+Use `AuthService` to check authentication state:
+
+```typescript
+const auth = inject(AuthService);
+if (auth.isAuthenticated()) { /* ... */ }
+```
+
+---
+
+## Testing Patterns
+
+### What to Test
+
+- **Services**: Every public method, error handling
+- **Components**: Creation, rendering states (loading, error, data), user interactions
+- **Guards**: Authenticated and unauthenticated scenarios
+
+### Service Test Pattern
+
+```typescript
+import { provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+
+beforeEach(() => {
+  TestBed.configureTestingModule({
+    providers: [provideHttpClient(), provideHttpClientTesting()],
+  });
+  service = TestBed.inject(YourService);
+  httpMock = TestBed.inject(HttpTestingController);
+});
+
+afterEach(() => httpMock.verify());
+```
+
+### Component Test Pattern
+
+```typescript
+beforeEach(async () => {
+  await TestBed.configureTestingModule({
+    imports: [YourComponent],
+    providers: [
+      provideHttpClient(),
+      provideHttpClientTesting(),
+      provideRouter([]),
+    ],
+  }).compileComponents();
+});
+```
+
+---
+
+## Routing
+
+### Lazy Loading
+
+Always lazy-load feature components:
+
+```typescript
+{
+  path: 'items',
+  loadComponent: () =>
+    import('./pages/item-list/item-list.component').then(
+      (m) => m.ItemListComponent
+    ),
+}
+```
+
+### Route Parameters
+
+```typescript
+// In component
+const route = inject(ActivatedRoute);
+const id = Number(route.snapshot.paramMap.get('id'));
+```
+
+---
+
+## Styling
+
+Use CSS custom properties defined in `styles.scss`. Never hardcode colors or spacing.
+
+```css
+.my-component {
+  padding: var(--spacing-lg, 1.5rem);
+  color: var(--color-text, #333);
+  background: var(--color-surface, #fff);
+  border: 1px solid var(--color-border, #e0e0e0);
+  border-radius: var(--radius-sm, 4px);
+}
+```
+
+Available tokens:
+- Spacing: `--spacing-xxs`, `--spacing-xs`, `--spacing-sm`, `--spacing-md`, `--spacing-lg`, `--spacing-xl`
+- Colors: `--color-primary`, `--color-text`, `--color-surface`, `--color-border`, `--color-error`, `--color-success`
+- Radius: `--radius-sm`, `--radius-md`, `--radius-lg`
+
+---
+
+## What NOT to Touch
+
+These are **horizontal** concerns managed by the platform team:
+
+| Area | Files |
+|------|-------|
+| Authentication | `core/services/auth.service.ts`, `core/guards/auth.guard.ts` |
+| API Base | `core/services/api.service.ts` |
+| App Shell | `app.component.ts`, `app.config.ts` |
+| Environments | `environments/` |
+| Build Config | `angular.json`, `tsconfig.json` |
+| CI/CD | `.github/workflows/` |
+
+If you need changes to horizontal code, open a discussion with the platform team.
+
+---
+
+## Reference Module
+
+The `features/_reference/` folder contains a complete working example of every pattern described above. It's gitignored and meant for local learning only.
+
+```bash
+# View the reference
+ls src/app/features/_reference/
+
+# Copy it to start a new feature
+cp -r src/app/features/_reference src/app/features/my-feature
+```
+
+See `features/_reference/README.md` for detailed instructions.

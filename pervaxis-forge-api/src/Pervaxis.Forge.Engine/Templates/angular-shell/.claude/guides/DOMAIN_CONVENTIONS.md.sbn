@@ -108,9 +108,9 @@ libs/domain/<noun>/
 
 ## Testing
 
-- **90%+ line coverage** — enforced in CI via `vitest --coverage`
+- **90%+ line coverage** — enforced in CI via `nx test --coverage`
 - **API service** — use `HttpTestingController`; test each method and each optional param
-- **Store** — mock the ApiService with `vi.fn()`; test success AND error paths for each method
+- **Store** — mock the ApiService with `jest.fn()`; test success AND error paths for each method
 - **Page components** — stub heavy imports (TranslocoPipe, ag-Grid) using `TestBed.overrideComponent`
 - **Permission tests** — set `AuthContextService` context to test show/hide of guarded elements
 - **No `NO_ERRORS_SCHEMA`** — always provide stubs for unknown elements

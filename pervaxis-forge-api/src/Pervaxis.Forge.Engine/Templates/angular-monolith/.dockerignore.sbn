@@ -1,0 +1,13 @@
+node_modules
+dist
+.angular
+.nx
+.git
+.github
+.vscode
+.idea
+coverage
+*.log
+npm-debug.log*
+.env
+.env.*

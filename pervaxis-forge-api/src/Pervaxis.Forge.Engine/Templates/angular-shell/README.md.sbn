@@ -4,8 +4,10 @@ Angular Shell application for the **{{ model.manifest.vertical_slug }}** vertica
 
 ## Stack
 
-- Angular 18 (standalone components)
+- Angular 21 (standalone components)
 - Nx workspace
+- Jest (unit testing)
+- ESLint (code quality)
 - Pervaxis Canvas modules: {{ for m in model.selected_canvas_modules }}{{ m.name }}{{ if !for.last }}, {{ end }}{{ end }}
 
 ## Getting Started
@@ -15,6 +17,30 @@ npm install
 npm start        # nx serve {{ model.manifest.service_name }}
 npm test         # nx test {{ model.manifest.service_name }}
 npm run build    # nx build {{ model.manifest.service_name }}
+npm run lint     # nx lint {{ model.manifest.service_name }}
+```
+
+## Project Structure
+
+```
+apps/{{ model.manifest.service_name }}/
+├── src/
+│   ├── app/
+│   │   ├── core/
+│   │   │   ├── interceptors/   # HTTP interceptors
+│   │   │   └── handlers/       # Error handlers
+│   │   ├── app.component.ts
+│   │   ├── app.config.ts
+│   │   ├── app.routes.ts
+│   │   └── home.component.ts
+│   ├── environments/
+│   │   ├── environment.ts
+│   │   └── environment.prod.ts
+│   ├── main.ts
+│   └── styles.scss
+├── jest.config.ts
+├── tsconfig.app.json
+└── tsconfig.spec.json
 ```
 
 ## Standards
@@ -23,3 +49,4 @@ Read `.claude/guides/` before making changes:
 - `DOMAIN_CONVENTIONS.md` — naming, structure, and coding standards
 - `GIT_WORKFLOW.md` — branching strategy and PR process
 - `PRINT_DEVELOPER_GUIDE.md` — how to build domain modules
+- `ci-sonarcloud-setup.md` — CI pipeline and SonarCloud configuration

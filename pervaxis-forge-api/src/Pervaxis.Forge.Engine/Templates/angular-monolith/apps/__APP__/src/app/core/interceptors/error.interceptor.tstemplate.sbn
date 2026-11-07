@@ -1,0 +1,49 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { catchError, throwError } from 'rxjs';
+import { AuthService } from '../services/auth.service';
+import { LoggerService } from '../services/logger.service';
+
+export const errorInterceptor: HttpInterceptorFn = (req, next) => {
+  const auth = inject(AuthService);
+  const logger = inject(LoggerService);
+
+  return next(req).pipe(
+    catchError((error: HttpErrorResponse) => {
+      switch (error.status) {
+        case 401:
+          logger.warn('Unauthorized request — logging out', error.url);
+          auth.logout();
+          break;
+        case 403:
+          logger.warn('Forbidden access', error.url);
+          break;
+        default:
+          if (error.status >= 500) {
+            logger.error('Server error', error.message, error.url);
+          }
+          break;
+      }
+
+      return throwError(() => error);
+    })
+  );
+};

@@ -1,0 +1,45 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ ************************************************************************
+ */
+
+import { Injectable, inject } from '@angular/core';
+import { AuthService } from './auth.service';
+import { LoggerService } from './logger.service';
+
+const AUTH_SYNC_CHANNEL = 'auth_state_sync';
+
+/**
+ * HORIZONTAL: Synchronizes auth state across browser tabs.
+ * When a user logs out in one tab, all other tabs log out too.
+ *
+ * Call init() once at app bootstrap (e.g., in AppComponent constructor).
+ * Web-only — not needed for mobile (Capacitor runs single-instance).
+ */
+@Injectable({ providedIn: 'root' })
+export class AuthSyncService {
+  private readonly auth = inject(AuthService);
+  private readonly logger = inject(LoggerService);
+  private channel: BroadcastChannel | null = null;
+
+  init(): void {
+    if (typeof BroadcastChannel === 'undefined') {
+      return; // Not supported (e.g., older browsers, SSR)
+    }
+
+    this.channel = new BroadcastChannel(AUTH_SYNC_CHANNEL);
+    this.channel.onmessage = (event) => {
+      if (event.data === 'logout') {
+        this.logger.info('Auth sync: logout received from another tab');
+        this.auth.logout();
+      }
+    };
+  }
+
+  /** Broadcast logout to all other tabs. Call this from AuthService.logout(). */
+  broadcastLogout(): void {
+    this.channel?.postMessage('logout');
+  }
+}

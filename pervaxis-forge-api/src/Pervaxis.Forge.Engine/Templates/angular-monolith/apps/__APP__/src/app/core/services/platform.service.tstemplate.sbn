@@ -1,0 +1,62 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+import { Injectable } from '@angular/core';
+import { Capacitor } from '@capacitor/core';
+
+@Injectable({ providedIn: 'root' })
+export class PlatformService {
+  /**
+   * Returns true when the app is running inside a Capacitor native shell
+   * (Android/iOS), false when running in a standard browser.
+   */
+  get isNative(): boolean {
+    return Capacitor.isNativePlatform();
+  }
+
+  /**
+   * Returns the current platform: 'ios', 'android', or 'web'.
+   */
+  get platform(): string {
+    return Capacitor.getPlatform();
+  }
+}
+{{ else }}
+import { Injectable } from '@angular/core';
+
+/**
+ * PlatformService — web-only stub.
+ *
+ * Detects whether the app is running in a browser context.
+ * When the mobile target is added (uiTargets includes "mobile"),
+ * this service is replaced with a Capacitor-backed implementation.
+ */
+@Injectable({ providedIn: 'root' })
+export class PlatformService {
+  /** Always false for web-only builds. */
+  get isNative(): boolean {
+    return false;
+  }
+
+  /** Always returns 'web' for web-only builds. */
+  get platform(): string {
+    return 'web';
+  }
+}
+{{ end }}

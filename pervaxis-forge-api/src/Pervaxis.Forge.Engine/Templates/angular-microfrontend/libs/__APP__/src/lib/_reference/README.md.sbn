@@ -1,0 +1,43 @@
+# Reference Module (MFE)
+
+> **This is a reference module for learning and copying. Do NOT commit this folder.**
+
+## Purpose
+
+This `_reference/` folder is a complete, working example of a micro-frontend feature library.
+It demonstrates every pattern you need: models, services, components, routing, mocking, and testing.
+
+## How to Use
+
+1. **Copy** this entire `_reference/` folder
+2. **Rename** the copy to your domain name (e.g., `assets/`, `orders/`, `inspections/`)
+3. **Find and replace** `sample` → your domain name (e.g., `asset`)
+4. **Find and replace** `Sample` → your domain name PascalCase (e.g., `Asset`)
+5. **Customize** the model interface to match your API contract
+6. **Update** the library's public API barrel (`index.ts`)
+7. **Delete** this `_reference/` folder when you're done (it's in `.gitignore` anyway)
+
+## What's Inside
+
+| File | Purpose |
+|------|---------|
+| `models/sample.model.ts` | Domain interfaces and DTOs |
+| `services/sample.service.ts` | API calls via ApiService |
+| `services/sample.service.spec.ts` | Service unit tests |
+| `sample-list.component.ts` | List view with table |
+| `sample-form.component.ts` | Create/Edit form with validation |
+| `sample-detail.component.ts` | Detail view for a single item |
+| `mocks/sample-mock.interceptor.ts` | Dev-only mock HTTP interceptor |
+| `constants/sample.constants.ts` | Route paths, API paths, permissions |
+| `sample.routes.ts` | Routes with auth guard |
+| `index.ts` | Barrel exports |
+
+## Conventions
+
+- Use `inject()` — never constructor injection
+- Use `ChangeDetectionStrategy.OnPush` on all components
+- Use `ApiService` for HTTP — never raw `HttpClient`
+- Use signals for component state
+- Keep components standalone
+- Write a `.spec.ts` for every `.ts` file
+- Import `authGuard` from `@pervaxis/canvas-auth`

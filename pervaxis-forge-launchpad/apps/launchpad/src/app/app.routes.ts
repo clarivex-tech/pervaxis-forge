@@ -56,8 +56,8 @@ export const appRoutes: Routes = [
 						path: ':slug/generate',
 						data: { breadcrumb: 'Generate Services' },
 						loadComponent: () =>
-							import('./features/service-generation/generation-wizard.component').then(
-								(m) => m.GenerationWizardComponent
+							import('./features/service-generation/generation-wizard-v2.component').then(
+								(m) => m.GenerationWizardV2Component
 							),
 					},
 				],

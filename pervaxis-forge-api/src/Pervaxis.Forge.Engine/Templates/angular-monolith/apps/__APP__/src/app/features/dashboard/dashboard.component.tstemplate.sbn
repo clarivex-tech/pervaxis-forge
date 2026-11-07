@@ -1,0 +1,43 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component } from '@angular/core';
+
+/**
+ * VERTICAL: This is your starting point.
+ * Replace this placeholder with your domain-specific dashboard.
+ */
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-dashboard',
+  standalone: true,
+  template: `
+    <div class="dashboard">
+      <h1>Welcome to {{ model.manifest.service_name }}</h1>
+      <p>This scaffold is ready for your business logic. Start building here.</p>
+    </div>
+  `,
+  styles: [`
+    .dashboard {
+      padding: var(--spacing-xl);
+    }
+    h1 {
+      margin-bottom: var(--spacing-md);
+    }
+  `],
+})
+export class DashboardComponent {}

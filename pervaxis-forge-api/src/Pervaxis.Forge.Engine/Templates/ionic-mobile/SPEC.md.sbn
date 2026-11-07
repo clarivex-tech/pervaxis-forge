@@ -1,3 +1,49 @@
-# Spec
+# {{ model.manifest.service_name }} — Technical Specification
 
-Ionic mobile UI scaffold.
+## Service Identity
+
+| Property | Value |
+|----------|-------|
+| Service Name | `{{ model.manifest.service_name }}` |
+| Service Type | Ionic Mobile Application |
+| Component Prefix | `{{ model.manifest.component_prefix }}` |
+| Target Platforms | {{ for target in model.manifest.ui_targets }}{{ target }}{{ if !for.last }}, {{ end }}{{ end }} |
+| Product | {{ model.manifest.product }} |
+| Vertical | {{ model.manifest.vertical_slug }} |
+
+## Architecture Decisions
+
+### Standalone Architecture
+
+This project uses Angular 21 standalone components — no NgModules. All components, directives, and pipes declare their dependencies via the `imports` array in their `@Component` decorator.
+
+### Mobile Framework
+
+- **Ionic Angular** for UI components providing native-like look and feel
+- **Capacitor** for native platform access and deployment to Android/iOS
+- Dark mode support via `prefers-color-scheme` media query and Ionic theme variables
+
+### Folder Structure
+
+- `core/` — Singleton services, guards, interceptors, and handlers. Provided at root level.
+- `features/` — Lazy-loaded feature areas. Each feature is a self-contained folder with its own routes, components, and services.
+- `shared/` — Reusable components, directives, and pipes used across multiple features.
+
+### Routing Strategy
+
+- Lazy-loaded feature routes via `loadComponent` / `loadChildren`
+- Route guards for authentication enforcement
+- Wildcard catch-all for unmatched URLs
+
+### Error Handling Strategy
+
+- Global `ErrorHandler` captures unhandled exceptions
+- HTTP `errorInterceptor` handles API response errors (401, 403, 5xx)
+- Structured logging via `LoggerService` with environment-aware level suppression
+
+### Security
+
+- Content Security Policy via `<meta>` tag in `index.html`
+- Auth interceptor attaches Bearer tokens to outgoing requests
+- Route guards prevent unauthorized navigation
+- Capacitor uses HTTPS scheme for Android (`androidScheme: 'https'`)

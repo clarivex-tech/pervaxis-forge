@@ -1,1 +1,35 @@
-export const appRoutes = [];
+import { Routes } from '@angular/router';
+import { authGuard } from './core/guards/auth.guard';
+
+/**
+ * Application routes.
+ *
+ * HORIZONTAL (do not modify):
+ *   - Auth guard enforcement pattern
+ *   - Wildcard catch-all redirect
+ *
+ * VERTICAL (extend here):
+ *   - Add your feature routes below the home route
+ *   - Use lazy loading: loadComponent / loadChildren
+ *   - Apply authGuard to protected routes
+ */
+export const appRoutes: Routes = [
+  {
+    path: '',
+    redirectTo: 'home',
+    pathMatch: 'full',
+  },
+  {
+    path: 'home',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/home/home.component').then((m) => m.HomeComponent),
+  },
+
+  // --- VERTICAL: Add your feature routes here ---
+
+  {
+    path: '**',
+    redirectTo: '',
+  },
+];

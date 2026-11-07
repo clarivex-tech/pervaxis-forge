@@ -23,4 +23,5 @@ public sealed record SelectedCanvasModule
     public required string Name { get; init; }
     public required string PackageName { get; init; }
     public required string ImportName { get; init; }
+    public required string Version { get; init; }
 }

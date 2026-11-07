@@ -1,0 +1,40 @@
+import { Injectable } from '@angular/core';
+import { environment } from '../../../environments/environment';
+
+export enum LogLevel {
+  Debug = 0,
+  Info = 1,
+  Warn = 2,
+  Error = 3,
+}
+
+@Injectable({ providedIn: 'root' })
+export class LoggerService {
+  private readonly minLevel: LogLevel = environment.production
+    ? LogLevel.Warn
+    : LogLevel.Debug;
+
+  debug(message: string, ...args: unknown[]): void {
+    if (this.minLevel <= LogLevel.Debug) {
+      console.debug(`[DEBUG] ${message}`, ...args);
+    }
+  }
+
+  info(message: string, ...args: unknown[]): void {
+    if (this.minLevel <= LogLevel.Info) {
+      console.info(`[INFO] ${message}`, ...args);
+    }
+  }
+
+  warn(message: string, ...args: unknown[]): void {
+    if (this.minLevel <= LogLevel.Warn) {
+      console.warn(`[WARN] ${message}`, ...args);
+    }
+  }
+
+  error(message: string, ...args: unknown[]): void {
+    if (this.minLevel <= LogLevel.Error) {
+      console.error(`[ERROR] ${message}`, ...args);
+    }
+  }
+}

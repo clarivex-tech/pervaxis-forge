@@ -1,0 +1,121 @@
+{{ if model.manifest.queue }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Data.Outbox;
+using {{ model.names.namespace }}.Models.Configuration;
+
+namespace {{ model.names.namespace }}.Infrastructure.Outbox;
+
+public sealed class OutboxRelayService : BackgroundService
+{
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IOptions<ForgeOutboxOptions> _outboxOptions;
+    private readonly ILogger<OutboxRelayService> _logger;
+
+    public OutboxRelayService(
+        IServiceScopeFactory scopeFactory,
+        IOptions<ForgeOutboxOptions> outboxOptions,
+        ILogger<OutboxRelayService> logger)
+    {
+        _scopeFactory = scopeFactory;
+        _outboxOptions = outboxOptions;
+        _logger = logger;
+    }
+
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        var interval = TimeSpan.FromSeconds(_outboxOptions.Value.PollingIntervalSeconds);
+
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                await ProcessPendingMessagesAsync(stoppingToken);
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unhandled exception in outbox relay polling cycle");
+            }
+
+            await Task.Delay(interval, stoppingToken);
+        }
+    }
+
+    private async Task ProcessPendingMessagesAsync(CancellationToken cancellationToken)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<{{ model.names.dot_net_class_name }}DbContext>();
+
+        var pendingMessages = await dbContext.Set<OutboxMessage>()
+            .Where(m => m.Status == OutboxMessageStatus.Pending)
+            .OrderBy(m => m.CreatedAt)
+            .Take(50)
+            .ToListAsync(cancellationToken);
+
+        foreach (var message in pendingMessages)
+        {
+            message.Status = OutboxMessageStatus.Processing;
+            await dbContext.SaveChangesAsync(cancellationToken);
+
+            try
+            {
+                await PublishToSqsAsync(message, cancellationToken);
+
+                message.Status = OutboxMessageStatus.Processed;
+                message.ProcessedAt = DateTimeOffset.UtcNow;
+            }
+            catch (Exception ex)
+            {
+                message.RetryCount++;
+
+                if (message.RetryCount >= _outboxOptions.Value.MaxRetries)
+                {
+                    message.Status = OutboxMessageStatus.DeadLettered;
+                    _logger.LogWarning(
+                        "Outbox message {MessageId} ({EventType}) dead-lettered after {RetryCount} retries",
+                        message.Id, message.EventType, message.RetryCount);
+                }
+                else
+                {
+                    message.Status = OutboxMessageStatus.Pending;
+                    _logger.LogWarning(ex,
+                        "Outbox message {MessageId} publish failed, retry {RetryCount}",
+                        message.Id, message.RetryCount);
+                }
+            }
+
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+    }
+
+    private async Task PublishToSqsAsync(OutboxMessage message, CancellationToken cancellationToken)
+    {
+        // TODO: VERTICAL — Implement SQS publish via Genesis Messaging module
+        // Example: await _messagingService.PublishAsync(message.EventType, message.Payload, cancellationToken);
+        await Task.CompletedTask;
+    }
+}
+{{ end }}

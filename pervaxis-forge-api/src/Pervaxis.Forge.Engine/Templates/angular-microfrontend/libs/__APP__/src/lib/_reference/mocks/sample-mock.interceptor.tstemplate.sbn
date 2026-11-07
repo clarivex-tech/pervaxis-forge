@@ -1,0 +1,101 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { HttpInterceptorFn, HttpResponse } from '@angular/common/http';
+import { of, delay } from 'rxjs';
+import { SampleItem } from '../models/sample.model';
+
+/**
+ * Mock interceptor for development.
+ * Intercepts requests to /api/samples and returns fake data.
+ *
+ * Register in your app config:
+ *   provideHttpClient(withInterceptors([sampleMockInterceptor]))
+ */
+
+let mockData: SampleItem[] = [
+  { id: 1, name: 'Alpha Widget', description: 'First sample item', status: 'active', createdAt: '2024-01-15T10:00:00Z' },
+  { id: 2, name: 'Beta Gadget', description: 'Second sample item', status: 'active', createdAt: '2024-02-20T14:30:00Z' },
+  { id: 3, name: 'Gamma Device', description: 'Third sample item', status: 'inactive', createdAt: '2024-03-10T09:15:00Z' },
+];
+
+let nextId = 4;
+
+export const sampleMockInterceptor: HttpInterceptorFn = (req, next) => {
+  const url = req.url;
+  const apiPath = '/api/samples';
+
+  if (!url.includes(apiPath)) {
+    return next(req);
+  }
+
+  const simulatedDelay = 300;
+
+  // GET /api/samples — list all
+  if (req.method === 'GET' && url.endsWith(apiPath)) {
+    return of(new HttpResponse({ status: 200, body: [...mockData] })).pipe(delay(simulatedDelay));
+  }
+
+  // GET /api/samples/:id — get by id
+  const getByIdMatch = url.match(/\/api\/samples\/(\d+)$/);
+  if (req.method === 'GET' && getByIdMatch) {
+    const id = Number(getByIdMatch[1]);
+    const item = mockData.find((i) => i.id === id);
+    if (item) {
+      return of(new HttpResponse({ status: 200, body: { ...item } })).pipe(delay(simulatedDelay));
+    }
+    return of(new HttpResponse({ status: 404, body: { message: 'Not found' } }));
+  }
+
+  // POST /api/samples — create
+  if (req.method === 'POST' && url.endsWith(apiPath)) {
+    const body = req.body as Record<string, unknown>;
+    const newItem: SampleItem = {
+      id: nextId++,
+      name: body['name'] as string,
+      description: body['description'] as string,
+      status: body['status'] as 'active' | 'inactive',
+      createdAt: new Date().toISOString(),
+    };
+    mockData.push(newItem);
+    return of(new HttpResponse({ status: 201, body: newItem })).pipe(delay(simulatedDelay));
+  }
+
+  // PUT /api/samples/:id — update
+  const putMatch = url.match(/\/api\/samples\/(\d+)$/);
+  if (req.method === 'PUT' && putMatch) {
+    const id = Number(putMatch[1]);
+    const index = mockData.findIndex((i) => i.id === id);
+    if (index !== -1) {
+      const body = req.body as Record<string, unknown>;
+      mockData[index] = { ...mockData[index], ...body };
+      return of(new HttpResponse({ status: 200, body: { ...mockData[index] } })).pipe(delay(simulatedDelay));
+    }
+    return of(new HttpResponse({ status: 404, body: { message: 'Not found' } }));
+  }
+
+  // DELETE /api/samples/:id — delete
+  const deleteMatch = url.match(/\/api\/samples\/(\d+)$/);
+  if (req.method === 'DELETE' && deleteMatch) {
+    const id = Number(deleteMatch[1]);
+    mockData = mockData.filter((i) => i.id !== id);
+    return of(new HttpResponse({ status: 204, body: null })).pipe(delay(simulatedDelay));
+  }
+
+  return next(req);
+};

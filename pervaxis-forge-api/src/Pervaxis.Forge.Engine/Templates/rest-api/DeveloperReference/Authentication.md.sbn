@@ -1,0 +1,134 @@
+# Authentication and authorization (Cognito and other OIDC providers)
+
+The platform already validates tokens for you. You do **not** write token-checking code. You fill in settings and choose which endpoints need which permission.
+
+Code lives in `Infrastructure/Extensions/AuthenticationExtensions.cs`, `Infrastructure/Extensions/AuthorizationPolicyExtensions.cs` and `Auth/CognitoTokenValidator.cs`. Do not edit them. If something is missing, raise a platform ticket.
+{{- if model.manifest.cognito != null }}
+
+## This service is already set up for Cognito
+
+The generator filled in the Cognito settings in `appsettings.json`:
+
+| Setting | Value |
+|---|---|
+| `Forge:Authentication:Scheme` | `{{ model.manifest.cognito.scheme }}` |
+| `Forge:Oidc:Provider` | `Cognito` |
+| `Forge:Oidc:Authority` | `{{ model.manifest.cognito.authority }}` |
+| `Forge:Oidc:ClientIds` | {{ for client_id in model.manifest.cognito.client_ids }}`{{ client_id }}`{{ if !for.last }}, {{ end }}{{ end }} |
+| `Forge:Authorization:AdminGroup` | `{{ model.manifest.cognito.admin_group }}` |
+{{- if model.manifest.cognito.allow_api_key }}
+
+The scheme is `Both`: a request with a bearer token is checked as a Cognito login, and a request without one is checked as an API key. Set `Forge:Authentication:ApiKey` (or use Secrets Manager) before API key callers can get in. API key callers have no groups, so they cannot use `AdminOnly` endpoints.
+{{- end }}
+
+You only need to add a permission to each endpoint. To use other values in another environment, override them in `appsettings.<Environment>.json` or with environment variables. The sections below explain every setting.
+{{- end }}
+
+## Modes
+
+Set `Forge:Authentication:Scheme`:
+
+| Value | Meaning |
+|---|---|
+| `ApiKey` (default) | Callers send an `X-Api-Key` header. |
+| `Bearer` | Callers send `Authorization: Bearer <access token>`. |
+| `Both` | A bearer token is used when present, otherwise the API key. |
+
+Any other value (including a typo such as `bearer`) stops the service at startup.
+
+## Setting up Cognito
+
+1. Create the user pool, the app clients and the groups in AWS. The platform does not create them.
+2. Fill in the settings (all values are IDs, not secrets, and no client secret is needed):
+
+```json
+{
+  "Forge": {
+    "Authentication": { "Scheme": "Bearer" },
+    "Oidc": {
+      "Provider": "Cognito",
+      "Authority": "https://cognito-idp.<region>.amazonaws.com/<user-pool-id>",
+      "ClientIds": [ "<web-app-client-id>", "<mobile-app-client-id>" ]
+    },
+    "Authorization": { "AdminGroup": "Admin" }
+  }
+}
+```
+
+| Setting | What to put there |
+|---|---|
+| `Authority` | `https://cognito-idp.<region>.amazonaws.com/<user-pool-id>` |
+| `ClientIds` | The app client ID of each frontend that calls this service. Tokens issued to any other app client are rejected. |
+| `AdminGroup` | The Cognito group allowed to use `AdminOnly` endpoints. Default: `Admin`. |
+
+Use `appsettings.<Environment>.json` or environment variables for per-environment values. Environment variable names use double underscores, for example `Forge__Oidc__Authority` and `Forge__Oidc__ClientIds__0`.
+
+Teams usually share one user pool per vertical, with one app client per frontend.
+
+### What is checked on every request
+
+- Signature, issuer and expiry (always).
+- `token_use` must be `access`. ID tokens are rejected.
+- `client_id` must be one of `ClientIds`.
+
+Cognito access tokens have no normal `aud` claim, so `Audience` is not used for Cognito. Older services stored the client ID in `Audience`. That still works when `ClientIds` is empty, but it is deprecated. Move the value to `ClientIds`.
+
+Claims keep their original Cognito names (`username`, `cognito:groups`, `client_id`). The user name is the `username` claim.
+
+## Protecting endpoints
+
+Every endpoint already requires a signed-in caller. Add a policy when it needs more.
+
+Built in: `AdminOnly`, which needs the group set in `AdminGroup`.
+
+```csharp
+[HttpDelete("{id}")]
+[Authorize(Policy = "AdminOnly")]
+public async Task<IActionResult> DeleteAsync(string id, CancellationToken cancellationToken)
+{
+    // ...
+}
+```
+
+Your own policies are defined in settings. You choose the names:
+
+```json
+{
+  "Forge": {
+    "Authorization": {
+      "Policies": {
+        "BillingAccess": { "Groups": [ "Billing", "Finance" ] },
+        "ReportsRead": { "Scopes": [ "reports/read" ] },
+        "BillingAdmin": { "Groups": [ "Billing" ], "Scopes": [ "billing/write" ] }
+      }
+    }
+  }
+}
+```
+
+```csharp
+[Authorize(Policy = "BillingAccess")]
+```
+
+Rules:
+- The user needs **any one** of the listed groups, and **any one** of the listed scopes.
+- If both lists are filled in, the user needs both.
+- A policy needs at least one group or scope.
+- `AdminOnly` is reserved.
+- Mistakes in these settings stop the service at startup.
+
+Groups come from the `cognito:groups` claim for Cognito and from `groups` for other providers. Change it with `Forge:Authorization:GroupClaimType` if your provider uses another claim name.
+
+Scopes come from the space-separated `scope` claim (or `scp`). Custom scopes in Cognito, such as `reports/read`, come from a resource server defined in your user pool.
+
+API key callers have no groups or scopes. They cannot satisfy `AdminOnly` or your own policies, even in `Both` mode.
+
+## What this does not cover
+
+- **Frontend sign-in, callback, refresh and logout** are separate. The frontend must send the **access token**, not the ID token.
+- **Sign-out does not revoke a token.** An access token stays valid until it expires.
+- **Creating the AWS resources** (pool, app clients, groups) is done in AWS or your infrastructure code.
+
+## Tests
+
+`tests/{{ model.names.test_project_name }}/CognitoAuthenticationTests.cs` covers the platform rules with real signed tokens, so nothing calls AWS. Keep it. Add your own tests for your endpoints in separate files.

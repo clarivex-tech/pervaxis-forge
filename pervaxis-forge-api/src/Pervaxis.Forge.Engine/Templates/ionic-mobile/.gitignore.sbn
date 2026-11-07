@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+www/
+dist/
+.angular/
+
+# Test coverage
+coverage/
+
+# Capacitor native platforms
+android/
+ios/
+.capacitor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment files with secrets
+.env
+.env.local
+.env.*.local

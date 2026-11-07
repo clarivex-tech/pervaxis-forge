@@ -27,6 +27,7 @@ import { CanvasModule, GenesisModule } from '../models/generation.model';
 interface ModuleApiDto {
 	id: string;
 	displayName: string;
+	description: string;
 	iamPermissions: string;
 }
 
@@ -53,9 +54,11 @@ export class ModulesApiService implements IModulesApiService {
 	listModules(): Observable<GenesisModule[]> {
 		return this.http.get<ModuleApiDto[]>(this.baseUrl).pipe(
 			map(items => items.map(item => ({
-				name: item.id,
-				label: item.displayName,
-				description: item.iamPermissions,
+				name: item.displayName,
+				// Display-only rename: the backend key stays "Search".
+				label: item.displayName === 'Search' ? 'OpenSearch' : item.displayName,
+				description: item.description,
+				isCloudAgnostic: !item.iamPermissions || item.iamPermissions.trim() === '',
 			})))
 		);
 	}

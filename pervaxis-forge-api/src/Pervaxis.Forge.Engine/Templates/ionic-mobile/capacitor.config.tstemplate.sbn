@@ -1,0 +1,12 @@
+import type { CapacitorConfig } from '@capacitor/cli';
+
+const config: CapacitorConfig = {
+  appId: 'com.{{ model.manifest.vertical_slug }}.{{ model.manifest.service_name | string.replace "-" "" }}',
+  appName: '{{ model.manifest.service_name }}',
+  webDir: 'www',
+  server: {
+    androidScheme: 'https',
+  },
+};
+
+export default config;

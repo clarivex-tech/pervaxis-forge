@@ -8,10 +8,11 @@
 ## 1. The Contract: What You Own vs What You Don't
 
 ### You own (vertical code)
-- `Services/` — service implementation and domain logic
-- `Data/` — EF Core `DbContext`, entities, repositories, migrations
-- `Models/` — request/response records and domain models
-- `Controllers/` — endpoint logic, routing, validation
+- `Domains/` — all your feature modules (controllers, services, data, models, validators, exceptions per domain)
+- `Services/` — root-level service stub (replace or extend for single-domain services)
+- `Data/` — shared EF Core `DbContext` if you have a single cross-domain schema
+- `Models/` — shared request/response records (prefer domain-scoped models under `Domains/`)
+- `Controllers/` — root-level controller stub (replace or extend for single-domain services)
 - `Tests/` — all test cases
 
 ### You do NOT touch (horizontal — raise a Pervaxis ticket for changes)
@@ -54,7 +55,138 @@ I{{ model.names.dot_net_class_name }}              ← You write: business logic
 
 ---
 
-## 3. Implementing Your Service
+## 2a. Domains Folder — Feature Module Structure
+
+All domain feature code lives under `Domains/`. Each feature gets its own sub-folder:
+
+```
+Domains/
+└── YourFeature/
+    ├── Controllers/    ← HTTP endpoints for this feature
+    ├── Services/       ← Business logic and orchestration
+    ├── Data/           ← EF Core entities, DbContext, repositories (if feature-scoped)
+    ├── Models/         ← Request / response records for this feature
+    ├── Validators/     ← FluentValidation validators for this feature
+    └── Exceptions/     ← Domain exceptions for this feature
+```
+
+See `Domains/README.md` for full guidance and examples.
+
+**Rules:**
+- One folder per feature — never mix two features in the same folder.
+- Register all feature services in `Extensions/ServiceCollectionExtensions.cs`.
+- Domain exceptions are caught at the controller boundary — not in global middleware.
+
+---
+
+## 2b. Common Utilities
+
+The `Common/` folder ships ready-to-use utilities for patterns that come up in most services. Use them as-is — they are not domain code.
+
+### PagedResult&lt;T&gt;
+
+Standard paginated response wrapper. Use for any list endpoint.
+
+```csharp
+// In your service:
+var items = await dbContext.Records
+    .OrderBy(r => r.CreatedAt)
+    .Skip((page - 1) * pageSize)
+    .Take(pageSize)
+    .ToListAsync(cancellationToken);
+
+var total = await dbContext.Records.CountAsync(cancellationToken);
+return PagedResult<MyResponse>.Create(items, page, pageSize, total);
+```
+
+```csharp
+// In your controller:
+[HttpGet]
+[ProducesResponseType(typeof(PagedResult<MyResponse>), StatusCodes.Status200OK)]
+public async Task<IActionResult> ListAsync(
+    [FromQuery] int page = 1,
+    [FromQuery] int pageSize = 20,
+    CancellationToken cancellationToken = default)
+{
+    if (page < 1) return BadRequest("page must be >= 1");
+    if (pageSize is < 1 or > 100) return BadRequest("pageSize must be between 1 and 100");
+    var result = await _service.ListAsync(page, pageSize, cancellationToken);
+    return Ok(result);
+}
+```
+
+### WorkbookReader
+
+Zero-dependency `.xlsx` parser — no ClosedXML or EPPlus needed.
+
+```csharp
+using var stream = file.OpenReadStream();
+var (rows, headers) = WorkbookReader.Read(
+    stream,
+    expectedHeaders: ["Date", "Amount", "Reference"]);
+
+foreach (var row in rows)
+{
+    var date = row["Date"];
+    var amount = row["Amount"];
+}
+```
+
+Catch `WorkbookReadException` for invalid files, missing columns, or size-limit violations.
+
+### DeduplicationHelper
+
+SHA-256 content hash for exactly-once file upload / duplicate detection.
+
+```csharp
+var hash = await DeduplicationHelper.ComputeHashAsync(file.OpenReadStream(), cancellationToken);
+
+var existing = await dbContext.Imports
+    .FirstOrDefaultAsync(i => i.ContentHash == hash, cancellationToken);
+if (existing is not null)
+    throw new DuplicateImportException(hash, existing.Id);
+
+dbContext.Imports.Add(new ImportEntity { ContentHash = hash, ... });
+
+try
+{
+    await dbContext.SaveChangesAsync(cancellationToken);
+}
+catch (DbUpdateException ex) when (DeduplicationHelper.IsUniqueConstraintViolation(ex))
+{
+    // Race condition — re-query and throw your typed exception
+    var concurrent = await dbContext.Imports
+        .AsNoTracking()
+        .FirstOrDefaultAsync(i => i.ContentHash == hash, cancellationToken);
+    throw new DuplicateImportException(hash, concurrent?.Id);
+}
+```
+
+### ConfirmationPhraseValidator
+
+Typed confirmation for destructive admin operations.
+
+```csharp
+// In your service — define the phrase as a public constant:
+public const string ConfirmationPhrase = "RESET ALL DATA";
+
+// Preview endpoint returns the phrase so the UI can show it:
+return new ResetPreviewResponse
+{
+    RecordCount = count,
+    ConfirmationPhrase = ConfirmationPhrase,
+};
+
+// Execute endpoint validates it before acting:
+ConfirmationPhraseValidator.Require(request.Confirmation, ConfirmationPhrase);
+await dbContext.Records.ExecuteDeleteAsync(cancellationToken);
+```
+
+Catch `ConfirmationRequiredException` at the controller boundary and return `400 Bad Request`.
+
+---
+
+
 
 The scaffold provides a stub implementation (`{{ model.names.dot_net_class_name }}Service`) that returns default values and logs a warning. The app starts and runs cleanly — your task is to replace the stub logic with real business logic.
 
@@ -363,7 +495,16 @@ services.AddHttpClient<IDownstreamOrdersClient, DownstreamOrdersClient>(client =
 
 ## 6. Data Access
 
+{{ if model.manifest.database != null -}}
+### PostgreSQL is already set up
+
+This service was generated with PostgreSQL. The platform provides the connection, Secrets Manager credentials with automatic password rotation, the `/health/ready` check and the EF Core tooling. You add entities, configuration classes and migrations. You do not register a DbContext yourself: use `{{ model.names.dot_net_class_name }}DbContext` in `Data/`.
+
+Settings, password rotation, adding tables and the migration workflow are in [`DeveloperReference/Database.md`](DeveloperReference/Database.md).
+{{- else -}}
 ### Add EF Core to the project
+
+This service was generated without a database. To add one, generate it again with a database selected. The steps below are only for adding EF Core by hand.
 
 Add to `{{ model.names.namespace }}.csproj`:
 
@@ -379,13 +520,14 @@ Add to `{{ model.names.namespace }}.csproj`:
 Register in `Extensions/ServiceCollectionExtensions.cs`:
 
 ```csharp
-var connectionString = configuration.GetConnectionString("{{ model.names.dot_net_class_name }}")
-    ?? throw new InvalidOperationException("Connection string '{{ model.names.dot_net_class_name }}' is not configured.");
+var connectionString = configuration.GetConnectionString("Default")
+    ?? throw new InvalidOperationException("Connection string 'Default' is not configured.");
 
 services.AddDbContext<YourDomainDbContext>(opts =>
     opts.UseNpgsql(connectionString, npgsql =>
         npgsql.EnableRetryOnFailure(3)));
 ```
+{{- end }}
 
 ### Entity, DbContext, Repository
 
@@ -400,6 +542,20 @@ public sealed class YourDomainEntity
     public required DateTimeOffset UpdatedAt { get; set; }
 }
 
+{{ if model.manifest.database != null -}}
+// Data/YourDomainConfiguration.cs  (the platform DbContext finds it automatically)
+public sealed class YourDomainConfiguration : IEntityTypeConfiguration<YourDomainEntity>
+{
+    public void Configure(EntityTypeBuilder<YourDomainEntity> entity)
+    {
+        entity.HasKey(e => e.Id);
+        entity.Property(e => e.Reference).HasMaxLength(100).IsRequired();
+        entity.HasIndex(e => e.Reference).IsUnique();
+    }
+}
+
+// See DeveloperReference/Database.md for adding the DbSet to {{ model.names.dot_net_class_name }}DbContext.
+{{- else -}}
 // Data/YourDomainDbContext.cs
 public sealed class YourDomainDbContext : DbContext
 {
@@ -417,6 +573,7 @@ public sealed class YourDomainDbContext : DbContext
         });
     }
 }
+{{- end }}
 
 // Data/IYourDomainRepository.cs
 public interface IYourDomainRepository
@@ -449,10 +606,14 @@ internal static class YourDomainMappings
 
 ### Migrations
 
+{{ if model.manifest.database != null -}}
+Migrations use EF Core. Create them with `dotnet ef migrations add`, and let the deployment pipeline apply the generated script. Do not apply migrations when the service starts. The full workflow and rules are in [`DeveloperReference/Database.md`](DeveloperReference/Database.md).
+{{- else -}}
 ```powershell
 dotnet ef migrations add InitialCreate --project src/{{ model.names.namespace }}
 dotnet ef database update --project src/{{ model.names.namespace }}
 ```
+{{- end }}
 
 ---
 
@@ -464,6 +625,27 @@ The following Genesis modules are wired and ready to inject into your service:
 {{ end }}
 
 Inject their interfaces at the **service layer only** — never directly in controllers.
+{{- ref_odata = false -}}
+{{- ref_sanitization = false -}}
+{{- for module in model.selected_modules -}}
+{{- if (module.name | string.downcase) == "odata" -}}{{- ref_odata = true -}}{{- end -}}
+{{- if (module.name | string.downcase) == "sanitization" -}}{{- ref_sanitization = true -}}{{- end -}}
+{{- end }}
+{{- if ref_odata || ref_sanitization }}
+
+### Feature reference
+
+For these features the detailed configuration and code examples live in `DeveloperReference/`. They are kept there only, so this guide stays short.
+
+| Feature | Platform provides | Domain developers do | Details |
+|---|---|---|---|
+{{- if ref_odata }}
+| OData | Query parsing, limits, pagination response types | Apply pagination and supported filters to database queries | [OData.md](DeveloperReference/OData.md) |
+{{- end }}
+{{- if ref_sanitization }}
+| Sanitization | Text-cleaning tools and profiles | Choose fields and cleaning profiles | [Sanitization.md](DeveloperReference/Sanitization.md) |
+{{- end }}
+{{- end }}
 
 ### Caching
 
@@ -687,7 +869,39 @@ Follow this exact order every time:
 
 ---
 
-## 12. Quick Reference
+## 12. Switching OIDC Provider
+
+Pervaxis supports any OIDC-compliant identity provider. Change `Forge:Oidc:Provider` and set `Authority` + `Audience` accordingly. No code changes required — configuration only.
+
+**Cognito** is handled by the platform as well, with its own checks (access tokens only, allowed app clients, admin group). For Cognito set `ClientIds` instead of `Audience`. Settings, policies and examples are in [`DeveloperReference/Authentication.md`](DeveloperReference/Authentication.md).
+
+| Provider | Authority URL | Audience |
+|---|---|---|
+| Auth0 | `https://{domain}/` | `https://your-api` |
+| Supabase | `https://{project}.supabase.co/auth/v1` | `authenticated` |
+| Okta | `https://{domain}/oauth2/default` | `api://default` |
+| Cognito | `https://cognito-idp.{region}.amazonaws.com/{pool-id}` | not used. Set `ClientIds` to the app client IDs |
+
+Example (`appsettings.json`):
+
+```json
+{
+  "Forge": {
+    "Oidc": {
+      "Provider": "Okta",
+      "Authority": "https://dev-123456.okta.com/oauth2/default",
+      "Audience": "api://default",
+      "Domain": ""
+    }
+  }
+}
+```
+
+The `Domain` property is retained for Auth0 management API compatibility and can be left empty for other providers.
+
+---
+
+## 13. Quick Reference
 
 | Topic | Guide |
 |---|---|

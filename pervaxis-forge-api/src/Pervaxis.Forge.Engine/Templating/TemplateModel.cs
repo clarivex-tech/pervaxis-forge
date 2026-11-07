@@ -18,4 +18,12 @@ public sealed record TemplateModel
     public IReadOnlyList<SelectedCanvasModule> SelectedCanvasModules { get; init; } = [];
 
     public string CurrentYear { get; init; } = DateTime.UtcNow.Year.ToString();
+
+    public string ForgeVersion { get; init; } = Engine.ForgeVersion.Full;
+
+    public string ForgeBuild { get; init; } = Engine.ForgeVersion.Build;
+
+    public string PrintedAt { get; init; } = DateTime.UtcNow.ToString("o");
+
+    public string GenesisVersion { get; init; } = "";
 }

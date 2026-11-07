@@ -1,0 +1,48 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component } from '@angular/core';
+import { RouterLink } from '@angular/router';
+
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-not-found',
+  standalone: true,
+  imports: [RouterLink],
+  template: `
+    <div class="not-found">
+      <h1>404</h1>
+      <p>Page not found</p>
+      <a routerLink="/dashboard">Back to Dashboard</a>
+    </div>
+  `,
+  styles: [`
+    .not-found {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 60vh;
+      text-align: center;
+    }
+    h1 { font-size: 4rem; color: var(--color-secondary); }
+    p { margin: var(--spacing-md) 0; color: var(--color-secondary); }
+    a { color: var(--color-primary); text-decoration: none; font-weight: 500; }
+    a:hover { text-decoration: underline; }
+  `],
+})
+export class NotFoundComponent {}

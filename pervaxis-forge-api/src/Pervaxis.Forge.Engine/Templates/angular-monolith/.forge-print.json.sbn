@@ -1,0 +1,22 @@
+{
+  "product": "{{ model.manifest.product }}",
+  "service": "{{ model.manifest.service_name }}",
+  "type": "Monolithic",
+  "componentPrefix": "{{ model.manifest.component_prefix }}",
+  "template": "angular-monolith",
+  "forge": {
+    "version": "{{ model.forge_version }}",
+    "build": "{{ model.forge_build }}"
+  },
+  "printedAt": "{{ model.printed_at }}",
+  "platforms": [
+{{- for target in model.manifest.ui_targets }}
+    "{{ target }}"{{ if !for.last }},{{ end }}
+{{- end }}
+  ],
+  "canvasModules": [
+{{- for module in model.selected_canvas_modules }}
+    "{{ module.name }}"{{ if !for.last }},{{ end }}
+{{- end }}
+  ]
+}
