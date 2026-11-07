@@ -5,7 +5,10 @@ namespace Pervaxis.Forge.Engine.Validation;
 
 public sealed class ManifestValidator
 {
-    private static readonly Regex KebabCaseRegex = new("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled);
+    // Every pattern has a match timeout so unusual input cannot make validation run for a long time.
+    private static readonly TimeSpan RegexTimeout = TimeSpan.FromMilliseconds(250);
+
+    private static readonly Regex KebabCaseRegex = new("^[a-z0-9]+(?:-[a-z0-9]+)*$", RegexOptions.Compiled, RegexTimeout);
 
     public ValidationResult Validate(ForgeManifest manifest)
     {
@@ -84,9 +87,9 @@ public sealed class ManifestValidator
     }
 
     // These values are written into appsettings.json, so the patterns also keep them safe for JSON.
-    private static readonly Regex UserPoolIdRegex = new(@"^[a-z]{2}(?:-[a-z]+)+-\d+_[A-Za-z0-9]+$", RegexOptions.Compiled);
-    private static readonly Regex ClientIdRegex = new(@"^[A-Za-z0-9_+]{1,128}$", RegexOptions.Compiled);
-    private static readonly Regex GroupNameRegex = new(@"^[A-Za-z0-9_.:/@+= -]{1,128}$", RegexOptions.Compiled);
+    private static readonly Regex UserPoolIdRegex = new(@"^[a-z]{2}(?:-[a-z]+)+-\d+_[A-Za-z0-9]+$", RegexOptions.Compiled, RegexTimeout);
+    private static readonly Regex ClientIdRegex = new(@"^[A-Za-z0-9_+]{1,128}$", RegexOptions.Compiled, RegexTimeout);
+    private static readonly Regex GroupNameRegex = new(@"^[A-Za-z0-9_.:/@+= -]{1,128}$", RegexOptions.Compiled, RegexTimeout);
 
     /// <summary>
     /// Multi-tenancy v1 takes the tenant from a validated Cognito access token and isolates data in PostgreSQL.
