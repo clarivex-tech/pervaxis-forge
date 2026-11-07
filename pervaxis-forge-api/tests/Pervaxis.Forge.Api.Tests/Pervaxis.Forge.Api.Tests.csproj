@@ -4,6 +4,12 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
+    <!-- The API is a web app. Referencing the same shared framework lets NuGet prune packages it already provides
+         (for example Microsoft.AspNetCore.DataProtection and its System.Security.Cryptography.Xml/Pkcs 10.0.7
+         dependencies, which have known vulnerabilities) instead of restoring them. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\..\src\Pervaxis.Forge.Api\Pervaxis.Forge.Api.csproj" />
     <PackageReference Include="xunit" Version="2.9.3" />
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" />
