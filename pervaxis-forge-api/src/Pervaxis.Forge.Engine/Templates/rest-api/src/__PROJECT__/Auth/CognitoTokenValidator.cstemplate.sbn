@@ -1,0 +1,61 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Security.Claims;
+
+namespace {{ model.names.namespace }}.Auth;
+
+/// <summary>
+/// Cognito-specific checks that run after the JWT signature, issuer and expiry have been validated.
+///
+/// Cognito access tokens do not carry a normal <c>aud</c> claim. They identify the app client in
+/// <c>client_id</c> and mark their type in <c>token_use</c>. These two checks replace audience validation.
+/// </summary>
+public static class CognitoTokenValidator
+{
+    public const string TokenUseClaim = "token_use";
+    public const string ClientIdClaim = "client_id";
+    public const string AccessTokenUse = "access";
+
+    /// <summary>
+    /// Returns <see langword="null"/> when the token is acceptable, or a short reason for rejecting it.
+    /// The reason never contains the token itself.
+    /// </summary>
+    public static string? GetRejectionReason(ClaimsPrincipal? principal, IReadOnlyCollection<string> allowedClientIds)
+    {
+        ArgumentNullException.ThrowIfNull(allowedClientIds);
+
+        if (principal is null)
+            return "No principal was produced from the token.";
+
+        // An ID token has token_use=id. It proves who the user is, but it is not meant for calling APIs.
+        var tokenUse = principal.FindFirst(TokenUseClaim)?.Value;
+        if (!string.Equals(tokenUse, AccessTokenUse, StringComparison.Ordinal))
+            return $"token_use is '{tokenUse ?? "<missing>"}', expected '{AccessTokenUse}'.";
+
+        // The token must have been issued to one of this service's app clients.
+        var clientId = principal.FindFirst(ClientIdClaim)?.Value;
+        if (string.IsNullOrEmpty(clientId))
+            return "client_id claim is missing.";
+
+        if (!allowedClientIds.Contains(clientId, StringComparer.Ordinal))
+            return "client_id is not one of the configured app clients.";
+
+        return null;
+    }
+}

@@ -1,0 +1,31 @@
+# Developer Reference
+
+This folder holds **copy-and-adapt examples** for the platform features this service was generated with.
+
+- Nothing in this folder is compiled. It is documentation, not product code.
+- Copy a snippet into your own feature folder under `src/{{ model.names.namespace }}/Domains/` and change the names.
+- Examples for optional features (OData, Sanitization) appear only when that feature was selected when the service was generated.
+
+## Examples in this service
+
+- [`Authentication.md`](Authentication.md): Cognito and other OIDC providers, policies and admin groups
+{{- if model.manifest.database != null }}
+- [`Database.md`](Database.md): PostgreSQL settings, password rotation, health checks, tables and EF migrations
+{{- end }}
+{{- if model.manifest.multi_tenancy }}
+- [`Tenancy.md`](Tenancy.md): tenant entities, repositories, background work and what to avoid
+{{- end }}
+{{- for module in model.selected_modules -}}
+{{- if (module.name | string.downcase) == "odata" }}
+- [`OData.md`](OData.md): paginated list endpoints with `$top`, `$skip` and `$count`
+{{- end -}}
+{{- if (module.name | string.downcase) == "sanitization" }}
+- [`Sanitization.md`](Sanitization.md): cleaning user input to prevent XSS
+{{- end -}}
+{{- end }}
+
+## Ground rules
+
+- Examples follow the standards in `.claude/guides/PERVAXIS_STANDARDS.md`.
+- The package behind each example is the source of truth. If an example and the package disagree, trust the package and tell the platform team.
+- Keep domain code in `Domains/`. Do not edit `Program.cs` to wire a feature. Raise a platform ticket instead.

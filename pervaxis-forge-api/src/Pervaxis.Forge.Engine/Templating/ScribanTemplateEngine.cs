@@ -111,6 +111,18 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                         }
                         : null,
                     ["multi_tenancy"] = model.Manifest.MultiTenancy,
+                    ["cognito"] = model.Manifest.Cognito is { } cognito
+                        ? new Scriban.Runtime.ScriptObject
+                        {
+                            ["user_pool_id"] = cognito.UserPoolId,
+                            ["region"] = cognito.Region,
+                            ["authority"] = cognito.Authority,
+                            ["client_ids"] = cognito.ClientIds.ToList(),
+                            ["admin_group"] = cognito.AdminGroup,
+                            ["allow_api_key"] = cognito.AllowApiKey,
+                            ["scheme"] = cognito.AllowApiKey ? "Both" : "Bearer",
+                        }
+                        : null,
                     ["database"] = model.Manifest.Database is { } db
                         ? new Scriban.Runtime.ScriptObject
                         {

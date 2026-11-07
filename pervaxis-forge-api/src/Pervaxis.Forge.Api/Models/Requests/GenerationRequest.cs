@@ -42,4 +42,5 @@ public record GenerationRequest
     public BackgroundJobConfig? BackgroundJobs { get; init; }
     public UtilitiesConfig? Utilities { get; init; }
     public bool MultiTenancy { get; init; } = false;
+    public CognitoConfig? Cognito { get; init; }
 }

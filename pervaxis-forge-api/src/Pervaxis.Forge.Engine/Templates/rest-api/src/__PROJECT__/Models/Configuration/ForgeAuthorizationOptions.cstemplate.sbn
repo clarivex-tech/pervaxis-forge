@@ -1,0 +1,51 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+namespace {{ model.names.namespace }}.Models.Configuration;
+
+/// <summary>
+/// Authorization settings. The platform builds the policies; each service chooses its own
+/// policy names and which endpoints use them.
+/// </summary>
+public sealed class ForgeAuthorizationOptions
+{
+    public const string SectionName = "Forge:Authorization";
+
+    /// <summary>The group that satisfies the built-in <c>AdminOnly</c> policy. Default: Admin.</summary>
+    public string AdminGroup { get; init; } = "Admin";
+
+    /// <summary>
+    /// The token claim that lists the user's groups. Leave empty to use the provider default:
+    /// <c>cognito:groups</c> for Cognito, <c>groups</c> for other providers.
+    /// </summary>
+    public string? GroupClaimType { get; init; }
+
+    /// <summary>Named policies defined in configuration, keyed by policy name.</summary>
+    public Dictionary<string, ForgePolicyOptions> Policies { get; init; } = new();
+}
+
+/// <summary>
+/// One named policy. The user needs ANY listed group and ANY listed scope.
+/// A list that is empty is not checked. At least one list must be filled in.
+/// </summary>
+public sealed class ForgePolicyOptions
+{
+    public List<string> Groups { get; init; } = [];
+
+    public List<string> Scopes { get; init; } = [];
+}

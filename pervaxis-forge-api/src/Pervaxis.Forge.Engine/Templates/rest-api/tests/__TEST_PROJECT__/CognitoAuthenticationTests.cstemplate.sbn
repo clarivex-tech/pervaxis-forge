@@ -1,0 +1,515 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using Amazon.SecretsManager;
+using FluentAssertions;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
+using Moq;
+using {{ model.names.namespace }}.Auth;
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Models.Configuration;
+using Xunit;
+
+namespace {{ model.names.test_project_name }};
+
+// These tests cover the platform authentication code (Cognito token rules, policies, startup checks).
+// Keep them. Add your own tests for your endpoints in separate files.
+
+public class CognitoTokenValidatorTests
+{
+    private static ClaimsPrincipal Principal(params (string Type, string Value)[] claims) =>
+        new(new ClaimsIdentity(claims.Select(c => new Claim(c.Type, c.Value)), "test"));
+
+    private static readonly string[] Allowed = ["web-client", "mobile-client"];
+
+    [Fact]
+    public void AccessToken_FromAllowedClient_IsAccepted()
+    {
+        var principal = Principal(("token_use", "access"), ("client_id", "mobile-client"));
+
+        CognitoTokenValidator.GetRejectionReason(principal, Allowed).Should().BeNull();
+    }
+
+    [Fact]
+    public void IdToken_IsRejected()
+    {
+        var principal = Principal(("token_use", "id"), ("client_id", "web-client"));
+
+        CognitoTokenValidator.GetRejectionReason(principal, Allowed).Should().Contain("token_use");
+    }
+
+    [Fact]
+    public void MissingTokenUse_IsRejected()
+    {
+        var principal = Principal(("client_id", "web-client"));
+
+        CognitoTokenValidator.GetRejectionReason(principal, Allowed).Should().Contain("<missing>");
+    }
+
+    [Fact]
+    public void ClientFromAnotherApp_IsRejected()
+    {
+        var principal = Principal(("token_use", "access"), ("client_id", "someone-elses-client"));
+
+        CognitoTokenValidator.GetRejectionReason(principal, Allowed).Should().Contain("app clients");
+    }
+
+    [Fact]
+    public void MissingClientId_IsRejected()
+    {
+        var principal = Principal(("token_use", "access"));
+
+        CognitoTokenValidator.GetRejectionReason(principal, Allowed).Should().Contain("client_id");
+    }
+
+    [Fact]
+    public void ClientId_IsCaseSensitive()
+    {
+        var principal = Principal(("token_use", "access"), ("client_id", "WEB-CLIENT"));
+
+        CognitoTokenValidator.GetRejectionReason(principal, Allowed).Should().NotBeNull();
+    }
+
+    [Fact]
+    public void NullPrincipal_IsRejected()
+    {
+        CognitoTokenValidator.GetRejectionReason(null, Allowed).Should().NotBeNull();
+    }
+}
+
+public class AuthorizationPolicyTests
+{
+    [Theory]
+    [InlineData("Cognito", null, "cognito:groups")]
+    [InlineData("cognito", "", "cognito:groups")]
+    [InlineData("Okta", null, "groups")]
+    [InlineData("Auth0", "https://example.com/groups", "https://example.com/groups")]
+    public void GroupClaimType_UsesConfiguredValueOrProviderDefault(string provider, string? configured, string expected)
+    {
+        AuthorizationPolicyExtensions.ResolveGroupClaimType(provider, configured).Should().Be(expected);
+    }
+
+    [Fact]
+    public void HasAnyScope_SplitsSpaceSeparatedScopes()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim("scope", "openid reports/read profile")], "test"));
+
+        AuthorizationPolicyExtensions.HasAnyScope(user, ["reports/read"]).Should().BeTrue();
+        AuthorizationPolicyExtensions.HasAnyScope(user, ["reports"]).Should().BeFalse();
+        AuthorizationPolicyExtensions.HasAnyScope(user, ["reports/write"]).Should().BeFalse();
+    }
+
+    [Fact]
+    public void HasAnyScope_ReadsTheScpClaimToo()
+    {
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim("scp", "billing.read")], "test"));
+
+        AuthorizationPolicyExtensions.HasAnyScope(user, ["billing.read"]).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("AdminOnly")]
+    [InlineData("adminonly")]
+    [InlineData(" AdminOnly ")]
+    [InlineData("\tAdminOnly")]
+    public void PolicyThatResolvesToAdminOnly_IsRejected(string name)
+    {
+        var settings = new ForgeAuthorizationOptions
+        {
+            Policies = { [name] = new ForgePolicyOptions { Groups = ["Ops"] } },
+        };
+
+        var act = () => new AuthorizationOptions().AddForgePolicies(settings, "Cognito");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*AdminOnly*built in*");
+    }
+
+    [Fact]
+    public void TwoPoliciesThatDifferOnlyByWhitespaceOrCase_AreRejected()
+    {
+        var settings = new ForgeAuthorizationOptions
+        {
+            Policies =
+            {
+                ["BillingAccess"] = new ForgePolicyOptions { Groups = ["Billing"] },
+                [" billingaccess "] = new ForgePolicyOptions { Groups = ["Finance"] },
+            },
+        };
+
+        var act = () => new AuthorizationOptions().AddForgePolicies(settings, "Cognito");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*more than once*");
+    }
+
+    [Fact]
+    public void PolicyWithoutGroupsOrScopes_IsRejected()
+    {
+        var settings = new ForgeAuthorizationOptions
+        {
+            Policies = { ["Empty"] = new ForgePolicyOptions() },
+        };
+
+        var act = () => new AuthorizationOptions().AddForgePolicies(settings, "Cognito");
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*Empty*at least one group or scope*");
+    }
+
+    [Fact]
+    public void ValidPolicies_AreRegistered()
+    {
+        var settings = new ForgeAuthorizationOptions
+        {
+            Policies =
+            {
+                ["BillingAccess"] = new ForgePolicyOptions { Groups = ["Billing"] },
+                ["ReportsRead"] = new ForgePolicyOptions { Scopes = ["reports/read"] },
+            },
+        };
+        var options = new AuthorizationOptions();
+
+        options.AddForgePolicies(settings, "Cognito");
+
+        options.GetPolicy("AdminOnly").Should().NotBeNull();
+        options.GetPolicy("BillingAccess").Should().NotBeNull();
+        options.GetPolicy("ReportsRead").Should().NotBeNull();
+    }
+}
+
+public class AuthenticationStartupValidationTests
+{
+    private static void Register(Dictionary<string, string?> settings)
+    {
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
+        new ServiceCollection().AddForgeAuthentication(configuration);
+    }
+
+    [Theory]
+    [InlineData("bearer")]
+    [InlineData("Basic")]
+    [InlineData("")]
+    public void UnknownScheme_StopsStartup(string scheme)
+    {
+        var act = () => Register(new() { ["Forge:Authentication:Scheme"] = scheme });
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*Scheme*ApiKey*Bearer*Both*");
+    }
+
+    [Fact]
+    public void Bearer_WithoutAuthority_StopsStartup()
+    {
+        var act = () => Register(new() { ["Forge:Authentication:Scheme"] = "Bearer" });
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*Authority*");
+    }
+
+    [Fact]
+    public void Cognito_WithoutClientIds_StopsStartup()
+    {
+        var act = () => Register(new()
+        {
+            ["Forge:Authentication:Scheme"] = "Bearer",
+            ["Forge:Oidc:Provider"] = "Cognito",
+            ["Forge:Oidc:Authority"] = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Pool",
+        });
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*ClientIds*");
+    }
+
+    [Fact]
+    public void Cognito_WithLegacyAudience_IsAcceptedAsClientId()
+    {
+        var act = () => Register(new()
+        {
+            ["Forge:Authentication:Scheme"] = "Bearer",
+            ["Forge:Oidc:Provider"] = "Cognito",
+            ["Forge:Oidc:Authority"] = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Pool",
+            ["Forge:Oidc:Audience"] = "legacy-client-id",
+        });
+
+        act.Should().NotThrow();
+    }
+
+    [Fact]
+    public void OtherProvider_WithoutAudience_StopsStartup()
+    {
+        var act = () => Register(new()
+        {
+            ["Forge:Authentication:Scheme"] = "Bearer",
+            ["Forge:Oidc:Provider"] = "Okta",
+            ["Forge:Oidc:Authority"] = "https://dev-1.okta.com/oauth2/default",
+        });
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*Audience*");
+    }
+
+    [Fact]
+    public void ApiKeyScheme_NeedsNoOidcSettings()
+    {
+        var act = () => Register(new() { ["Forge:Authentication:Scheme"] = "ApiKey" });
+
+        act.Should().NotThrow();
+    }
+}
+
+/// <summary>
+/// A small web host that uses the real <c>AddForgeAuthentication</c> and real signed JWTs.
+/// The signing key is a test key and the issuer metadata is supplied directly, so nothing calls AWS.
+/// </summary>
+public sealed class CognitoHostFixture : IAsyncLifetime
+{
+    public const string Issuer = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_TestPool";
+    public const string WebClient = "web-client";
+    public const string MobileClient = "mobile-client";
+
+    private readonly RSA _rsa = RSA.Create(2048);
+    private WebApplication? _app;
+
+    public RsaSecurityKey SigningKey { get; }
+
+    public HttpClient Client { get; private set; } = null!;
+
+    public CognitoHostFixture()
+    {
+        SigningKey = new RsaSecurityKey(_rsa) { KeyId = "test-key" };
+    }
+
+    public async Task InitializeAsync()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
+
+        // Ignore ambient settings (for example Forge__Oidc__* environment variables on a developer machine).
+        // This test sets everything it needs below.
+        builder.Configuration.Sources.Clear();
+
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Forge:Authentication:Scheme"] = "Bearer",
+            ["Forge:Oidc:Provider"] = "Cognito",
+            ["Forge:Oidc:Authority"] = Issuer,
+            ["Forge:Oidc:ClientIds:0"] = WebClient,
+            ["Forge:Oidc:ClientIds:1"] = MobileClient,
+            ["Forge:Authorization:AdminGroup"] = "Admin",
+            ["Forge:Authorization:Policies:BillingAccess:Groups:0"] = "Billing",
+            ["Forge:Authorization:Policies:BillingAccess:Groups:1"] = "Finance",
+            ["Forge:Authorization:Policies:ReportsRead:Scopes:0"] = "reports/read",
+        });
+
+        // The API key handler asks for Secrets Manager. A stub keeps the host valid without AWS.
+        builder.Services.AddSingleton(Mock.Of<IAmazonSecretsManager>());
+
+        builder.Services.AddForgeAuthentication(builder.Configuration);
+
+        // Use the test key instead of downloading the pool's public keys.
+        builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+        {
+            var metadata = new OpenIdConnectConfiguration { Issuer = Issuer };
+            metadata.SigningKeys.Add(SigningKey);
+            options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(metadata);
+        });
+
+        _app = builder.Build();
+        _app.UseAuthentication();
+        _app.UseAuthorization();
+        _app.MapGet("/ping", () => "ok");
+        _app.MapGet("/admin", () => "admin").RequireAuthorization(AuthorizationPolicyExtensions.AdminOnlyPolicy);
+        _app.MapGet("/billing", () => "billing").RequireAuthorization("BillingAccess");
+        _app.MapGet("/reports", () => "reports").RequireAuthorization("ReportsRead");
+
+        await _app.StartAsync();
+        Client = _app.GetTestClient();
+    }
+
+    public async Task DisposeAsync()
+    {
+        Client.Dispose();
+
+        if (_app is not null)
+            await _app.DisposeAsync();
+
+        _rsa.Dispose();
+    }
+
+    /// <summary>Creates a signed access token. Pass overrides to build bad tokens.</summary>
+    public string CreateToken(
+        Dictionary<string, object>? claims = null,
+        string issuer = Issuer,
+        DateTime? expires = null,
+        SecurityKey? signingKey = null)
+    {
+        var payload = new Dictionary<string, object>
+        {
+            ["sub"] = "user-1",
+            ["username"] = "alice",
+            ["token_use"] = "access",
+            ["client_id"] = WebClient,
+        };
+
+        foreach (var (name, value) in claims ?? [])
+            payload[name] = value;
+
+        var expiry = expires ?? DateTime.UtcNow.AddMinutes(10);
+
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Issuer = issuer,
+            Claims = payload,
+            NotBefore = expiry.AddMinutes(-30),
+            IssuedAt = expiry.AddMinutes(-30),
+            Expires = expiry,
+            SigningCredentials = new SigningCredentials(signingKey ?? SigningKey, SecurityAlgorithms.RsaSha256),
+        };
+
+        return new JsonWebTokenHandler().CreateToken(descriptor);
+    }
+
+    public async Task<HttpStatusCode> GetStatusAsync(string path, string? token)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+
+        if (token is not null)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await Client.SendAsync(request);
+        return response.StatusCode;
+    }
+}
+
+public class CognitoAuthenticationHttpTests(CognitoHostFixture host) : IClassFixture<CognitoHostFixture>
+{
+    [Fact]
+    public async Task ValidAccessToken_IsAccepted()
+    {
+        (await host.GetStatusAsync("/ping", host.CreateToken())).Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task TokenFromSecondAppClient_IsAccepted()
+    {
+        var token = host.CreateToken(new() { ["client_id"] = CognitoHostFixture.MobileClient });
+
+        (await host.GetStatusAsync("/ping", token)).Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task NoToken_Returns401()
+    {
+        (await host.GetStatusAsync("/ping", null)).Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task IdToken_Returns401()
+    {
+        var token = host.CreateToken(new() { ["token_use"] = "id" });
+
+        (await host.GetStatusAsync("/ping", token)).Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task TokenForAnotherAppClient_Returns401()
+    {
+        var token = host.CreateToken(new() { ["client_id"] = "someone-elses-client" });
+
+        (await host.GetStatusAsync("/ping", token)).Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task ExpiredToken_Returns401()
+    {
+        var token = host.CreateToken(expires: DateTime.UtcNow.AddMinutes(-20));
+
+        (await host.GetStatusAsync("/ping", token)).Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task TokenSignedWithAnotherKey_Returns401()
+    {
+        using var otherRsa = RSA.Create(2048);
+        var token = host.CreateToken(signingKey: new RsaSecurityKey(otherRsa) { KeyId = "test-key" });
+
+        (await host.GetStatusAsync("/ping", token)).Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task TokenFromAnotherIssuer_Returns401()
+    {
+        var token = host.CreateToken(issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_OtherPool");
+
+        (await host.GetStatusAsync("/ping", token)).Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task AdminGroup_CanCallAdminEndpoint()
+    {
+        var token = host.CreateToken(new() { ["cognito:groups"] = new[] { "Users", "Admin" } });
+
+        (await host.GetStatusAsync("/admin", token)).Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task NonAdminGroup_GetsForbiddenOnAdminEndpoint()
+    {
+        var token = host.CreateToken(new() { ["cognito:groups"] = new[] { "Users" } });
+
+        (await host.GetStatusAsync("/admin", token)).Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task NoGroups_GetsForbiddenOnAdminEndpoint()
+    {
+        (await host.GetStatusAsync("/admin", host.CreateToken())).Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Theory]
+    [InlineData("Billing", HttpStatusCode.OK)]
+    [InlineData("Finance", HttpStatusCode.OK)]
+    [InlineData("Admin", HttpStatusCode.Forbidden)]
+    public async Task ConfiguredGroupPolicy_AllowsAnyListedGroup(string group, HttpStatusCode expected)
+    {
+        var token = host.CreateToken(new() { ["cognito:groups"] = new[] { group } });
+
+        (await host.GetStatusAsync("/billing", token)).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("openid reports/read", HttpStatusCode.OK)]
+    [InlineData("reports/read", HttpStatusCode.OK)]
+    [InlineData("openid profile", HttpStatusCode.Forbidden)]
+    [InlineData("reports", HttpStatusCode.Forbidden)]
+    public async Task ConfiguredScopePolicy_ReadsTheScopeClaim(string scope, HttpStatusCode expected)
+    {
+        var token = host.CreateToken(new() { ["scope"] = scope });
+
+        (await host.GetStatusAsync("/reports", token)).Should().Be(expected);
+    }
+}

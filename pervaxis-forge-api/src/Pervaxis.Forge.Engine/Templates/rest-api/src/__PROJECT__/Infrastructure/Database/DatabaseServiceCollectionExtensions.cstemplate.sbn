@@ -1,0 +1,103 @@
+{{ if model.manifest.database != null }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Amazon.SecretsManager;
+using Microsoft.EntityFrameworkCore;
+using Npgsql;
+using {{ model.names.namespace }}.Models.Configuration;
+
+namespace {{ model.names.namespace }}.Infrastructure.Database;
+
+public static class DatabaseServiceCollectionExtensions
+{
+    /// <summary>
+    /// Registers PostgreSQL for the service and the DbContext <typeparamref name="TContext"/>.
+    ///
+    /// Settings:
+    /// - <c>ConnectionStrings:Default</c>: host, database, port and SSL settings (and user/password for local development).
+    /// - <c>Forge:Database:SecretId</c>: optional. Takes the user name and password from Secrets Manager
+    ///   and keeps them current after password rotation.
+    /// - <c>Forge:Database:RootCertificate</c>: optional. CA file used to verify the server.
+    ///
+    /// Also adds the readiness check used by <c>/health/ready</c>.
+    /// </summary>
+    public static IServiceCollection AddForgeDatabase<TContext>(
+        this IServiceCollection services,
+        IConfiguration configuration)
+        where TContext : DbContext
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+
+        var options = new ForgeDatabaseOptions();
+        configuration.GetSection(ForgeDatabaseOptions.SectionName).Bind(options);
+
+        var connectionString = configuration.GetConnectionString("Default");
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            throw new InvalidOperationException(
+                "Connection string 'ConnectionStrings:Default' is not configured. " +
+                "Set host, database and SSL settings there. With 'Forge:Database:SecretId' the user name and password come from the secret.");
+        }
+
+        var baseSettings = new NpgsqlConnectionStringBuilder(connectionString);
+        if (!string.IsNullOrWhiteSpace(options.RootCertificate))
+            baseSettings.RootCertificate = options.RootCertificate.Trim();
+
+        var secretId = options.SecretId?.Trim();
+        var useSecret = !string.IsNullOrEmpty(secretId);
+
+        if (useSecret)
+        {
+            services.AddSingleton(provider => new DatabaseCredentialsReader(
+                provider.GetRequiredService<IAmazonSecretsManager>(), secretId!, baseSettings));
+        }
+
+        services.AddSingleton(provider =>
+        {
+            // Singleton factories are synchronous. The secret is read the first time the database is used.
+            var settings = useSecret
+                ? provider.GetRequiredService<DatabaseCredentialsReader>().ReadAsync(CancellationToken.None).GetAwaiter().GetResult()
+                : baseSettings;
+
+            return NpgsqlDataSource.Create(settings.ConnectionString);
+        });
+
+        services.AddSingleton(provider =>
+        {
+            Func<CancellationToken, Task<NpgsqlConnectionStringBuilder>>? refresh = null;
+            if (useSecret)
+                refresh = provider.GetRequiredService<DatabaseCredentialsReader>().ReadAsync;
+
+            return new DatabaseConnectionOpener(provider.GetRequiredService<NpgsqlDataSource>(), refresh);
+        });
+
+        services.AddSingleton<DatabaseConnectionInterceptor>();
+
+        // Not pooled: the DbContext takes scoped services (the tenant context), which pooling does not allow.
+        services.AddDbContext<TContext>((provider, builder) => builder
+            .UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>(), npgsql => npgsql.EnableRetryOnFailure(3))
+            .AddInterceptors(provider.GetRequiredService<DatabaseConnectionInterceptor>()));
+
+        services.AddHealthChecks().AddCheck<PostgresHealthCheck>("postgres", tags: ["ready"]);
+
+        return services;
+    }
+}
+{{ end }}

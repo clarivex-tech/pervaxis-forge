@@ -19,10 +19,15 @@
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using {{ model.names.namespace }}.Common;
 using {{ model.names.namespace }}.Infrastructure.Exceptions;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 using Polly.CircuitBreaker;
+{{- if model.manifest.multi_tenancy }}
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Core.Exceptions.Exceptions;
+{{- end }}
 
 namespace {{ model.names.namespace }}.Infrastructure.Middleware;
 
@@ -108,6 +113,14 @@ public sealed class ExceptionHandlerMiddleware
                 Detail = string.Join(" ", fluentEx.Errors.Select(e => e.ErrorMessage))
             },
 
+            ConfirmationRequiredException confirmEx => new ProblemDetails
+            {
+                Type = "https://tools.ietf.org/html/rfc7807",
+                Title = "Confirmation Required",
+                Status = StatusCodes.Status400BadRequest,
+                Detail = confirmEx.Message
+            },
+
             SlugConflictException conflictEx => new ProblemDetails
             {
                 Type = "https://tools.ietf.org/html/rfc7807",
@@ -116,6 +129,46 @@ public sealed class ExceptionHandlerMiddleware
                 Detail = conflictEx.Message
             },
 
+            KeyNotFoundException notFoundEx => new ProblemDetails
+            {
+                Type = "https://tools.ietf.org/html/rfc7807",
+                Title = "Not Found",
+                Status = StatusCodes.Status404NotFound,
+                Detail = notFoundEx.Message
+            },
+
+            UnauthorizedAccessException unauthorizedEx => new ProblemDetails
+            {
+                Type = "https://tools.ietf.org/html/rfc7807",
+                Title = "Forbidden",
+                Status = StatusCodes.Status403Forbidden,
+                Detail = unauthorizedEx.Message
+            },
+
+{{- if model.manifest.multi_tenancy }}
+            // Tenant isolation. The 404 is identical for "missing" and "belongs to another tenant".
+            TenantResourceNotFoundException => new ProblemDetails
+            {
+                Type = "https://tools.ietf.org/html/rfc7807",
+                Title = "Not Found",
+                Status = StatusCodes.Status404NotFound,
+                Detail = "The requested resource was not found."
+            },
+            TenantContextRequiredException or TenantIsolationViolationException => new ProblemDetails
+            {
+                Type = "https://tools.ietf.org/html/rfc7807",
+                Title = "Forbidden",
+                Status = StatusCodes.Status403Forbidden,
+                Detail = "A valid tenant is required for this operation."
+            },
+            DbUpdateConcurrencyException => new ProblemDetails
+            {
+                Type = "https://tools.ietf.org/html/rfc7807",
+                Title = "Conflict",
+                Status = StatusCodes.Status409Conflict,
+                Detail = "The resource was changed by another request. Reload it and try again."
+            },
+{{- end }}
             OperationCanceledException => new ProblemDetails
             {
                 Type = "https://tools.ietf.org/html/rfc7807",
@@ -152,6 +205,20 @@ public sealed class ExceptionHandlerMiddleware
                 _logger.LogInformation(
                     ex,
                     "Validation error {ErrorId} {CorrelationId} {StatusCode}",
+                    errorId, correlationId, statusCode);
+                break;
+
+            case 403:
+                _logger.LogWarning(
+                    ex,
+                    "Forbidden {ErrorId} {CorrelationId} {StatusCode}",
+                    errorId, correlationId, statusCode);
+                break;
+
+            case 404:
+                _logger.LogInformation(
+                    ex,
+                    "Not found {ErrorId} {CorrelationId} {StatusCode}",
                     errorId, correlationId, statusCode);
                 break;
 

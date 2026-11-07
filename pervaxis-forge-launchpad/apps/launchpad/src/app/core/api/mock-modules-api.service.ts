@@ -28,18 +28,19 @@ import { IModulesApiService } from './modules-api.service';
 })
 export class MockModulesApiService implements IModulesApiService {
 	private readonly modules: GenesisModule[] = [
-		{ name: 'Caching', label: 'Caching', description: 'Distributed caching via Redis' },
-		{ name: 'Messaging', label: 'Messaging', description: 'Event-driven messaging via SQS/SNS' },
-		{ name: 'FileStorage', label: 'File Storage', description: 'Object storage via S3' },
-		{ name: 'Search', label: 'Search', description: 'Full-text search via OpenSearch' },
-		{ name: 'Notifications', label: 'Notifications', description: 'Email, SMS and push notifications' },
-		{ name: 'Workflow', label: 'Workflow', description: 'Step-based workflow via AWS Step Functions' },
-		{ name: 'AIAssistance', label: 'AI Assistance', description: 'Generative AI via Bedrock' },
-		{ name: 'Reporting', label: 'Reporting', description: 'Data exports and scheduled reports' },
-		{ name: 'Idempotency', label: 'Idempotency', description: 'Request deduplication via DynamoDB' },
-		{ name: 'OData', label: 'OData Support', description: 'OData query capabilities for RESTful APIs' },
-		{ name: 'TransactionalLogging', label: 'Transactional Logging', description: 'Structured transactional audit logging via CloudWatch' },
-		{ name: 'FeatureFlags', label: 'Feature Flags', description: 'Feature flag management via AWS AppConfig' },
+		{ name: 'Caching', label: 'Caching', description: 'Distributed caching via Redis', isCloudAgnostic: false },
+		{ name: 'Messaging', label: 'Messaging', description: 'Event-driven messaging via SQS/SNS', isCloudAgnostic: false },
+		{ name: 'FileStorage', label: 'File Storage', description: 'Object storage via S3', isCloudAgnostic: false },
+		{ name: 'Search', label: 'OpenSearch', description: 'Full-text search via OpenSearch', isCloudAgnostic: false },
+		{ name: 'Notifications', label: 'Notifications', description: 'Email, SMS and push notifications', isCloudAgnostic: false },
+		{ name: 'Workflow', label: 'Workflow', description: 'Step-based workflow via AWS Step Functions', isCloudAgnostic: false },
+		{ name: 'AIAssistance', label: 'AI Assistance', description: 'Generative AI via Bedrock', isCloudAgnostic: false },
+		{ name: 'Reporting', label: 'Reporting', description: 'Data exports and scheduled reports', isCloudAgnostic: false },
+		{ name: 'Idempotency', label: 'Idempotency', description: 'Request deduplication via DynamoDB', isCloudAgnostic: false },
+		{ name: 'OData', label: 'OData Support', description: 'OData query capabilities for RESTful APIs', isCloudAgnostic: true },
+		{ name: 'TransactionalLogging', label: 'Transactional Logging', description: 'Structured transactional audit logging via CloudWatch', isCloudAgnostic: false },
+		{ name: 'FeatureFlags', label: 'Feature Flags', description: 'Feature flag management via AWS AppConfig', isCloudAgnostic: false },
+		{ name: 'Sanitization', label: 'Sanitization', description: 'Server-side input sanitization and XSS prevention', isCloudAgnostic: true },
 	];
 
 	private readonly canvasModules: CanvasModule[] = [

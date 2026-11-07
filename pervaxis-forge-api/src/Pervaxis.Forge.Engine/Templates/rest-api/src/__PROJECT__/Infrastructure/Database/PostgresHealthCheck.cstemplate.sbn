@@ -1,0 +1,53 @@
+{{ if model.manifest.database != null }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Npgsql;
+
+namespace {{ model.names.namespace }}.Infrastructure.Database;
+
+/// <summary>
+/// Readiness check: connects to PostgreSQL and runs <c>SELECT 1</c>.
+/// It is part of <c>/health/ready</c> only. <c>/health</c> (liveness) never touches the database,
+/// so a short database outage does not make the platform restart healthy containers.
+/// </summary>
+public sealed class PostgresHealthCheck(NpgsqlDataSource dataSource, DatabaseConnectionOpener opener) : IHealthCheck
+{
+    public async Task<HealthCheckResult> CheckHealthAsync(
+        HealthCheckContext context, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await using var connection = dataSource.CreateConnection();
+            await opener.OpenAsync(connection, cancellationToken).ConfigureAwait(false);
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT 1";
+            await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+
+            return HealthCheckResult.Healthy();
+        }
+        catch (Exception exception)
+        {
+            // The exception is logged by the health check system. The HTTP response only says Unhealthy.
+            return HealthCheckResult.Unhealthy("The database is not reachable.", exception);
+        }
+    }
+}
+{{ end }}

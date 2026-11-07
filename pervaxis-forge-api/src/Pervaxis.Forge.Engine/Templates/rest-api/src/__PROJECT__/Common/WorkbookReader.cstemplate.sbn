@@ -1,0 +1,261 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.IO.Compression;
+using System.Xml;
+
+namespace {{ model.names.namespace }}.Common;
+
+/// <summary>
+/// Zero-dependency .xlsx reader that parses Excel workbooks using the OpenXML format
+/// directly (ZIP + XML) without any third-party Excel library.
+///
+/// Features:
+/// - No ClosedXML / EPPlus / DocumentFormat.OpenXml dependency
+/// - Header auto-detection (scans first 30 rows)
+/// - Normalised column names (strips non-alphanumeric characters for fuzzy matching)
+/// - Shared string table support
+/// - Parses both Excel OADate serial numbers and ISO 8601 text dates
+/// - Hard caps: 50,000 rows, 50 MB expanded size
+/// - XXE protection via DtdProcessing.Prohibit
+/// </summary>
+/// <example>
+/// <code>
+/// // In your service, inject WorkbookReader and call:
+/// using var stream = file.OpenReadStream();
+/// var (rows, headers) = WorkbookReader.Read(stream, expectedHeaders: ["Date", "Amount", "Reference"]);
+/// foreach (var row in rows)
+/// {
+///     var date = row["Date"];
+///     var amount = row["Amount"];
+/// }
+/// </code>
+/// </example>
+public static class WorkbookReader
+{
+    private const int MaxRows = 50_000;
+    private const long MaxExpandedBytes = 50 * 1024 * 1024; // 50 MB
+    private const int HeaderScanLimit = 30;
+
+    /// <summary>
+    /// Reads an .xlsx stream and returns all data rows as dictionaries keyed by normalised column name.
+    /// </summary>
+    /// <param name="stream">The .xlsx file stream. Must be readable and seekable.</param>
+    /// <param name="expectedHeaders">
+    ///   Optional list of column names to validate are present after normalisation.
+    ///   Throws <see cref="WorkbookReadException"/> if any are missing.
+    /// </param>
+    /// <returns>
+    ///   A tuple of the data rows (each a dictionary of normalised-header → cell value) and
+    ///   the ordered list of all discovered header names.
+    /// </returns>
+    /// <exception cref="WorkbookReadException">
+    ///   Thrown when the file is not a valid .xlsx, exceeds limits, or expected headers are missing.
+    /// </exception>
+    public static (IReadOnlyList<IReadOnlyDictionary<string, string>> Rows, IReadOnlyList<string> Headers)
+        Read(Stream stream, IReadOnlyList<string>? expectedHeaders = null)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        ZipArchive zip;
+        try
+        {
+            zip = new ZipArchive(stream, ZipArchiveMode.Read, leaveOpen: true);
+        }
+        catch (InvalidDataException)
+        {
+            throw new WorkbookReadException("File is not a valid .xlsx workbook.");
+        }
+
+        using (zip)
+        {
+            var sharedStrings = ReadSharedStrings(zip);
+            var sheetEntry = zip.Entries
+                .Where(e => e.FullName.StartsWith("xl/worksheets/sheet", StringComparison.OrdinalIgnoreCase)
+                         && e.FullName.EndsWith(".xml", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(e => e.FullName, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault()
+                ?? throw new WorkbookReadException("No worksheet found in the workbook.");
+
+            if (sheetEntry.Length > MaxExpandedBytes)
+                throw new WorkbookReadException($"Worksheet exceeds the {MaxExpandedBytes / 1024 / 1024} MB size limit.");
+
+            return ParseSheet(sheetEntry, sharedStrings, expectedHeaders);
+        }
+    }
+
+    // ── Shared strings ────────────────────────────────────────────────────────
+
+    private static IReadOnlyList<string> ReadSharedStrings(ZipArchive zip)
+    {
+        var entry = zip.GetEntry("xl/sharedStrings.xml");
+        if (entry is null) return [];
+
+        using var stream = entry.Open();
+        var strings = new List<string>();
+        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };
+        using var reader = XmlReader.Create(stream, settings);
+
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.Element && reader.LocalName == "t")
+                strings.Add(reader.ReadElementContentAsString());
+        }
+
+        return strings;
+    }
+
+    // ── Sheet parsing ─────────────────────────────────────────────────────────
+
+    private static (IReadOnlyList<IReadOnlyDictionary<string, string>>, IReadOnlyList<string>)
+        ParseSheet(ZipArchiveEntry entry, IReadOnlyList<string> sharedStrings, IReadOnlyList<string>? expectedHeaders)
+    {
+        using var stream = entry.Open();
+        var settings = new XmlReaderSettings { DtdProcessing = DtdProcessing.Prohibit };
+        using var reader = XmlReader.Create(stream, settings);
+
+        var rawRows = new List<List<(string CellRef, string Value)>>();
+        List<(string CellRef, string Value)>? currentRow = null;
+        string? currentCellRef = null;
+        string? currentCellType = null;
+
+        while (reader.Read())
+        {
+            if (reader.NodeType == XmlNodeType.Element)
+            {
+                switch (reader.LocalName)
+                {
+                    case "row":
+                        currentRow = [];
+                        rawRows.Add(currentRow);
+                        break;
+                    case "c":
+                        currentCellRef = reader.GetAttribute("r");
+                        currentCellType = reader.GetAttribute("t");
+                        break;
+                    case "v" when currentRow is not null && currentCellRef is not null:
+                        var rawValue = reader.ReadElementContentAsString();
+                        var value = ResolveValue(rawValue, currentCellType, sharedStrings);
+                        currentRow.Add((currentCellRef, value));
+                        currentCellRef = null;
+                        currentCellType = null;
+                        break;
+                }
+            }
+        }
+
+        return BuildResult(rawRows, expectedHeaders);
+    }
+
+    private static string ResolveValue(string raw, string? cellType, IReadOnlyList<string> sharedStrings)
+    {
+        if (cellType == "s" && int.TryParse(raw, out var idx) && idx < sharedStrings.Count)
+            return sharedStrings[idx];
+
+        // Try to parse as Excel OADate serial
+        if (cellType is null && double.TryParse(raw, System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var serial)
+            && serial > 1 && serial < 2958466) // valid OADate range
+        {
+            try { return DateTime.FromOADate(serial).ToString("yyyy-MM-dd"); }
+            catch { /* not a date serial — fall through */ }
+        }
+
+        return raw;
+    }
+
+    // ── Result building ───────────────────────────────────────────────────────
+
+    private static (IReadOnlyList<IReadOnlyDictionary<string, string>>, IReadOnlyList<string>)
+        BuildResult(List<List<(string CellRef, string Value)>> rawRows, IReadOnlyList<string>? expectedHeaders)
+    {
+        // Find the header row — first row within HeaderScanLimit that has ≥ 2 non-blank cells
+        int headerRowIndex = -1;
+        for (var i = 0; i < Math.Min(rawRows.Count, HeaderScanLimit); i++)
+        {
+            if (rawRows[i].Count(c => !string.IsNullOrWhiteSpace(c.Value)) >= 2)
+            {
+                headerRowIndex = i;
+                break;
+            }
+        }
+
+        if (headerRowIndex < 0)
+            throw new WorkbookReadException("Could not locate a header row in the workbook.");
+
+        // Build column map: column letter → normalised header name
+        var columnMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var orderedHeaders = new List<string>();
+        foreach (var (cellRef, value) in rawRows[headerRowIndex])
+        {
+            var col = ExtractColumn(cellRef);
+            var normalised = NormaliseHeader(value);
+            if (!string.IsNullOrWhiteSpace(normalised))
+            {
+                columnMap[col] = normalised;
+                orderedHeaders.Add(normalised);
+            }
+        }
+
+        // Validate expected headers
+        if (expectedHeaders is { Count: > 0 })
+        {
+            var missing = expectedHeaders
+                .Where(h => !orderedHeaders.Any(o => string.Equals(o, NormaliseHeader(h), StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+
+            if (missing.Count > 0)
+                throw new WorkbookReadException($"Missing expected columns: {string.Join(", ", missing)}");
+        }
+
+        // Parse data rows
+        var result = new List<IReadOnlyDictionary<string, string>>();
+        for (var i = headerRowIndex + 1; i < rawRows.Count; i++)
+        {
+            if (result.Count >= MaxRows)
+                throw new WorkbookReadException($"Workbook exceeds the {MaxRows:N0} row limit.");
+
+            var row = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (cellRef, value) in rawRows[i])
+            {
+                var col = ExtractColumn(cellRef);
+                if (columnMap.TryGetValue(col, out var header))
+                    row[header] = value;
+            }
+
+            // Skip entirely blank rows
+            if (row.Values.Any(v => !string.IsNullOrWhiteSpace(v)))
+                result.Add(row);
+        }
+
+        return (result, orderedHeaders);
+    }
+
+    private static string ExtractColumn(string cellRef)
+    {
+        var end = 0;
+        while (end < cellRef.Length && char.IsLetter(cellRef[end])) end++;
+        return cellRef[..end].ToUpperInvariant();
+    }
+
+    private static string NormaliseHeader(string header) =>
+        new string(header.Where(char.IsLetterOrDigit).ToArray());
+}
+
+/// <summary>Thrown when the workbook cannot be read or does not meet validation requirements.</summary>
+public sealed class WorkbookReadException(string message) : Exception(message);

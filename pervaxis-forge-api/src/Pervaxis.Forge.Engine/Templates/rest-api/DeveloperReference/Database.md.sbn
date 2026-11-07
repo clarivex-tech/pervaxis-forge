@@ -1,0 +1,147 @@
+{{- if model.manifest.database != null -}}
+# Database (PostgreSQL)
+
+The platform already connects to PostgreSQL for you. You do **not** write connection, password or health-check code. You fill in settings, then add your tables and migrations.
+
+Platform code lives in `Infrastructure/Database/` and `Data/{{ model.names.dot_net_class_name }}DbContext.cs`. Do not edit it. If something is missing, raise a platform ticket.
+
+## What the platform provides
+
+- One PostgreSQL connection setup (`AddForgeDatabase`, already called in `Program.cs`).
+- The user name and password read from AWS Secrets Manager, refreshed automatically after a password rotation.
+- A readiness check at `/health/ready` that runs `SELECT 1`.
+{{- if model.manifest.multi_tenancy }}
+- `{{ model.names.dot_net_class_name }}DbContext`, built on Core `TenantDbContext`: every tenant-owned query is limited to the caller's tenant and every write is checked. See [`Tenancy.md`](Tenancy.md).
+{{- else }}
+- `{{ model.names.dot_net_class_name }}DbContext`, with tenant filtering for entities that implement `ITenantEntity`.
+{{- end }}
+- The tooling for EF Core migrations (`dotnet ef` works out of the box).
+
+PostgreSQL is the only supported engine for now.
+
+## Settings
+
+| Setting | What to put there |
+|---|---|
+| `ConnectionStrings:Default` | Host, database, port and SSL mode, for example `Host=<endpoint>;Port=5432;Database=<db>;SSL Mode=VerifyFull`. For local development `appsettings.Development.json` already has a localhost connection string with a user name and password. |
+| `Forge:Database:SecretId` | The Secrets Manager secret (name or ARN) that holds the database credentials. Leave empty for local development. |
+| `Forge:Database:RootCertificate` | Path to the CA file used to verify the server. Use it with `SSL Mode=VerifyFull`. |
+
+With `SecretId` set, the user name and password come from the secret and anything you put in the connection string for them is replaced. The secret must look like this (RDS-managed secrets named `rds!db-...` and standard rotation secrets already do):
+
+```json
+{ "username": "app_user", "password": "..." }
+```
+
+Other keys in the secret are ignored.
+
+Use `appsettings.<Environment>.json` or environment variables for per-environment values, for example `ConnectionStrings__Default` and `Forge__Database__SecretId`.
+
+### AWS permissions
+
+The service's role needs `secretsmanager:GetSecretValue` on the secret, and `kms:Decrypt` if the secret uses a customer-managed key. A secret in another AWS account also needs a resource policy that allows the role.
+
+### Certificates
+
+The RDS CA bundle is at `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`. Add the file to your container image and point `Forge:Database:RootCertificate` at it. The generated `Dockerfile` does not include it yet.
+
+## Password rotation
+
+When PostgreSQL rejects the password, the platform reads the secret again and retries opening the connection **once**. Requests that fail at the same moment share one refresh, and refreshes happen at most every 5 seconds. Only opening the connection is retried. No command or transaction is ever replayed.
+
+Limits:
+- Only the **password** can change while the service runs. If a rotation also changes the user name, restart the service.
+- Changes to host, database or other connection settings need a restart.
+
+## Health endpoints
+
+| Endpoint | Meaning |
+|---|---|
+| `/health` | The service is alive. It never touches the database, so a short database outage does not make containers restart. The Dockerfile health check uses it. |
+| `/health/ready` | The service can reach the database. Use it for load balancer readiness. |
+
+## Adding tables
+
+Add an entity and a configuration class in your feature folder. The platform finds every `IEntityTypeConfiguration<T>` in the project, so you never edit the platform DbContext to add a table.
+
+```csharp
+// Domains/Billing/Data/InvoiceEntity.cs
+namespace {{ model.names.namespace }}.Domains.Billing.Data;
+
+public sealed class InvoiceEntity
+{
+    public required Guid Id { get; set; }
+    public required string Number { get; set; }
+    public required DateTimeOffset CreatedAt { get; set; }
+}
+```
+
+```csharp
+// Domains/Billing/Data/InvoiceConfiguration.cs
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace {{ model.names.namespace }}.Domains.Billing.Data;
+
+public sealed class InvoiceConfiguration : IEntityTypeConfiguration<InvoiceEntity>
+{
+    public void Configure(EntityTypeBuilder<InvoiceEntity> builder)
+    {
+        builder.ToTable("invoices");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Number).HasMaxLength(50).IsRequired();
+        builder.HasIndex(e => e.Number).IsUnique();
+    }
+}
+```
+
+The DbContext is a `partial` class, so you can add a `DbSet` from your own file:
+
+```csharp
+// Domains/Billing/Data/{{ model.names.dot_net_class_name }}DbContext.Billing.cs
+using Microsoft.EntityFrameworkCore;
+
+namespace {{ model.names.namespace }}.Data;
+
+public partial class {{ model.names.dot_net_class_name }}DbContext
+{
+    public DbSet<InvoiceEntity> Invoices => Set<InvoiceEntity>();
+}
+```
+
+Services take the DbContext through the constructor and keep queries inside the service layer:
+
+```csharp
+public sealed class InvoiceService({{ model.names.dot_net_class_name }}DbContext dbContext)
+{
+    public Task<InvoiceEntity?> FindAsync(Guid id, CancellationToken cancellationToken) =>
+        dbContext.Invoices.AsNoTracking().FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
+}
+```
+
+## Migrations (EF Core)
+
+Run these from the solution folder. Install the tool once with `dotnet tool install --global dotnet-ef`.
+
+```powershell
+# 1. After changing entities, create a migration
+dotnet ef migrations add AddInvoices --project src/{{ model.names.namespace }} --output-dir Data/Migrations
+
+# 2. Produce the SQL the pipeline applies (safe to run more than once)
+dotnet ef migrations script --idempotent --project src/{{ model.names.namespace }} --output migrations.sql
+
+# 3. Local database only
+dotnet ef database update --project src/{{ model.names.namespace }}
+```
+
+Rules:
+- Commit the generated migration files. Review them in the pull request.
+- Never edit a migration that has been applied anywhere. Add a new one.
+- Apply migrations to test and production from the **deployment pipeline** (the idempotent script, or `dotnet ef migrations bundle`). Do not run them when the service starts.
+- To undo a change, add a new migration that reverses it.
+- Generating a migration or a script does not connect to a database. `database update` connects to the database in `ConnectionStrings__Default`.
+
+## Tests
+
+`tests/{{ model.names.test_project_name }}/DatabaseTests.cs` covers the platform rules (password rotation, secret credentials, registration and the readiness check) without needing a database. Keep it. Add your own tests for your queries in separate files.
+{{- end -}}

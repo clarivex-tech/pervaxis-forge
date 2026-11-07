@@ -1,0 +1,100 @@
+{{- if model.manifest.multi_tenancy -}}
+# Multi-tenancy
+
+This service is multi-tenant. Many customers (tenants) share one PostgreSQL database and one schema. The platform keeps each tenant's rows apart. You do not write tenant checks yourself, and you must not work around them.
+
+## How the tenant is known
+
+- The tenant is the `tenant_id` claim in the caller's validated Cognito **access token**. It is one GUID string.
+- Nothing else sets it. Request headers such as `X-Tenant-ID` are ignored.
+- A token with a missing, malformed, duplicated or list-valued `tenant_id` is authenticated but gets **403** on tenant endpoints. No token gets **401**.
+- Roles and groups only decide what a user may do **inside** their tenant. An admin cannot cross tenants.
+- Health endpoints are marked tenant-exempt. For any tenant-exempt endpoint the tenant is deliberately unresolved, even when the token carries one.
+
+You can read the current tenant from `ITenantContext` (`Pervaxis.Core.Abstractions.MultiTenancy`). Do not store it in a singleton field.
+
+## Tenant-owned entities
+
+Derive from `TenantEntity<TId>`. The key is `(TenantId, Id)`, the platform fills `TenantId` on insert, and it can never change afterwards.
+
+```csharp
+public sealed class Invoice : TenantEntity<Guid>
+{
+    public Invoice(Guid id, string number) { Id = id; Number = number; }
+    public string Number { get; set; }
+    public ICollection<InvoiceLine> Lines { get; } = [];
+}
+
+public sealed class InvoiceLine : TenantEntity<Guid>
+{
+    public Guid InvoiceId { get; set; }
+    public Invoice? Invoice { get; set; }
+}
+```
+
+Add a configuration class next to the entity (it is picked up automatically):
+
+```csharp
+public sealed class InvoiceLineConfiguration : IEntityTypeConfiguration<InvoiceLine>
+{
+    public void Configure(EntityTypeBuilder<InvoiceLine> builder)
+    {
+        // Relationships between tenant-owned entities include TenantId in the foreign key.
+        builder.HasOne(l => l.Invoice).WithMany(i => i.Lines)
+            .HasForeignKey("TenantId", nameof(InvoiceLine.InvoiceId));
+    }
+}
+
+public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
+{
+    public void Configure(EntityTypeBuilder<Invoice> builder)
+    {
+        // Unique constraints include TenantId, so two tenants can use the same invoice number.
+        builder.HasIndex("TenantId", nameof(Invoice.Number)).IsUnique();
+    }
+}
+```
+
+- Give every id yourself (`Guid.NewGuid()`). Composite keys do not auto-generate.
+- Data that every tenant shares (for example a country list) carries `[SharedEntity]` and is not tenant-owned.
+- The model is checked on first use. An entity that is neither tenant-owned nor `[SharedEntity]`, or a unique index without `TenantId`, stops the service with a clear message.
+
+## Reading and writing
+
+Inject `IRepository<Invoice, Guid>` (or the read and write halves). It looks up rows by tenant **and** id, so a route needs only the id.
+
+- Another tenant's row looks exactly like a missing row: **404**, never 403.
+- A real concurrent edit is **409**.
+- A write with no tenant throws `TenantContextRequiredException`, which maps to **403**.
+- The `DbContext` is scoped to the request. Never keep one across requests, and never use `AddDbContextPool`.
+
+## Background work
+
+There is no tenant outside a request. A hosted service, message handler or job must open a scope for each unit of work:
+
+```csharp
+using (_tenantScopes.BeginScope(tenantId))   // ITenantScopeFactory
+{
+    await _repository.AddAsync(invoice, cancellationToken);
+    await _unitOfWork.CommitAsync(cancellationToken);
+}
+```
+
+- Take `tenantId` from trusted data (for example a message whose producer you authenticated), never from an unchecked attribute.
+- Dispose the scope in the code that opened it. Opening a different tenant inside an active scope is rejected.
+
+## Do not
+
+- Accept `TenantId` in a request body, query string or route.
+- Call `IgnoreQueryFilters()` without names, `FromSql*`, `ExecuteSql*`, `ExecuteUpdate` or `ExecuteDelete` on tenant-owned tables. They skip the checks above. To include soft-deleted rows only, use `IgnoreQueryFilters(["SoftDelete"])`.
+- Use `Find`/`FindAsync` with one key value on a tenant-owned entity. Use the repository.
+
+## Before you go live
+
+These live outside the generated service and the service cannot verify them:
+
+- The Cognito user pool is on the Essentials or Plus plan with a V2_0 or V3_0 pre-token-generation trigger that emits `tenant_id`.
+- Only trusted provisioning can set a user's tenant.
+- Suspending a tenant does not stop tokens already issued. Turn on `Forge:Tenant:EnableDirectoryChecks` and register an `ITenantDirectory` if you need suspension to take effect within about a minute.
+- If you already have data, it needs a mapping from old tenant ids to GUIDs before keys are converted. Do not run that from service startup.
+{{- end -}}

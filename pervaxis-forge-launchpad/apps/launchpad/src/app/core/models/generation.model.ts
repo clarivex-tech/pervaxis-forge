@@ -22,6 +22,7 @@ export interface GenesisModule {
 	name: string;
 	label: string;
 	description: string;
+	isCloudAgnostic: boolean;
 }
 
 export interface CanvasModule {
@@ -44,6 +45,18 @@ export interface GenerationMetadata {
 	deployInfrastructure: boolean;
 	pushToGitHub: boolean;
 	environment: string;
+}
+
+/** Amazon Cognito settings written into the generated service's appsettings.json. IDs only, no secrets. */
+export interface GenerationCognitoConfig {
+	/** For example us-east-1_AbC123xyz. The AWS region is read from it. */
+	userPoolId: string;
+	/** App client IDs allowed to call the service (one per frontend). */
+	clientIds: string[];
+	/** The Cognito group allowed to use the built-in AdminOnly policy. */
+	adminGroup: string;
+	/** When true the service accepts API keys as well as bearer tokens. */
+	allowApiKey: boolean;
 }
 
 export interface EnterpriseScaffoldOptions {
@@ -78,6 +91,7 @@ export interface GenerationRequest {
 	backgroundJobs?: GenerationBackgroundJobConfig | null;
 	utilities?: GenerationUtilitiesConfig | null;
 	multiTenancy?: boolean;
+	cognito?: GenerationCognitoConfig | null;
 }
 
 // ─── Infrastructure Config Interfaces (match API payload shapes) ─────────────

@@ -113,23 +113,6 @@ import { countNonDefaultToggles } from '../../utils/infra-options-mapping';
 					}
 				</div>
 
-				<!-- Multi-Tenancy Toggle Group -->
-				<div class="toggle-group">
-					<h4 class="toggle-group-title">
-						<mat-icon>apartment</mat-icon> Multi-Tenancy
-					</h4>
-					<mat-radio-group formControlName="multiTenancy" class="toggle-radio-group">
-						<mat-radio-button [value]="true">Enabled</mat-radio-button>
-						<mat-radio-button [value]="false">Disabled</mat-radio-button>
-					</mat-radio-group>
-					@if (infraForm().hasError('multiTenancyRequiresDatabase')) {
-						<div class="validation-warning">
-							<mat-icon>warning</mat-icon>
-							{{ infraForm().getError('multiTenancyRequiresDatabase') }}
-						</div>
-					}
-				</div>
-
 				<!-- Validation Toggle Group -->
 				<div class="toggle-group">
 					<h4 class="toggle-group-title">

@@ -55,8 +55,10 @@ export class ModulesApiService implements IModulesApiService {
 		return this.http.get<ModuleApiDto[]>(this.baseUrl).pipe(
 			map(items => items.map(item => ({
 				name: item.displayName,
-				label: item.displayName,
+				// Display-only rename: the backend key stays "Search".
+				label: item.displayName === 'Search' ? 'OpenSearch' : item.displayName,
 				description: item.description,
+				isCloudAgnostic: !item.iamPermissions || item.iamPermissions.trim() === '',
 			})))
 		);
 	}
