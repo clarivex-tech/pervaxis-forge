@@ -27,9 +27,11 @@ using Microsoft.AspNetCore.OutputCaching;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.OpenApi.Models;
 using System.Threading.RateLimiting;
+using Npgsql;
 using Octokit;
 using Pervaxis.Forge.Api.Data;
 using Pervaxis.Forge.Api.Endpoints;
+using Pervaxis.Forge.Api.Infrastructure.Database;
 using Pervaxis.Forge.Api.Infrastructure.Extensions;
 using Pervaxis.Forge.Api.Infrastructure.Http;
 using Pervaxis.Forge.Api.Infrastructure.Middleware;
@@ -82,14 +84,48 @@ if (isLocalMode)
 }
 else
 {
-    builder.Services.AddDbContextPool<ForgeDbContext>(options =>
-        options.UseNpgsql(
-            builder.Configuration.GetConnectionString("ForgeDb"),
-            npgsql =>
-            {
-                npgsql.EnableRetryOnFailure(3);
-                npgsql.CommandTimeout(10);
-            }));
+    var dbSecretId = builder.Configuration["Database:SecretId"];
+
+    if (!string.IsNullOrWhiteSpace(dbSecretId))
+    {
+        // AWS Secrets Manager path — credential rotation enabled.
+        // NpgsqlDataSource is a singleton; DatabaseConnectionOpener handles 28P01 retries.
+        builder.Services.AddSingleton(provider => new DatabaseSecretReader(
+            provider.GetRequiredService<IAmazonSecretsManager>(),
+            dbSecretId,
+            builder.Configuration["Database:RootCertificate"],
+            builder.Configuration["Database:CredentialsSecretId"]));
+
+        builder.Services.AddSingleton<NpgsqlDataSource>(provider =>
+        {
+            var reader = provider.GetRequiredService<DatabaseSecretReader>();
+            var initial = reader.ReadAsync(CancellationToken.None).GetAwaiter().GetResult();
+            return NpgsqlDataSource.Create(initial.ConnectionString);
+        });
+
+        builder.Services.AddSingleton(provider => new DatabaseConnectionOpener(
+            provider.GetRequiredService<NpgsqlDataSource>(),
+            provider.GetRequiredService<DatabaseSecretReader>().ReadAsync));
+
+        builder.Services.AddSingleton<DatabaseConnectionInterceptor>();
+
+        builder.Services.AddDbContextPool<ForgeDbContext>((provider, options) =>
+            options.UseNpgsql(provider.GetRequiredService<NpgsqlDataSource>(), npgsql =>
+                npgsql.CommandTimeout(10))
+                .AddInterceptors(provider.GetRequiredService<DatabaseConnectionInterceptor>()));
+    }
+    else
+    {
+        // Plain connection string path — no credential rotation.
+        builder.Services.AddDbContextPool<ForgeDbContext>(options =>
+            options.UseNpgsql(
+                builder.Configuration.GetConnectionString("ForgeDb"),
+                npgsql =>
+                {
+                    npgsql.EnableRetryOnFailure(3);
+                    npgsql.CommandTimeout(10);
+                }));
+    }
 }
 
 builder.Services.AddScoped<IVerticalService, VerticalService>();
