@@ -90,8 +90,9 @@ public sealed class ExceptionHandlerMiddleware
                 correlationId
             };
 
+            // Stop writing if the client has already disconnected.
             await context.Response.WriteAsync(
-                JsonSerializer.Serialize(responseBody, JsonOptions)).ConfigureAwait(false);
+                JsonSerializer.Serialize(responseBody, JsonOptions), context.RequestAborted).ConfigureAwait(false);
         }
     }
 
