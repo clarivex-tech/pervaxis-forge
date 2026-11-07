@@ -1,3 +1,4 @@
+{{ if !model.manifest.multi_tenancy }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -24,3 +25,4 @@ public sealed class ForgeTenantOptions
 
     public bool Required { get; set; } = false;
 }
+{{ end }}

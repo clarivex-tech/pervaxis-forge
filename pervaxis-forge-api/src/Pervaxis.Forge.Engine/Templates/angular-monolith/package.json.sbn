@@ -46,6 +46,8 @@
 {{ end }}
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
+    "angular-eslint": "^21.0.0",
+    "typescript-eslint": "^8.0.0",
     "eslint": "^9.0.0",
     "jasmine-core": "~5.4.0",
     "@types/jasmine": "~5.1.0",

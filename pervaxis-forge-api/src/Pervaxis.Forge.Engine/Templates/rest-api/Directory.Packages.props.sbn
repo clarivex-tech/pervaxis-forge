@@ -2,7 +2,7 @@
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
-    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+    <CentralPackageTransitivePinningEnabled>true</CentralPackageTransitivePinningEnabled>
   </PropertyGroup>
 
   <ItemGroup>
@@ -11,6 +11,9 @@
     <PackageVersion Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.4.4" />
     <PackageVersion Include="AWSSDK.SQS" Version="4.0.3.1" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" />
+    <!-- Keep every project on the same EF Core version (the Npgsql provider asks for 10.0.0 as a minimum). -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.8" />
     <PackageVersion Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.0" />
     <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.0.0" />
     <PackageVersion Include="Serilog.AspNetCore" Version="9.0.0" />
@@ -37,6 +40,14 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.4" />
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="coverlet.msbuild" Version="6.0.2" />
+    <!-- Transitive version pins — override vulnerable versions pulled in by dependencies -->
+{{- if model.manifest.multi_tenancy }}
+    <!-- Claims-based multi-tenancy (Core). Both packages ship in the Core 1.7.0 release (tag v1.7.0). A tenant service cannot restore until that release is published. -->
+    <PackageVersion Include="Pervaxis.Core.MultiTenancy" Version="1.7.0" />
+    <PackageVersion Include="Pervaxis.Core.Data.EntityFrameworkCore" Version="1.7.0" />
+{{- end }}
+    <PackageVersion Include="AngleSharp" Version="1.7.2" />
+    <PackageVersion Include="HtmlSanitizer" Version="9.2.1039" />
 {{- for module in model.selected_modules }}
     <PackageVersion Include="{{ module.package_name }}" Version="{{ module.version }}" />
 {{- end }}

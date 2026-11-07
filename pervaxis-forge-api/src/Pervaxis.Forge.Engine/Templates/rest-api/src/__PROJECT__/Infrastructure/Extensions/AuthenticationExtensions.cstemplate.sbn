@@ -20,6 +20,10 @@ using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.IdentityModel.Tokens;
+{{- if model.manifest.multi_tenancy }}
+using Microsoft.IdentityModel.JsonWebTokens;
+using Pervaxis.Core.MultiTenancy;
+{{- end }}
 using Microsoft.OpenApi.Models;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Auth;
@@ -38,7 +42,24 @@ public static class AuthenticationExtensions
         var authOptions = new ForgeAuthenticationOptions();
         configuration.GetSection(ForgeAuthenticationOptions.SectionName).Bind(authOptions);
 
-        var scheme = authOptions.Scheme;
+        var authorizationOptions = new ForgeAuthorizationOptions();
+        configuration.GetSection(ForgeAuthorizationOptions.SectionName).Bind(authorizationOptions);
+{{- if model.manifest.multi_tenancy }}
+
+        var tenantOptions = new ClaimsTenantOptions();
+        configuration.GetSection("Forge:Tenant").Bind(tenantOptions);
+{{- end }}
+
+        // Fail closed: a typo such as "bearer" must stop the service, not fall back to a weaker scheme.
+        var scheme = authOptions.Scheme?.Trim();
+        if (scheme is not ("ApiKey" or "Bearer" or "Both"))
+        {
+            throw new InvalidOperationException(
+                $"Configuration key '{ForgeAuthenticationOptions.SectionName}:Scheme' must be 'ApiKey', 'Bearer', or 'Both'.");
+        }
+
+        var isCognito = string.Equals(oidcOptions.Provider?.Trim(), "Cognito", StringComparison.OrdinalIgnoreCase);
+        var cognitoClientIds = ResolveCognitoClientIds(oidcOptions);
 
         // Validate OIDC config only when JWT is needed
         if (scheme is "Bearer" or "Both")
@@ -47,9 +68,17 @@ public static class AuthenticationExtensions
                 throw new InvalidOperationException(
                     $"Configuration key '{ForgeOidcOptions.SectionName}:Authority' is required when Scheme is '{scheme}'.");
 
-            if (string.IsNullOrEmpty(oidcOptions.Audience))
+            if (isCognito)
+            {
+                if (cognitoClientIds.Count == 0)
+                    throw new InvalidOperationException(
+                        $"Configuration key '{ForgeOidcOptions.SectionName}:ClientIds' needs at least one Cognito app client ID when Scheme is '{scheme}'.");
+            }
+            else if (string.IsNullOrEmpty(oidcOptions.Audience))
+            {
                 throw new InvalidOperationException(
                     $"Configuration key '{ForgeOidcOptions.SectionName}:Audience' is required when Scheme is '{scheme}'.");
+            }
         }
 
         var authBuilder = services.AddAuthentication(options =>
@@ -73,14 +102,63 @@ public static class AuthenticationExtensions
             authBuilder.AddJwtBearer(options =>
             {
                 options.Authority = oidcOptions.Authority;
-                options.Audience = oidcOptions.Audience;
-                options.TokenValidationParameters = new TokenValidationParameters
+
+                // Issuer, signature and expiry are always validated.
+                var validation = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
-                    ValidateAudience = true,
+                    // Cognito access tokens have no normal "aud" claim. They are checked by client_id below.
+                    ValidateAudience = !isCognito,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
                 };
+
+                if (isCognito)
+                {
+                    // Keep Cognito claim names as issued (token_use, client_id, cognito:groups, username).
+                    options.MapInboundClaims = false;
+                    validation.NameClaimType = "username";
+
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnTokenValidated = context =>
+                        {
+                            var reason = CognitoTokenValidator.GetRejectionReason(context.Principal, cognitoClientIds);
+                            if (reason is not null)
+                            {
+                                // Log why, never the token.
+                                context.HttpContext.RequestServices
+                                    .GetRequiredService<ILoggerFactory>()
+                                    .CreateLogger("Forge.Authentication")
+                                    .LogWarning("Cognito token rejected: {Reason}", reason);
+
+                                context.Fail("The Cognito token must be an access token issued to an allowed app client.");
+                            }
+{{- if model.manifest.multi_tenancy }}
+                            else
+                            {
+                                // Raw-payload check: the principal cannot reveal arrays or duplicate JSON properties.
+                                var payload = context.SecurityToken is JsonWebToken jwt ? Base64UrlEncoder.Decode(jwt.EncodedPayload) : null;
+                                if (!TenantClaimGuard.Enforce(context.Principal, payload, tenantOptions.ClaimType))
+                                {
+                                    context.HttpContext.RequestServices
+                                        .GetRequiredService<ILoggerFactory>()
+                                        .CreateLogger("Forge.Authentication")
+                                        .LogWarning("Tenant claim rejected: it is not a single valid tenant GUID string.");
+                                }
+                            }
+{{- end }}
+
+                            return Task.CompletedTask;
+                        }
+                    };
+                }
+                else
+                {
+                    options.Audience = oidcOptions.Audience;
+                }
+
+                options.TokenValidationParameters = validation;
             });
         }
 
@@ -102,7 +180,7 @@ public static class AuthenticationExtensions
             });
         }
 
-        // Authorization policy
+        // Authorization policies
         services.AddAuthorization(options =>
         {
             options.FallbackPolicy = new AuthorizationPolicyBuilder()
@@ -114,6 +192,9 @@ public static class AuthenticationExtensions
                 })
                 .RequireAuthenticatedUser()
                 .Build();
+
+            // AdminOnly plus any policies a service defines under Forge:Authorization:Policies.
+            options.AddForgePolicies(authorizationOptions, oidcOptions.Provider);
         });
 
         // Add Swagger Bearer security definition when JWT is active
@@ -149,5 +230,23 @@ public static class AuthenticationExtensions
         }
 
         return services;
+    }
+
+    /// <summary>
+    /// The allowed Cognito app client IDs. Services created before ClientIds existed stored the
+    /// client ID in Audience, so Audience is used when ClientIds is empty. That fallback is deprecated.
+    /// </summary>
+    private static IReadOnlyList<string> ResolveCognitoClientIds(ForgeOidcOptions oidcOptions)
+    {
+        var configured = oidcOptions.ClientIds
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id.Trim())
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+
+        if (configured.Count == 0 && !string.IsNullOrWhiteSpace(oidcOptions.Audience))
+            configured.Add(oidcOptions.Audience.Trim());
+
+        return configured;
     }
 }

@@ -1,0 +1,75 @@
+# Domains
+
+This folder is your vertical's home. Organise all domain feature modules here.
+
+## Structure
+
+Each domain module lives in its own sub-folder:
+
+```
+Domains/
+└── YourFeature/
+    ├── Controllers/    ← HTTP endpoints for this feature
+    ├── Services/       ← Business logic and orchestration
+    ├── Data/           ← EF Core entities, DbContext, repositories (if feature-scoped)
+    ├── Models/         ← Request / response records for this feature
+    ├── Validators/     ← FluentValidation validators for this feature's request models
+    └── Exceptions/     ← Domain exceptions specific to this feature
+```
+
+## Rules
+
+- One folder per domain feature — never mix two features in the same folder.
+- Controllers handle HTTP concerns only — no business logic.
+- Services contain business logic — no `HttpContext`, no direct EF Core.
+- Validators live alongside the request models they validate.
+- Domain exceptions are caught at the controller boundary — not in global middleware.
+- Register all services in `Extensions/ServiceCollectionExtensions.cs`.
+
+## Example
+
+```
+Domains/
+├── Billing/
+│   ├── Controllers/
+│   │   └── BillingController.cs
+│   ├── Services/
+│   │   ├── IBillingService.cs
+│   │   └── BillingService.cs
+│   ├── Data/
+│   │   ├── BillingEntity.cs
+│   │   └── BillingDbContext.cs
+│   ├── Models/
+│   │   ├── CreateBillingRequest.cs
+│   │   └── BillingResponse.cs
+│   ├── Validators/
+│   │   └── CreateBillingRequestValidator.cs
+│   └── Exceptions/
+│       ├── BillingNotFoundException.cs
+│       └── DuplicateBillingException.cs
+└── Pricing/
+    ├── Controllers/
+    │   └── PricingController.cs
+    ├── Services/
+    │   ├── IPricingService.cs
+    │   └── PricingService.cs
+    ├── Models/
+    │   ├── UpdatePricingRequest.cs
+    │   └── PricingResponse.cs
+    └── Exceptions/
+        └── PricingNotFoundException.cs
+```
+
+## Common Utilities
+
+The `Common/` folder at the project root contains shared utilities available to all domain modules:
+
+- `PagedResult<T>` — standard paginated response wrapper
+- `WorkbookReader` — `.xlsx` file parsing utility
+- `DeduplicationHelper` — SHA-256 content hash for duplicate file detection
+- `ConfirmationPhraseValidator` — typed validation for destructive operation confirmation phrases
+
+See `Common/` for usage examples in the XML doc comments.
+
+---
+*Pervaxis Forge — {{ model.manifest.service_name }} — Domains*

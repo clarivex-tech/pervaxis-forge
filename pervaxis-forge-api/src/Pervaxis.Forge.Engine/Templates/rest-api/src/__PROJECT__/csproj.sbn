@@ -30,6 +30,13 @@
 {{ if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
 {{ end }}
+{{ if model.manifest.database != null }}
+    <!-- Needed by "dotnet ef" to create migrations. Not shipped with the service. -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+{{ end }}
 {{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" />
@@ -38,6 +45,10 @@
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" />
 {{ end }}
+{{- if model.manifest.multi_tenancy }}
+    <PackageReference Include="Pervaxis.Core.MultiTenancy" />
+    <PackageReference Include="Pervaxis.Core.Data.EntityFrameworkCore" />
+{{- end }}
     <PackageReference Include="Asp.Versioning.Http" />
     <PackageReference Include="Asp.Versioning.Mvc.ApiExplorer" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />

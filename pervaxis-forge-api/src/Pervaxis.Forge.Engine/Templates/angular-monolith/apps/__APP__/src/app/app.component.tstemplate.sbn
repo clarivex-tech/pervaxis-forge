@@ -16,7 +16,7 @@
  ************************************************************************
  */
 
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
 import { IonApp, IonRouterOutlet, IonProgressBar, IonToast, IonAlert } from '@ionic/angular/standalone';

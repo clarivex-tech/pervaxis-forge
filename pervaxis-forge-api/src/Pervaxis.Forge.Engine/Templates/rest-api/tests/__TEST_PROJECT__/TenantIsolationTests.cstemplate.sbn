@@ -1,0 +1,300 @@
+{{ if model.manifest.multi_tenancy }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using System.Net.Http.Headers;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using Amazon.SecretsManager;
+using FluentAssertions;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
+using Moq;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Auth;
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+using Xunit;
+
+namespace {{ model.names.test_project_name }};
+
+// These tests prove the tenant rules of this service: the tenant comes only from one valid scalar GUID string
+// claim in a validated access token, and never from a header. Keep them. Add your own tests in separate files.
+
+public class TenantClaimGuardTests
+{
+    private const string Claim = "tenant_id";
+    private const string Tenant = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+
+    private static ClaimsPrincipal PrincipalWithTenant(string value) =>
+        new(new ClaimsIdentity([new Claim("sub", "user-1"), new Claim(Claim, value)], "test"));
+
+    [Fact]
+    public void SingleValidGuidString_IsAccepted_AndTheClaimIsKept()
+    {
+        var principal = PrincipalWithTenant(Tenant);
+
+        TenantClaimGuard.Enforce(principal, "{\"tenant_id\":\"" + Tenant + "\"}", Claim).Should().BeTrue();
+
+        principal.FindAll(Claim).Should().ContainSingle();
+    }
+
+    [Theory]
+    [InlineData("{\"tenant_id\":[\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"]}")]
+    [InlineData("{\"tenant_id\":[\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\",\"8c9bfd10-1d4a-4a3c-bd5b-0a1b2c3d4e5f\"]}")]
+    [InlineData("{\"tenant_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\",\"tenant_id\":\"8c9bfd10-1d4a-4a3c-bd5b-0a1b2c3d4e5f\"}")]
+    [InlineData("{\"tenant_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\",\"tenant_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"}")]
+    [InlineData("{\"tenant_id\":{\"id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"}}")]
+    [InlineData("{\"tenant_id\":42}")]
+    [InlineData("{\"tenant_id\":true}")]
+    [InlineData("{\"tenant_id\":null}")]
+    [InlineData("{\"tenant_id\":\"\"}")]
+    [InlineData("{\"tenant_id\":\"not-a-guid\"}")]
+    [InlineData("{\"tenant_id\":\"00000000-0000-0000-0000-000000000000\"}")]
+    [InlineData("{\"sub\":\"user-1\"}")]
+    [InlineData("not json")]
+    public void AnyOtherShape_IsRejected_AndEveryTenantClaimIsRemoved(string payload)
+    {
+        // The flattened principal looks fine (a single string), which is why the raw payload must be checked.
+        var principal = PrincipalWithTenant(Tenant);
+
+        TenantClaimGuard.Enforce(principal, payload, Claim).Should().BeFalse();
+
+        principal.FindAll(Claim).Should().BeEmpty();
+        principal.FindFirst("sub").Should().NotBeNull("the token stays authenticated; only the tenant claim is dropped");
+    }
+
+    [Fact]
+    public void MissingPayload_IsRejected()
+    {
+        var principal = PrincipalWithTenant(Tenant);
+
+        TenantClaimGuard.Enforce(principal, null, Claim).Should().BeFalse();
+
+        principal.FindAll(Claim).Should().BeEmpty();
+    }
+}
+
+/// <summary>
+/// A small web host with the real <c>AddForgeAuthentication</c>, the real Core tenant middleware and real signed JWTs.
+/// The signing key is a test key and issuer metadata is supplied directly, so nothing calls AWS.
+/// </summary>
+public sealed class TenantHostFixture : IAsyncLifetime
+{
+    public const string Issuer = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_TestPool";
+    public const string WebClient = "web-client";
+    public const string TenantA = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+    public const string TenantB = "8c9bfd10-1d4a-4a3c-bd5b-0a1b2c3d4e5f";
+
+    private readonly RSA _rsa = RSA.Create(2048);
+    private WebApplication? _app;
+
+    public HttpClient Client { get; private set; } = null!;
+
+    public async Task InitializeAsync()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
+        builder.Configuration.Sources.Clear();
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Forge:Authentication:Scheme"] = "Bearer",
+            ["Forge:Oidc:Provider"] = "Cognito",
+            ["Forge:Oidc:Authority"] = Issuer,
+            ["Forge:Oidc:ClientIds:0"] = WebClient,
+            ["Forge:Tenant:ClaimType"] = "tenant_id",
+        });
+
+        builder.Services.AddSingleton(Mock.Of<IAmazonSecretsManager>());
+        builder.Services.AddForgeAuthentication(builder.Configuration);
+        builder.Services.AddPervaxisClaimsMultiTenancy(options => builder.Configuration.GetSection("Forge:Tenant").Bind(options));
+        builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+        {
+            var metadata = new OpenIdConnectConfiguration { Issuer = Issuer };
+            metadata.SigningKeys.Add(new RsaSecurityKey(_rsa) { KeyId = "test-key" });
+            options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(metadata);
+        });
+
+        _app = builder.Build();
+        _app.UseRouting();
+        _app.UseAuthentication();
+        _app.UsePervaxisClaimsTenancy();
+        _app.UseAuthorization();
+        _app.MapGet("/tenant", (ITenantContext tenant) => tenant.IsResolved ? tenant.TenantId.Value : "unresolved");
+        _app.MapGet("/exempt", (ITenantContext tenant) => tenant.IsResolved ? tenant.TenantId.Value : "unresolved").WithTenantExempt();
+        _app.MapGet("/exempt-anonymous", (ITenantContext tenant) => tenant.IsResolved ? tenant.TenantId.Value : "unresolved")
+            .AllowAnonymous().WithTenantExempt();
+        _app.MapGet("/anonymous", () => "ok").AllowAnonymous();
+        await _app.StartAsync();
+        Client = _app.GetTestClient();
+    }
+
+    public async Task DisposeAsync()
+    {
+        Client.Dispose();
+        if (_app is not null)
+            await _app.DisposeAsync();
+        _rsa.Dispose();
+    }
+
+    /// <summary>Builds a signed access token. <paramref name="tenantMembers"/> is raw JSON, so tests can write any shape.</summary>
+    public string CreateToken(string? tenantMembers)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var members = new List<string>
+        {
+            "\"sub\":\"user-1\"",
+            "\"username\":\"alice\"",
+            "\"token_use\":\"access\"",
+            $"\"client_id\":\"{WebClient}\"",
+            $"\"iss\":\"{Issuer}\"",
+            $"\"nbf\":{now.AddMinutes(-5).ToUnixTimeSeconds()}",
+            $"\"iat\":{now.AddMinutes(-5).ToUnixTimeSeconds()}",
+            $"\"exp\":{now.AddMinutes(10).ToUnixTimeSeconds()}",
+        };
+        if (tenantMembers is not null)
+            members.Add(tenantMembers);
+
+        var header = Base64UrlEncoder.Encode(Encoding.UTF8.GetBytes("{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"test-key\"}"));
+        var payload = Base64UrlEncoder.Encode(Encoding.UTF8.GetBytes("{" + string.Join(",", members) + "}"));
+        var signature = Base64UrlEncoder.Encode(
+            _rsa.SignData(Encoding.ASCII.GetBytes(header + "." + payload), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+        return header + "." + payload + "." + signature;
+    }
+
+    public async Task<(HttpStatusCode Status, string Body)> GetAsync(string path, string? token, string? tenantHeader = null)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        if (token is not null)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (tenantHeader is not null)
+            request.Headers.Add("X-Tenant-ID", tenantHeader);
+        using var response = await Client.SendAsync(request);
+        return (response.StatusCode, await response.Content.ReadAsStringAsync());
+    }
+}
+
+public class TenantIsolationHttpTests(TenantHostFixture host) : IClassFixture<TenantHostFixture>
+{
+    private static string Scalar(string value) => $"\"tenant_id\":\"{value}\"";
+
+    [Fact]
+    public async Task ValidTenantClaim_ResolvesTheTenant()
+    {
+        var (status, body) = await host.GetAsync("/tenant", host.CreateToken(Scalar(TenantHostFixture.TenantA)));
+
+        status.Should().Be(HttpStatusCode.OK);
+        body.Should().Be(TenantHostFixture.TenantA);
+    }
+
+    [Fact]
+    public async Task UppercaseGuid_IsCanonicalizedToLowercase()
+    {
+        var (status, body) = await host.GetAsync("/tenant", host.CreateToken(Scalar(TenantHostFixture.TenantA.ToUpperInvariant())));
+
+        status.Should().Be(HttpStatusCode.OK);
+        body.Should().Be(TenantHostFixture.TenantA);
+    }
+
+    [Fact]
+    public async Task TwoCallersWithDifferentTenants_NeverSeeEachOther()
+    {
+        var a = host.GetAsync("/tenant", host.CreateToken(Scalar(TenantHostFixture.TenantA)));
+        var b = host.GetAsync("/tenant", host.CreateToken(Scalar(TenantHostFixture.TenantB)));
+
+        (await a).Body.Should().Be(TenantHostFixture.TenantA);
+        (await b).Body.Should().Be(TenantHostFixture.TenantB);
+    }
+
+    [Theory]
+    [InlineData("\"tenant_id\":[\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"]")]
+    [InlineData("\"tenant_id\":[\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\",\"8c9bfd10-1d4a-4a3c-bd5b-0a1b2c3d4e5f\"]")]
+    [InlineData("\"tenant_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\",\"tenant_id\":\"8c9bfd10-1d4a-4a3c-bd5b-0a1b2c3d4e5f\"")]
+    [InlineData("\"tenant_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\",\"tenant_id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"")]
+    [InlineData("\"tenant_id\":{\"id\":\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"}")]
+    [InlineData("\"tenant_id\":42")]
+    [InlineData("\"tenant_id\":null")]
+    [InlineData("\"tenant_id\":\"\"")]
+    [InlineData("\"tenant_id\":\"not-a-guid\"")]
+    [InlineData("\"tenant_id\":\"00000000-0000-0000-0000-000000000000\"")]
+    public async Task MalformedOrAmbiguousTenantClaim_IsForbidden(string tenantMembers)
+    {
+        var (status, _) = await host.GetAsync("/tenant", host.CreateToken(tenantMembers));
+
+        status.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task AuthenticatedWithoutTenantClaim_IsForbidden()
+    {
+        (await host.GetAsync("/tenant", host.CreateToken(null))).Status.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task NoToken_IsUnauthorized()
+    {
+        (await host.GetAsync("/tenant", null)).Status.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    [Fact]
+    public async Task TenantHeader_IsIgnored_AndNeverEchoed()
+    {
+        var withClaim = await host.GetAsync("/tenant", host.CreateToken(Scalar(TenantHostFixture.TenantA)), tenantHeader: TenantHostFixture.TenantB);
+        var withoutClaim = await host.GetAsync("/tenant", host.CreateToken(null), tenantHeader: TenantHostFixture.TenantB);
+
+        withClaim.Body.Should().Be(TenantHostFixture.TenantA);
+        withoutClaim.Status.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task ExemptEndpoint_StaysUnresolved_EvenWithAValidTenantClaim()
+    {
+        var (status, body) = await host.GetAsync("/exempt", host.CreateToken(Scalar(TenantHostFixture.TenantA)));
+
+        status.Should().Be(HttpStatusCode.OK);
+        body.Should().Be("unresolved");
+    }
+
+    [Fact]
+    public async Task ExemptEndpoint_StillRequiresAuthentication_UnlessAlsoAnonymous()
+    {
+        (await host.GetAsync("/exempt", null)).Status.Should().Be(HttpStatusCode.Unauthorized);
+
+        var (status, body) = await host.GetAsync("/exempt-anonymous", null);
+        status.Should().Be(HttpStatusCode.OK);
+        body.Should().Be("unresolved");
+    }
+
+    [Fact]
+    public async Task AllowAnonymousAlone_DoesNotExemptTheEndpointFromTenancy()
+    {
+        (await host.GetAsync("/anonymous", null)).Status.Should().Be(HttpStatusCode.Unauthorized);
+    }
+}
+{{ end }}

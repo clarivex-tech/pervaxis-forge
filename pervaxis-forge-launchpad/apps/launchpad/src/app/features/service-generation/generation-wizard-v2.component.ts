@@ -19,7 +19,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ActivatedRoute } from '@angular/router';
-import { FormBuilder, FormControl, FormGroup, ReactiveFormsModule, Validators } from '@angular/forms';
+import { AbstractControl, FormBuilder, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { MatCardModule } from '@angular/material/card';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -29,6 +29,7 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
+import { MatRadioModule } from '@angular/material/radio';
 
 import {
 	GENERATION_API_SERVICE,
@@ -53,6 +54,31 @@ type BuildTypeOption = {
 
 type ServiceCategory = BuildTypeOption['category'];
 
+// Cognito identifiers. The same rules are enforced by the API, which writes these values into appsettings.json.
+const COGNITO_POOL_ID_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d+_[A-Za-z0-9]+$/;
+const COGNITO_CLIENT_ID_PATTERN = /^[A-Za-z0-9_+]{1,128}$/;
+const COGNITO_GROUP_PATTERN = /^[A-Za-z0-9_.:/@+= -]{1,128}$/;
+
+/** Splits "id1, id2 id3" into a list of unique, non-empty app client IDs. */
+function parseCognitoClientIds(value: string | null | undefined): string[] {
+	return [...new Set((value ?? '').split(/[\s,]+/).map((id) => id.trim()).filter((id) => id.length > 0))];
+}
+
+/** Like Validators.pattern, but ignores spaces around pasted values and reports an empty value as required. */
+function trimmedPattern(pattern: RegExp): ValidatorFn {
+	return (control: AbstractControl): ValidationErrors | null => {
+		const value = String(control.value ?? '').trim();
+		if (!value) return { required: true };
+		return pattern.test(value) ? null : { pattern: true };
+	};
+}
+
+function cognitoClientIdsValidator(control: AbstractControl): ValidationErrors | null {
+	const ids = parseCognitoClientIds(control.value as string);
+	if (ids.length === 0) return { required: true };
+	return ids.every((id) => COGNITO_CLIENT_ID_PATTERN.test(id)) ? null : { pattern: true };
+}
+
 const SHELL_PRESELECTED_CANVAS_MODULES = ['Shell', 'Layout', 'Navigation', 'Auth', 'Workspace'] as const;
 const SHARED_CANVAS_MODULES = ['Settings', 'Profile', 'Notifications', 'Search'] as const;
 const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', 'Support'] as const;
@@ -71,6 +97,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 		MatButtonModule,
 		MatIconModule,
 		MatSlideToggleModule,
+		MatRadioModule,
 		InfrastructureOptionsComponent,
 	],
 	changeDetection: ChangeDetectionStrategy.OnPush,
@@ -78,7 +105,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 		<div class="wizard-container">
 			<div class="wizard-header">
 				<h1>Generate Service</h1>
-				<p>7-Step Configuration Wizard</p>
+				<p>8-Step Configuration Wizard</p>
 			</div>
 
 			<div class="wizard-progress-bar">
@@ -113,17 +140,6 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 								}
 							</mat-select>
 						</mat-form-field>
-
-						<div class="info-grid">
-							<div class="info-item">
-								<span class="label">Cloud Provider</span>
-								<span class="value">{{ selectedVertical()?.cloudProvider ?? 'N/A' }}</span>
-							</div>
-							<div class="info-item">
-								<span class="label">GitHub Org</span>
-								<span class="value">{{ selectedVertical()?.githubOrg ?? 'N/A' }}</span>
-							</div>
-						</div>
 					</mat-card-content>
 				</mat-card>
 
@@ -219,19 +235,20 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 					</mat-card-content>
 				</mat-card>
 
-				<!-- STEP 4: Modules -->
+				<!-- STEP 4: Platform Modules -->
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 4: {{ modulesStepTitle() }}</mat-card-title>
 					</mat-card-header>
 					<mat-card-content>
 						@if (isBackendTypeSelected() && isLoadingModules()) {
-							<p class="loading-hint">Loading Genesis modules...</p>
+							<p class="loading-hint">Loading modules...</p>
 						} @else if (isCanvasTypeSelected() && isLoadingCanvasModules()) {
 							<p class="loading-hint">Loading Canvas modules...</p>
 						} @else if (isBackendTypeSelected()) {
+							<p class="step-hint">Select the cloud-agnostic platform capabilities for your service.</p>
 							<div class="module-grid">
-								@for (module of availableModules(); track module.name) {
+								@for (module of platformModules(); track module.name) {
 									<button
 										type="button"
 										class="module-button"
@@ -243,9 +260,9 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 									</button>
 								}
 							</div>
-							@if (availableModules().length > 0) {
+							@if (platformModules().length > 0) {
 								<div class="module-actions">
-									<button type="button" mat-button (click)="selectAllModules()">Select All</button>
+									<button type="button" mat-button (click)="selectAllPlatformModules()">Select All</button>
 									<button type="button" mat-button (click)="clearModules()">Clear</button>
 								</div>
 							}
@@ -277,10 +294,177 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 					</mat-card-content>
 				</mat-card>
 
-				<!-- STEP 5: Production Readiness (Enterprise Scaffold) -->
+				<!-- STEP 5: Cloud Services -->
+				@if (isBackendTypeSelected()) {
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
-						<mat-card-title>Step 5: Production Readiness</mat-card-title>
+						<mat-card-title>Step 5: Cloud Services</mat-card-title>
+						<mat-card-subtitle>Select your cloud provider and pick the managed services you need</mat-card-subtitle>
+					</mat-card-header>
+					<mat-card-content>
+						<!-- Cloud provider picker -->
+						<div class="cloud-provider-row">
+							<mat-form-field class="cloud-provider-field">
+								<mat-label>Cloud Provider</mat-label>
+								<mat-select formControlName="cloudProvider">
+									<mat-option value="AWS">
+										<span class="provider-option">AWS</span>
+									</mat-option>
+									<mat-option value="Azure">
+										<span class="provider-option">Azure</span>
+									</mat-option>
+									<mat-option value="GCP">
+										<span class="provider-option">GCP</span>
+									</mat-option>
+								</mat-select>
+							</mat-form-field>
+							@if (form.controls.cloudProvider.value !== (selectedVertical()?.cloudProvider ?? 'AWS')) {
+								<div class="provider-override-hint">
+									<mat-icon>info</mat-icon>
+									<span>Overrides vertical default ({{ selectedVertical()?.cloudProvider ?? 'AWS' }})</span>
+								</div>
+							}
+						</div>
+
+						<!-- Cloud services are AWS-only for now -->
+						@if (form.controls.cloudProvider.value === 'AWS') {
+							<div class="module-grid">
+								@for (module of cloudModules(); track module.name) {
+									<button
+										type="button"
+										class="module-button"
+										[class.selected]="isModuleSelected(module.name)"
+										(click)="toggleModule(module.name)"
+									>
+										<span class="module-label">{{ module.label }}</span>
+										<span class="module-desc">{{ module.description }}</span>
+									</button>
+								}
+								<button
+									type="button"
+									class="module-button"
+									[class.selected]="form.controls.secretsManagementEnabled.value"
+									(click)="toggleSecretsManagement()"
+								>
+									<span class="module-label">Secrets Management</span>
+									<span class="module-desc">AWS Secrets Manager &amp; SSM Parameter Store integration</span>
+								</button>
+								@if (form.controls.type.value === 'RestApi') {
+									<button
+										type="button"
+										class="module-button"
+										[class.selected]="form.controls.cognitoEnabled.value"
+										(click)="toggleCognito()"
+									>
+										<span class="module-label">Cognito</span>
+										<span class="module-desc">Sign-in and access control with Amazon Cognito user pools</span>
+									</button>
+								}
+							</div>
+
+							<!-- Cognito details: shown once the Cognito tile is selected -->
+							@if (form.controls.cognitoEnabled.value) {
+								<div class="settings-section">
+									<h4>Cognito details</h4>
+									<p class="step-hint">
+										The print arrives with these values already filled into appsettings.json. They are IDs, not secrets.
+									</p>
+									<div class="form-grid-2col">
+										<mat-form-field>
+											<mat-label>User pool ID *</mat-label>
+											<input matInput formControlName="cognitoUserPoolId" placeholder="us-east-1_AbC123xyz" />
+											<mat-hint>The AWS region is read from the ID.</mat-hint>
+											@if (form.controls.cognitoUserPoolId.hasError('required')) {
+												<mat-error>User pool ID is required.</mat-error>
+											} @else if (form.controls.cognitoUserPoolId.hasError('pattern')) {
+												<mat-error>Use the format us-east-1_AbC123xyz.</mat-error>
+											}
+										</mat-form-field>
+
+										<mat-form-field>
+											<mat-label>App client IDs *</mat-label>
+											<input matInput formControlName="cognitoClientIds" placeholder="web client ID, mobile client ID" />
+											<mat-hint>One per frontend, separated by commas.</mat-hint>
+											@if (form.controls.cognitoClientIds.hasError('required')) {
+												<mat-error>At least one app client ID is required.</mat-error>
+											} @else if (form.controls.cognitoClientIds.hasError('pattern')) {
+												<mat-error>Client IDs may only contain letters, digits, _ and +.</mat-error>
+											}
+										</mat-form-field>
+
+										<mat-form-field>
+											<mat-label>Admin group *</mat-label>
+											<input matInput formControlName="cognitoAdminGroup" placeholder="Admin" />
+											<mat-hint>Members of this group can use admin-only endpoints.</mat-hint>
+											@if (form.controls.cognitoAdminGroup.invalid) {
+												<mat-error>Use up to 128 letters, digits or . _ : / &#64; + = - characters.</mat-error>
+											}
+										</mat-form-field>
+									</div>
+									<mat-checkbox formControlName="cognitoAllowApiKey">
+										Also allow API keys (for service-to-service calls)
+									</mat-checkbox>
+								</div>
+							}
+
+							<!-- Messaging queues: shown once the Messaging tile is selected -->
+							@if (isModuleSelected('Messaging')) {
+								<div class="settings-section">
+									<h4>Messaging Queues (Optional)</h4>
+									<div class="queue-builder">
+										<div class="queue-col">
+											<div class="queue-row">
+												<mat-form-field class="queue-input">
+													<mat-label>Publish Queue</mat-label>
+													<input matInput formControlName="publishQueueInput" placeholder="e.g. billing-events" />
+												</mat-form-field>
+												<button mat-stroked-button type="button" (click)="addQueue('publish')">Add</button>
+											</div>
+											<div class="queue-chip-wrap">
+												@for (queue of publishQueues(); track queue) {
+													<button class="queue-chip" type="button" (click)="removeQueue('publish', queue)">
+														{{ queue }} <span>×</span>
+													</button>
+												}
+											</div>
+										</div>
+
+										<div class="queue-col">
+											<div class="queue-row">
+												<mat-form-field class="queue-input">
+													<mat-label>Subscribe Queue</mat-label>
+													<input matInput formControlName="subscribeQueueInput" placeholder="e.g. intake-events" />
+												</mat-form-field>
+												<button mat-stroked-button type="button" (click)="addQueue('subscribe')">Add</button>
+											</div>
+											<div class="queue-chip-wrap">
+												@for (queue of subscribeQueues(); track queue) {
+													<button class="queue-chip" type="button" (click)="removeQueue('subscribe', queue)">
+														{{ queue }} <span>×</span>
+													</button>
+												}
+											</div>
+										</div>
+									</div>
+								</div>
+							}
+							<div class="module-actions">
+								<button type="button" mat-button (click)="selectAllCloudModules()">Select All</button>
+								<button type="button" mat-button (click)="clearCloudModules()">Clear</button>
+							</div>
+						} @else {
+							<p class="loading-hint">
+								No services are available for {{ form.controls.cloudProvider.value }} yet.
+							</p>
+						}
+					</mat-card-content>
+				</mat-card>
+				}
+
+				<!-- STEP 6: Production Readiness (Enterprise Scaffold) -->
+				<mat-card class="step-card" [class.active]="true">
+					<mat-card-header>
+						<mat-card-title>Step 6: Production Readiness</mat-card-title>
 						<mat-card-subtitle>Enterprise Scaffold Configuration</mat-card-subtitle>
 					</mat-card-header>
 					<mat-card-content>
@@ -320,12 +504,6 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 								<mat-icon>tune</mat-icon> Selectable Features
 							</h4>
 							<div class="selectable-features">
-								<div class="feature-checkbox">
-									<mat-checkbox formControlName="secretsManagementEnabled">
-										<strong>Secrets Management</strong>
-										<p>AWS Secrets Manager &amp; SSM Parameter Store integration</p>
-									</mat-checkbox>
-								</div>
 								<div class="feature-checkbox">
 									<mat-checkbox formControlName="resilienceEnabled">
 										<strong>Resilience &amp; Polly Wiring</strong>
@@ -378,85 +556,101 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				/>
 				}
 
-				<!-- STEP 6: Deployment Settings -->
+				<!-- Database panel (before Multi-Tenancy, which depends on it) -->
+				@if (isBackendTypeSelected()) {
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
-						<mat-card-title>Step 6: Deployment Settings</mat-card-title>
+						<mat-card-title>Database</mat-card-title>
+						<mat-card-subtitle>Persistence for the generated service</mat-card-subtitle>
 					</mat-card-header>
 					<mat-card-content>
-						<!-- Database Section -->
-						@if (isBackendTypeSelected()) {
-							<div class="settings-section">
-								<h4>Database Configuration</h4>
-								<div class="checkbox-row">
-									<mat-checkbox formControlName="useDatabase">
-										Include database
-									</mat-checkbox>
-								</div>
+						<div class="checkbox-row">
+							<mat-checkbox formControlName="useDatabase">
+								Include database
+							</mat-checkbox>
+						</div>
 
-								@if (form.controls.useDatabase.value) {
-									<div class="form-grid-2col">
-										<mat-form-field>
-											<mat-label>Database Engine *</mat-label>
-											<mat-select formControlName="databaseEngine">
-												<mat-option value="">Select engine</mat-option>
-												<mat-option value="postgresql">PostgreSQL</mat-option>
-												<mat-option value="sqlserver">SQL Server</mat-option>
-												<mat-option value="mysql">MySQL</mat-option>
-											</mat-select>
-										</mat-form-field>
+						@if (form.controls.useDatabase.value) {
+							<div class="form-grid-2col">
+								<mat-form-field>
+									<mat-label>Database Engine *</mat-label>
+									<mat-select formControlName="databaseEngine">
+										<mat-option value="postgresql">PostgreSQL</mat-option>
+									</mat-select>
+									<mat-hint>PostgreSQL is the only supported engine for now.</mat-hint>
+								</mat-form-field>
 
-										<mat-form-field>
-											<mat-label>DB Schema *</mat-label>
-											<input matInput formControlName="databaseSchema" placeholder="e.g. intake" />
-										</mat-form-field>
-									</div>
-								}
+								<mat-form-field>
+									<mat-label>DB Schema *</mat-label>
+									<input matInput formControlName="databaseSchema" placeholder="e.g. intake" />
+								</mat-form-field>
 							</div>
 						}
+					</mat-card-content>
+				</mat-card>
+				}
 
-						<!-- Messaging Queues -->
-						@if (isBackendTypeSelected()) {
-							<div class="settings-section">
-								<h4>Messaging Queues (Optional)</h4>
-								<div class="queue-builder">
-									<div class="queue-col">
-										<div class="queue-row">
-											<mat-form-field class="queue-input">
-												<mat-label>Publish Queue</mat-label>
-												<input matInput formControlName="publishQueueInput" placeholder="e.g. billing-events" />
-											</mat-form-field>
-											<button mat-stroked-button type="button" (click)="addQueue('publish')">Add</button>
-										</div>
-										<div class="queue-chip-wrap">
-											@for (queue of publishQueues(); track queue) {
-												<button class="queue-chip" type="button" (click)="removeQueue('publish', queue)">
-													{{ queue }} <span>×</span>
-												</button>
-											}
-										</div>
-									</div>
-
-									<div class="queue-col">
-										<div class="queue-row">
-											<mat-form-field class="queue-input">
-												<mat-label>Subscribe Queue</mat-label>
-												<input matInput formControlName="subscribeQueueInput" placeholder="e.g. intake-events" />
-											</mat-form-field>
-											<button mat-stroked-button type="button" (click)="addQueue('subscribe')">Add</button>
-										</div>
-										<div class="queue-chip-wrap">
-											@for (queue of subscribeQueues(); track queue) {
-												<button class="queue-chip" type="button" (click)="removeQueue('subscribe', queue)">
-													{{ queue }} <span>×</span>
-												</button>
-											}
-										</div>
-									</div>
-								</div>
+				<!-- Multi-Tenancy panel (between Infrastructure Options and Deployment Settings) -->
+				@if (isBackendTypeSelected()) {
+				<mat-card class="step-card" [class.active]="true">
+					<mat-card-header>
+						<mat-card-title>Multi-Tenancy</mat-card-title>
+						<mat-card-subtitle>Tenant isolation for shared deployments</mat-card-subtitle>
+					</mat-card-header>
+					<mat-card-content>
+						<mat-radio-group [formControl]="infraOptionsForm.controls.multiTenancy" class="multi-tenancy-options">
+							<mat-radio-button [value]="true">Enabled</mat-radio-button>
+							<mat-radio-button [value]="false">Disabled</mat-radio-button>
+						</mat-radio-group>
+						@if (infraOptionsForm.hasError('multiTenancyRequiresDatabase')) {
+							<div class="provider-override-hint">
+								<mat-icon>warning</mat-icon>
+								<span>{{ infraOptionsForm.getError('multiTenancyRequiresDatabase') }}</span>
 							</div>
 						}
+						@if (infraOptionsForm.hasError('multiTenancyRequiresCognito')) {
+							<div class="provider-override-hint">
+								<mat-icon>warning</mat-icon>
+								<span>{{ infraOptionsForm.getError('multiTenancyRequiresCognito') }}</span>
+							</div>
+						}
+						@if (infraOptionsForm.hasError('multiTenancyRejectsApiKey')) {
+							<div class="provider-override-hint">
+								<mat-icon>warning</mat-icon>
+								<span>{{ infraOptionsForm.getError('multiTenancyRejectsApiKey') }}</span>
+							</div>
+						}
+						@if (infraOptionsForm.controls.multiTenancy.value) {
+							<div class="settings-section">
+								<h4>Cognito prerequisites</h4>
+								<p class="step-hint">
+									The service reads the tenant from a validated Cognito access token. Nothing here can check
+									your user pool, so confirm it is set up this way before you generate.
+								</p>
+								<ul>
+									<li>The user pool is on the Essentials or Plus feature plan.</li>
+									<li>A pre-token-generation trigger (V2_0 or V3_0) adds the <code>tenant_id</code> claim to access tokens.</li>
+									<li>Each user belongs to exactly one tenant, and only trusted provisioning can set it.</li>
+									<li>The claim is one GUID string (not a list). Machine-to-machine tokens are not supported.</li>
+								</ul>
+								<mat-checkbox
+									[checked]="tenancyPrerequisitesAcknowledged()"
+									(change)="tenancyPrerequisitesAcknowledged.set($event.checked)"
+								>
+									I confirm the Cognito user pool meets these prerequisites
+								</mat-checkbox>
+							</div>
+						}
+					</mat-card-content>
+				</mat-card>
+				}
 
+				<!-- STEP 7: Deployment Settings -->
+				<mat-card class="step-card" [class.active]="true">
+					<mat-card-header>
+						<mat-card-title>Step 7: Deployment Settings</mat-card-title>
+					</mat-card-header>
+					<mat-card-content>
 						<!-- GitHub & Infrastructure -->
 						<div class="settings-section">
 							<h4>GitHub &amp; Infrastructure</h4>
@@ -475,10 +669,10 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 					</mat-card-content>
 				</mat-card>
 
-				<!-- STEP 7: Review & Generate -->
+				<!-- STEP 8: Review & Generate -->
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
-						<mat-card-title>Step 7: Review &amp; Generate</mat-card-title>
+						<mat-card-title>Step 8: Review &amp; Generate</mat-card-title>
 					</mat-card-header>
 					<mat-card-content>
 						<div class="review-sections">
@@ -493,6 +687,16 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 										<span class="label">Build Type</span>
 										<span class="value">{{ selectedBuildTypeLabel() }}</span>
 									</div>
+									<div class="review-item">
+										<span class="label">Cloud Provider</span>
+										<span class="value">{{ form.controls.cloudProvider.value || 'AWS' }}</span>
+									</div>
+									@if (isBackendTypeSelected()) {
+										<div class="review-item">
+											<span class="label">Authentication</span>
+											<span class="value">{{ reviewAuthSummary() }}</span>
+										</div>
+									}
 									<div class="review-item">
 										<span class="label">Service Name</span>
 										<span class="value">{{ form.controls.name.value || 'N/A' }}</span>
@@ -862,6 +1066,71 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				margin: 1rem 0;
 			}
 
+			.module-section-header {
+				display: flex;
+				align-items: center;
+				gap: 0.5rem;
+				margin: 1.5rem 0 0.25rem;
+				font-size: 0.75rem;
+				font-weight: 600;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: #64748b;
+			}
+
+			.module-section-header:first-child {
+				margin-top: 0;
+			}
+
+			.module-section-icon {
+				font-size: 1rem;
+				width: 1rem;
+				height: 1rem;
+				color: #64748b;
+			}
+
+			.module-section-header--platform {
+				margin-top: 1.75rem;
+			}
+
+			.multi-tenancy-options {
+				display: flex;
+				gap: 1.5rem;
+				margin-bottom: 0.5rem;
+			}
+
+			.step-hint {
+				color: #64748b;
+				font-size: 0.875rem;
+				margin: 0 0 0.75rem;
+			}
+
+			.cloud-provider-row {
+				display: flex;
+				align-items: center;
+				gap: 1rem;
+				margin-bottom: 1.25rem;
+				flex-wrap: wrap;
+			}
+
+			.cloud-provider-field {
+				min-width: 200px;
+			}
+
+			.provider-override-hint {
+				display: flex;
+				align-items: center;
+				gap: 0.35rem;
+				font-size: 0.8rem;
+				color: #f59e0b;
+			}
+
+			.provider-override-hint mat-icon {
+				font-size: 1rem;
+				width: 1rem;
+				height: 1rem;
+			}
+
 			.module-button {
 				display: flex;
 				flex-direction: column;
@@ -875,6 +1144,16 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				transition: all 0.2s ease;
 				text-align: left;
 				position: relative;
+			}
+
+			.module-button:disabled {
+				opacity: 0.55;
+				cursor: not-allowed;
+			}
+
+			.module-button:disabled:hover {
+				border-color: #cbd5e1;
+				background: #fff;
 			}
 
 			.module-button:hover {
@@ -1379,6 +1658,13 @@ export class GenerationWizardV2Component {
 		auditLoggingEnabled: [false],
 		piiClassificationEnabled: [false],
 		outputCachingEnabled: [false],
+		cloudProvider: ['AWS'],
+		// Cognito (Step 5). The detail fields stay disabled, so they are ignored by form validation, until the tile is selected.
+		cognitoEnabled: [false],
+		cognitoUserPoolId: new FormControl({ value: '', disabled: true }, { nonNullable: true, validators: [trimmedPattern(COGNITO_POOL_ID_PATTERN)] }),
+		cognitoClientIds: new FormControl({ value: '', disabled: true }, { nonNullable: true, validators: [cognitoClientIdsValidator] }),
+		cognitoAdminGroup: new FormControl({ value: 'Admin', disabled: true }, { nonNullable: true, validators: [trimmedPattern(COGNITO_GROUP_PATTERN)] }),
+		cognitoAllowApiKey: new FormControl({ value: false, disabled: true }, { nonNullable: true }),
 	});
 
 	/** Nested FormGroup for infrastructure toggle options */
@@ -1402,7 +1688,17 @@ export class GenerationWizardV2Component {
 		pdfEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.pdfEnabled, disabled: true }, { nonNullable: true }),
 		templateEngineEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.templateEngineEnabled, disabled: true }, { nonNullable: true }),
 		hashingEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.hashingEnabled, { nonNullable: true }),
-	}, { validators: [infraOptionsValidator(() => this.form.controls.useDatabase.value)] });
+	}, {
+		validators: [
+			infraOptionsValidator(
+				() => this.form.controls.useDatabase.value,
+				() => ({
+					cognitoEnabled: this.form.controls.cognitoEnabled.value,
+					allowApiKey: this.form.controls.cognitoEnabled.value && this.form.controls.cognitoAllowApiKey.value,
+				}),
+			),
+		],
+	});
 
 	/** Whether a database is configured (derived from Deployment Settings) */
 	readonly databaseConfigured = computed(() => this.form.controls.useDatabase.value);
@@ -1422,8 +1718,17 @@ export class GenerationWizardV2Component {
 	readonly publishQueues = signal<string[]>([]);
 	readonly subscribeQueues = signal<string[]>([]);
 
-	readonly wizardSteps = ['Select Vertical', 'Choose Build Type', 'Service Details', 'Modules', 'Production Readiness', 'Deployment Settings', 'Review & Generate'] as const;
+	/** Cloud-provider-specific Genesis modules (AWS services) */
+	readonly cloudModules = computed(() => this.availableModules().filter(m => !m.isCloudAgnostic));
+
+	/** Cloud-agnostic platform modules */
+	readonly platformModules = computed(() => this.availableModules().filter(m => m.isCloudAgnostic));
+
+	readonly wizardSteps = ['Select Vertical', 'Choose Build Type', 'Service Details', 'Platform Modules', 'Cloud Services', 'Production Readiness', 'Deployment Settings', 'Review & Generate'] as const;
 	readonly activeStep = signal(0);
+
+	/** The user confirmed the Cognito prerequisites for Multi-Tenancy (they live outside the generated service). */
+	readonly tenancyPrerequisitesAcknowledged = signal(false);
 
 	readonly isValidating = signal(false);
 	readonly isGenerating = signal(false);
@@ -1448,6 +1753,22 @@ export class GenerationWizardV2Component {
 			this.applyVerticalSelection(slug);
 		});
 
+		// Cloud services are AWS-only: drop hidden AWS selections when switching provider.
+		this.form.controls.cloudProvider.valueChanges.subscribe((provider) => {
+			if (provider !== 'AWS') {
+				this.clearCloudModules();
+			}
+		});
+
+		this.form.controls.cognitoAllowApiKey.valueChanges.subscribe(() => this.infraOptionsForm.updateValueAndValidity());
+
+		// Switching tenancy off clears the prerequisite acknowledgment, so it must be given again if re-enabled.
+		this.infraOptionsForm.controls.multiTenancy.valueChanges.subscribe((enabled) => {
+			if (!enabled) {
+				this.tenancyPrerequisitesAcknowledged.set(false);
+			}
+		});
+
 		this.form.controls.pushToGitHub.valueChanges.subscribe((pushEnabled) => {
 			if (!pushEnabled) {
 				this.form.controls.createGitHubRepo.setValue(false, { emitEvent: false });
@@ -1458,6 +1779,9 @@ export class GenerationWizardV2Component {
 			if (!enabled) {
 				this.form.controls.databaseEngine.setValue('', { emitEvent: false });
 				this.form.controls.databaseSchema.setValue('', { emitEvent: false });
+			} else if (!this.form.controls.databaseEngine.value) {
+				// PostgreSQL is the only supported engine, so preselect it.
+				this.form.controls.databaseEngine.setValue('postgresql', { emitEvent: false });
 			}
 		});
 
@@ -1474,6 +1798,11 @@ export class GenerationWizardV2Component {
 
 		this.form.controls.serviceCategory.setValue(option.category, { emitEvent: false });
 		this.form.controls.type.setValue(type);
+
+		// Cognito settings are only supported for REST API services.
+		if (type !== 'RestApi') {
+			this.disableCognito();
+		}
 
 		if (option.category !== 'Backend Service') {
 			this.clearModules();
@@ -1508,9 +1837,9 @@ export class GenerationWizardV2Component {
 		if (!this.form.controls.verticalSlug.value.trim()) return 0;
 		if (!this.form.controls.type.value) return 1;
 		if (!this.form.controls.name.valid || !this.form.controls.displayName.valid || !this.form.controls.description.valid) return 2;
-		if (this.isBackendTypeSelected() && this.form.controls.useDatabase.value && (!this.form.controls.databaseEngine.value.trim() || !this.form.controls.databaseSchema.value.trim())) return 5;
-		if (!this.canGenerate()) return 6;
-		return 7;
+		if (this.isBackendTypeSelected() && this.form.controls.useDatabase.value && (!this.form.controls.databaseEngine.value.trim() || !this.form.controls.databaseSchema.value.trim())) return 6;
+		if (!this.canGenerate()) return 7;
+		return 8;
 	}
 
 	isBackendTypeSelected(): boolean {
@@ -1522,6 +1851,11 @@ export class GenerationWizardV2Component {
 	}
 
 	canGenerate(): boolean {
+		// Cognito setup cannot be checked from here, so Multi-Tenancy needs an explicit acknowledgment.
+		if (this.infraOptionsForm.controls.multiTenancy.value && !this.tenancyPrerequisitesAcknowledged()) {
+			return false;
+		}
+
 		return this.validationPreview()?.isValid === true;
 	}
 
@@ -1605,6 +1939,70 @@ export class GenerationWizardV2Component {
 
 	selectAllModules(): void {
 		this.selectedModules.set(this.availableModules().map((m) => m.name));
+	}
+
+	selectAllPlatformModules(): void {
+		const platformNames = this.platformModules().map((m) => m.name);
+		const current = this.selectedModules();
+		const merged = [...new Set([...current, ...platformNames])];
+		this.selectedModules.set(merged);
+	}
+
+	selectAllCloudModules(): void {
+		const cloudNames = this.cloudModules().map((m) => m.name);
+		const current = this.selectedModules();
+		const merged = [...new Set([...current, ...cloudNames])];
+		this.selectedModules.set(merged);
+		this.form.controls.secretsManagementEnabled.setValue(true);
+	}
+
+	clearCloudModules(): void {
+		const cloudNames = new Set(this.cloudModules().map((m) => m.name));
+		this.selectedModules.set(this.selectedModules().filter((n) => !cloudNames.has(n)));
+		this.form.controls.secretsManagementEnabled.setValue(false);
+		this.disableCognito();
+	}
+
+	toggleCognito(): void {
+		this.setCognitoEnabled(!this.form.controls.cognitoEnabled.value);
+	}
+
+	/** Switches Cognito off (and its fields out of validation). Typed values are kept in case it is turned on again. */
+	private disableCognito(): void {
+		this.setCognitoEnabled(false);
+	}
+
+	private setCognitoEnabled(enabled: boolean): void {
+		this.form.controls.cognitoEnabled.setValue(enabled);
+
+		for (const control of [
+			this.form.controls.cognitoUserPoolId,
+			this.form.controls.cognitoClientIds,
+			this.form.controls.cognitoAdminGroup,
+			this.form.controls.cognitoAllowApiKey,
+		]) {
+			if (enabled) {
+				control.enable({ emitEvent: false });
+			} else {
+				control.disable({ emitEvent: false });
+			}
+		}
+
+		// Multi-Tenancy depends on the authentication choice, so re-check it.
+		this.infraOptionsForm.updateValueAndValidity();
+	}
+
+	reviewAuthSummary(): string {
+		if (!this.form.controls.cognitoEnabled.value) return 'API key';
+
+		const ids = parseCognitoClientIds(this.form.controls.cognitoClientIds.value);
+		const mode = this.form.controls.cognitoAllowApiKey.value ? 'Cognito + API key' : 'Cognito';
+		return `${mode} (${ids.length} app client${ids.length === 1 ? '' : 's'})`;
+	}
+
+	toggleSecretsManagement(): void {
+		const control = this.form.controls.secretsManagementEnabled;
+		control.setValue(!control.value);
 	}
 
 	selectAllCanvasModules(): void {
@@ -1731,6 +2129,19 @@ export class GenerationWizardV2Component {
 	}
 
 	private buildRequest(): GenerationRequest | null {
+		if (this.form.controls.cognitoEnabled.value) {
+			const cognitoControls = [
+				this.form.controls.cognitoUserPoolId,
+				this.form.controls.cognitoClientIds,
+				this.form.controls.cognitoAdminGroup,
+			];
+			if (cognitoControls.some((control) => control.invalid)) {
+				cognitoControls.forEach((control) => control.markAsTouched());
+				this.validationError.set('Please complete the Cognito details in Step 5.');
+				return null;
+			}
+		}
+
 		if (this.form.invalid) {
 			this.validationError.set('Please complete required fields.');
 			return null;
@@ -1757,8 +2168,6 @@ export class GenerationWizardV2Component {
 
 		const databaseEngineMap: Record<string, string> = {
 			postgresql: 'PostgreSQL',
-			sqlserver: 'SqlServer',
-			mysql: 'MySQL',
 		};
 
 		const enterprise: EnterpriseScaffoldOptions = {
@@ -1787,6 +2196,16 @@ export class GenerationWizardV2Component {
 			} : null,
 			createGitHubRepo: value.createGitHubRepo,
 			enterprise,
+			...(value.cognitoEnabled && value.type === 'RestApi'
+				? {
+						cognito: {
+							userPoolId: value.cognitoUserPoolId.trim(),
+							clientIds: parseCognitoClientIds(value.cognitoClientIds),
+							adminGroup: value.cognitoAdminGroup.trim(),
+							allowApiKey: value.cognitoAllowApiKey,
+						},
+					}
+				: {}),
 			...mapInfraOptionsToRequest(this.infraOptionsForm.getRawValue()),
 		};
 	}
@@ -1800,6 +2219,9 @@ export class GenerationWizardV2Component {
 				if (initialVertical) {
 					this.form.controls.verticalSlug.setValue(initialVertical.slug, { emitEvent: false });
 					this.selectedVertical.set(initialVertical);
+					if (initialVertical.cloudProvider) {
+						this.form.controls.cloudProvider.setValue(initialVertical.cloudProvider, { emitEvent: false });
+					}
 				}
 				this.isLoadingVerticals.set(false);
 			},
@@ -1811,7 +2233,11 @@ export class GenerationWizardV2Component {
 	}
 
 	private applyVerticalSelection(slug: string): void {
-		this.selectedVertical.set(this.verticals().find((v) => v.slug === slug) ?? null);
+		const vertical = this.verticals().find((v) => v.slug === slug) ?? null;
+		this.selectedVertical.set(vertical);
+		if (vertical?.cloudProvider) {
+			this.form.controls.cloudProvider.setValue(vertical.cloudProvider, { emitEvent: false });
+		}
 	}
 
 	private loadModules(): void {

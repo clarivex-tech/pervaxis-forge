@@ -1,3 +1,4 @@
+{{ if !model.manifest.multi_tenancy }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -22,3 +23,4 @@ public interface ITenantEntity
 {
     string TenantId { get; set; }
 }
+{{ end }}

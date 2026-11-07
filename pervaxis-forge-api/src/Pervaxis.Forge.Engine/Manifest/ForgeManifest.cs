@@ -43,4 +43,6 @@ public sealed record ForgeManifest
     public UtilitiesConfig? Utilities { get; init; }
 
     public bool MultiTenancy { get; init; } = false;
+
+    public CognitoConfig? Cognito { get; init; }
 }
