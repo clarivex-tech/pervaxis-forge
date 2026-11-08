@@ -10,8 +10,9 @@ Platform code lives in `Infrastructure/Database/` and `Data/{{ model.names.dot_n
 - One PostgreSQL connection setup (`AddForgeDatabase`, already called in `Program.cs`).
 - The user name and password read from AWS Secrets Manager, refreshed automatically after a password rotation.
 - A readiness check at `/health/ready` that runs `SELECT 1`.
-{{- if model.manifest.multi_tenancy }}
+{{- if model.manifest.tenant_ready }}
 - `{{ model.names.dot_net_class_name }}DbContext`, built on Core `TenantDbContext`: every tenant-owned query is limited to the caller's tenant and every write is checked. See [`Tenancy.md`](Tenancy.md).
+- The `tenants` table and its first row, created by the `AddTenants` migration. Run `dotnet ef database update` before the first request.
 {{- else }}
 - `{{ model.names.dot_net_class_name }}DbContext`, with tenant filtering for entities that implement `ITenantEntity`.
 {{- end }}

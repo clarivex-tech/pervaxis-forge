@@ -594,13 +594,18 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				@if (isBackendTypeSelected()) {
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
-						<mat-card-title>Multi-Tenancy</mat-card-title>
-						<mat-card-subtitle>Tenant isolation for shared deployments</mat-card-subtitle>
+						<mat-card-title>Tenancy</mat-card-title>
+						<mat-card-subtitle>How many customers this service serves</mat-card-subtitle>
 					</mat-card-header>
 					<mat-card-content>
+						<p class="step-hint">
+							Every service with a database includes a tenants table and a tenant management API, and keeps
+							each customer's data apart. A single-tenant service can switch to multi-tenant later without
+							moving data (see DeveloperReference/GoingMultiTenant.md in the print).
+						</p>
 						<mat-radio-group [formControl]="infraOptionsForm.controls.multiTenancy" class="multi-tenancy-options">
-							<mat-radio-button [value]="true">Enabled</mat-radio-button>
-							<mat-radio-button [value]="false">Disabled</mat-radio-button>
+							<mat-radio-button [value]="false">Single tenant (one customer)</mat-radio-button>
+							<mat-radio-button [value]="true">Multi-tenant (several customers)</mat-radio-button>
 						</mat-radio-group>
 						@if (infraOptionsForm.hasError('multiTenancyRequiresDatabase')) {
 							<div class="provider-override-hint">

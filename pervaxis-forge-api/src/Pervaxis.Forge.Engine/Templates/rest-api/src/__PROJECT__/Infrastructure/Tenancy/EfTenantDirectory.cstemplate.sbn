@@ -1,0 +1,57 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Data.Tenancy;
+
+namespace {{ model.names.namespace }}.Infrastructure.Tenancy;
+
+/// <summary>
+/// Answers "does this tenant exist and is it active?" from the tenants table. Core calls it for every
+/// tenant-protected request when <c>Forge:Tenant:EnableDirectoryChecks</c> is true, and caches each answer for
+/// <c>Forge:Tenant:DirectoryCacheTtl</c>. If the database cannot be read, the request gets 503 rather than being let through.
+/// </summary>
+public sealed class EfTenantDirectory : ITenantDirectory
+{
+    private readonly {{ model.names.dot_net_class_name }}DbContext _dbContext;
+
+    public EfTenantDirectory({{ model.names.dot_net_class_name }}DbContext dbContext)
+    {
+        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+    }
+
+    /// <inheritdoc />
+    public async Task<TenantDirectoryEntry?> FindAsync(TenantId tenantId, CancellationToken cancellationToken = default)
+    {
+        if (!TenantIdFormat.TryGetGuid(tenantId, out var id))
+            return null;
+
+        var tenant = await _dbContext.Set<Tenant>()
+            .AsNoTracking()
+            .Where(t => t.Id == id)
+            .Select(t => new { t.Name, t.Status })
+            .FirstOrDefaultAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return tenant is null ? null : new TenantDirectoryEntry(tenantId, tenant.Name, tenant.Status);
+    }
+}
+{{ end }}

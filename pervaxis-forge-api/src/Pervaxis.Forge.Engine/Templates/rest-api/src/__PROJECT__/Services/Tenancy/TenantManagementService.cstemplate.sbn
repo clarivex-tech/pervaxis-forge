@@ -1,0 +1,234 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Data.Tenancy;
+
+namespace {{ model.names.namespace }}.Services.Tenancy;
+
+/// <summary>A tenant as returned by tenant management.</summary>
+public sealed record TenantSummary(Guid Id, string Name, TenantStatus Status, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+
+/// <summary>Why a tenant management call did not succeed.</summary>
+public enum TenantChangeError
+{
+    /// <summary>No error.</summary>
+    None,
+
+    /// <summary>The tenant does not exist.</summary>
+    NotFound,
+
+    /// <summary>The name is empty or too long.</summary>
+    InvalidName,
+
+    /// <summary>The status change is not allowed from the current status (for example reactivating an offboarded tenant).</summary>
+    InvalidTransition,
+
+    /// <summary>The change would leave a single-tenant service without its only tenant.</summary>
+    ProtectedTenant,
+}
+
+/// <summary>Outcome of a tenant management call.</summary>
+public sealed record TenantChangeResult(TenantSummary? Tenant, TenantChangeError Error, string? Message = null)
+{
+    public bool Succeeded => Error == TenantChangeError.None;
+
+    public static TenantChangeResult Ok(TenantSummary tenant) => new(tenant, TenantChangeError.None);
+
+    public static TenantChangeResult Fail(TenantChangeError error, string message) => new(null, error, message);
+}
+
+/// <summary>Creates, renames and changes the status of tenants. Used by <c>TenantsController</c>.</summary>
+public interface ITenantManagementService
+{
+    Task<IReadOnlyList<TenantSummary>> ListAsync(CancellationToken cancellationToken = default);
+
+    Task<TenantSummary?> GetAsync(Guid id, CancellationToken cancellationToken = default);
+
+    Task<TenantChangeResult> CreateAsync(string name, CancellationToken cancellationToken = default);
+
+    Task<TenantChangeResult> RenameAsync(Guid id, string name, CancellationToken cancellationToken = default);
+
+    /// <summary>Active to Suspended. Requests for the tenant get 403 until it is reactivated.</summary>
+    Task<TenantChangeResult> SuspendAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Suspended to Active.</summary>
+    Task<TenantChangeResult> ReactivateAsync(Guid id, CancellationToken cancellationToken = default);
+
+    /// <summary>Active or Suspended to Offboarded. Final: an offboarded tenant cannot be reactivated. Its data is kept.</summary>
+    Task<TenantChangeResult> OffboardAsync(Guid id, CancellationToken cancellationToken = default);
+}
+
+/// <inheritdoc />
+public sealed class TenantManagementService : ITenantManagementService
+{
+    private readonly {{ model.names.dot_net_class_name }}DbContext _dbContext;
+    private readonly TenantAdmissionGate _admissionGate;
+    private readonly ClaimsTenantOptions _tenantOptions;
+    private readonly ILogger<TenantManagementService> _logger;
+
+    public TenantManagementService(
+        {{ model.names.dot_net_class_name }}DbContext dbContext,
+        TenantAdmissionGate admissionGate,
+        IOptions<ClaimsTenantOptions> tenantOptions,
+        ILogger<TenantManagementService> logger)
+    {
+        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _admissionGate = admissionGate ?? throw new ArgumentNullException(nameof(admissionGate));
+        _tenantOptions = (tenantOptions ?? throw new ArgumentNullException(nameof(tenantOptions))).Value;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<TenantSummary>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        var tenants = await _dbContext.Set<Tenant>()
+            .AsNoTracking()
+            .OrderBy(t => t.Name)
+            .ToListAsync(cancellationToken)
+            .ConfigureAwait(false);
+
+        return tenants.Select(ToSummary).ToList();
+    }
+
+    /// <inheritdoc />
+    public async Task<TenantSummary?> GetAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        var tenant = await _dbContext.Set<Tenant>().AsNoTracking()
+            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken)
+            .ConfigureAwait(false);
+
+        return tenant is null ? null : ToSummary(tenant);
+    }
+
+    /// <inheritdoc />
+    public async Task<TenantChangeResult> CreateAsync(string name, CancellationToken cancellationToken = default)
+    {
+        if (!TryCleanName(name, out var cleaned))
+            return InvalidName();
+
+        var now = DateTimeOffset.UtcNow;
+        var tenant = new Tenant
+        {
+            Id = Guid.NewGuid(),
+            Name = cleaned,
+            Status = TenantStatus.Active,
+            CreatedAt = now,
+            UpdatedAt = now,
+        };
+
+        _dbContext.Set<Tenant>().Add(tenant);
+        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        _logger.LogInformation("Tenant {TenantId} created", tenant.Id);
+        return TenantChangeResult.Ok(ToSummary(tenant));
+    }
+
+    /// <inheritdoc />
+    public async Task<TenantChangeResult> RenameAsync(Guid id, string name, CancellationToken cancellationToken = default)
+    {
+        if (!TryCleanName(name, out var cleaned))
+            return InvalidName();
+
+        return await ChangeAsync(id, tenant =>
+        {
+            tenant.Name = cleaned;
+            return null;
+        }, "renamed", cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public Task<TenantChangeResult> SuspendAsync(Guid id, CancellationToken cancellationToken = default)
+        => MoveAsync(id, TenantStatus.Suspended, [TenantStatus.Active], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<TenantChangeResult> ReactivateAsync(Guid id, CancellationToken cancellationToken = default)
+        => MoveAsync(id, TenantStatus.Active, [TenantStatus.Suspended], cancellationToken);
+
+    /// <inheritdoc />
+    public Task<TenantChangeResult> OffboardAsync(Guid id, CancellationToken cancellationToken = default)
+        => MoveAsync(id, TenantStatus.Offboarded, [TenantStatus.Active, TenantStatus.Suspended], cancellationToken);
+
+    private Task<TenantChangeResult> MoveAsync(Guid id, TenantStatus target, TenantStatus[] allowedFrom, CancellationToken cancellationToken)
+        => ChangeAsync(id, tenant =>
+        {
+            if (!allowedFrom.Contains(tenant.Status))
+                return TenantChangeResult.Fail(
+                    TenantChangeError.InvalidTransition,
+                    $"A tenant that is {tenant.Status} cannot become {target}.");
+
+            if (target == TenantStatus.Offboarded && IsTheOnlyTenantOfThisService(tenant.Id))
+                return TenantChangeResult.Fail(
+                    TenantChangeError.ProtectedTenant,
+                    "This is a single-tenant service and this is its only tenant, so it cannot be offboarded. Suspend it instead.");
+
+            tenant.Status = target;
+            return null;
+        }, target.ToString().ToLowerInvariant(), cancellationToken);
+
+    private async Task<TenantChangeResult> ChangeAsync(
+        Guid id,
+        Func<Tenant, TenantChangeResult?> change,
+        string what,
+        CancellationToken cancellationToken)
+    {
+        var tenant = await _dbContext.Set<Tenant>()
+            .FirstOrDefaultAsync(t => t.Id == id, cancellationToken)
+            .ConfigureAwait(false);
+
+        if (tenant is null)
+            return TenantChangeResult.Fail(TenantChangeError.NotFound, "The tenant was not found.");
+
+        var refused = change(tenant);
+        if (refused is not null)
+            return refused;
+
+        tenant.UpdatedAt = DateTimeOffset.UtcNow;
+        await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+
+        // Apply the new status to the next request on this instance; other instances apply it within the cache TTL.
+        _admissionGate.Invalidate(new TenantId(tenant.Id.ToString("D")));
+
+        _logger.LogInformation("Tenant {TenantId} {Change}", tenant.Id, what);
+        return TenantChangeResult.Ok(ToSummary(tenant));
+    }
+
+    private bool IsTheOnlyTenantOfThisService(Guid id)
+        => _tenantOptions.Mode == TenancyMode.SingleTenant
+           && TenantIdFormat.TryNormalize(_tenantOptions.DefaultTenantId, out var only)
+           && TenantIdFormat.TryGetGuid(only, out var onlyId)
+           && onlyId == id;
+
+    private static bool TryCleanName(string? name, out string cleaned)
+    {
+        cleaned = name?.Trim() ?? string.Empty;
+        return cleaned.Length is > 0 and <= Tenant.NameMaxLength;
+    }
+
+    private static TenantChangeResult InvalidName()
+        => TenantChangeResult.Fail(TenantChangeError.InvalidName, $"The name must be 1 to {Tenant.NameMaxLength} characters.");
+
+    private static TenantSummary ToSummary(Tenant tenant)
+        => new(tenant.Id, tenant.Name, tenant.Status, tenant.CreatedAt, tenant.UpdatedAt);
+}
+{{ end }}

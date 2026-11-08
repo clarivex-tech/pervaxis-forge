@@ -41,10 +41,14 @@
     <PackageVersion Include="coverlet.collector" Version="6.0.2" />
     <PackageVersion Include="coverlet.msbuild" Version="6.0.2" />
     <!-- Transitive version pins — override vulnerable versions pulled in by dependencies -->
-{{- if model.manifest.multi_tenancy }}
-    <!-- Claims-based multi-tenancy (Core). Both packages ship in the Core 1.7.0 release (tag v1.7.0). A tenant service cannot restore until that release is published. -->
-    <PackageVersion Include="Pervaxis.Core.MultiTenancy" Version="1.7.0" />
-    <PackageVersion Include="Pervaxis.Core.Data.EntityFrameworkCore" Version="1.7.0" />
+{{- if model.manifest.tenant_ready }}
+    <!-- Claims-based multi-tenancy (Core). Single-tenant mode needs Core 1.8.0 (tag v1.8.0). -->
+    <PackageVersion Include="Pervaxis.Core.MultiTenancy" Version="1.8.0" />
+    <PackageVersion Include="Pervaxis.Core.Data.EntityFrameworkCore" Version="1.8.0" />
+    <!-- In-memory SQLite for the generated tenant tests. -->
+    <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
+    <!-- Test-only security override: EF Sqlite 10.0.8 pulls SQLitePCLRaw.lib.e_sqlite3 2.1.11 (GHSA-2m69-gcr7-jv3q); 3.50.3 is fixed. -->
+    <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
 {{- end }}
     <PackageVersion Include="AngleSharp" Version="1.7.2" />
     <PackageVersion Include="HtmlSanitizer" Version="9.2.1039" />

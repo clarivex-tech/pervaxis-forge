@@ -170,6 +170,16 @@ The six design questions are resolved above; the following evidence remains open
 7. **Mandatory Forge gate: raw-payload validation.** Core's middleware only sees the `ClaimsPrincipal`, which flattens a one-element JSON array into a plain string claim and hides duplicate JSON properties. Generated claims-based tenancy must therefore call `TenantClaimPayloadValidator.Validate` from the JwtBearer `TokenValidated` handler (using the token's raw payload and the configured claim name) and fail the request with 403 when the result is not `Resolved`. Generation of claims-based tenancy must not be enabled until the template includes this hook and generated tests prove that array-valued, one-element-array and duplicate-property tenant claims are rejected.
 8. Scope handles (`ITenantScopeFactory.BeginScope`) must be disposed by the code that created them. Disposal from an inherited flow is not detectable; it only fails closed (the scope becomes unresolved) and never exposes another tenant. Accepted limitation for v1.
 
+### Decision update (2026-11-07): tenant-ready by default
+
+Every generated REST service with a database is tenant-ready, even for one customer:
+
+- **Single-tenant mode** (`Forge:Tenant:Mode = SingleTenant`, the default when multi-tenancy is not selected): the tenant comes from `Forge:Tenant:DefaultTenantId`, not from a claim. No Cognito trigger is needed and API keys keep working. Rows are still tenant-tagged, so switching to `MultiTenant` needs no data migration.
+- **Tenant master table** (`tenants`) with the first tenant seeded by the `AddTenants` migration, and an `ITenantDirectory` backed by it. Directory checks are **on** by default: unknown or inactive tenants get 403.
+- **Tenant management API** (`api/v1/tenants`): list, create, rename, suspend, reactivate, offboard. Requires the new `PlatformAdmin` policy and is tenant-exempt. This deviates from section 2, which excluded onboarding from v1.
+- The step-by-step switch to multi-tenant ships in every print as `DeveloperReference/GoingMultiTenant.md`.
+- Services without a database are unchanged.
+
 ### Implementation status (2026-11-07)
 
 | Area | State | Evidence |
@@ -179,11 +189,13 @@ The six design questions are resolved above; the following evidence remains open
 | Forge validation (Engine and API) | Done: PostgreSQL and Cognito required, API keys rejected | `MultiTenancyGenerationTests` |
 | Forge validation (Launchpad) | Done: inline rules plus blocking prerequisite acknowledgment | `ngc` type check; no UI test written |
 | Generated service | Done: Core packages, claims middleware, `TenantDbContext`, raw-payload guard (item 7), exception mapping, tenant tests, developer reference | Generated tenant service builds with 0 warnings and passes 104 tests; non-tenant service still passes 70 |
+| Single-tenant mode and tenant management | Done: Core 1.8.0 `TenancyMode`, tenants table, EF migration and snapshot, `EfTenantDirectory`, management API, `PlatformAdmin` policy, tests, `GoingMultiTenant.md` | Single-tenant print: 0 warnings, 91 tests pass. Multi-tenant print: 125 pass. No-database print: 46 pass. Migration applied to PostgreSQL 18 and seeded the first tenant; `has-pending-model-changes` reports none. |
+| Core fix | Entities added only through configuration classes now get the tenant key and conversion (found while testing the print) | 5 new Core tests; Core EF suite 91/91 on SQLite and PostgreSQL |
 | Roslyn analyzers (section 9) | Not started | |
 | Migration tool and runbook (section 10) | Not started | |
 | Genesis inventory and major release (section 7) | Not started | |
 | Local-issuer CI and real-Cognito checks (section 11) | Local issuer covered in generated tests; scheduled real-Cognito check not started | |
-| Release | Generated services pin `Pervaxis.Core.MultiTenancy` and `Pervaxis.Core.Data.EntityFrameworkCore` 1.7.0, which are unpublished (nuget.org is at 1.6.0). Tag `v1.7.0` before generating tenant services. | |
+| Release | Core 1.7.0 is published. Prints now pin 1.8.0 (single-tenant mode, EF fix), which must be tagged `v1.8.0` and published before a print with a database can restore. | |
 
 Item 4: the 404 versus concurrency classification is tested on PostgreSQL in the Core EF package, and the generated middleware maps the results to 404 and 409. A test for mixed-entry failures rolling back has not been confirmed. Items 6 and 7 are verified in generated tests.
 

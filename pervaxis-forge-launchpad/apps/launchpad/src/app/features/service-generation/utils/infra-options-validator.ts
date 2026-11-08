@@ -54,7 +54,7 @@ export function infraOptionsValidator(
 		// Rule 2: Multi-Tenancy requires Database
 		if (value.multiTenancy && !databaseConfiguredFn()) {
 			errors['multiTenancyRequiresDatabase'] =
-				'Multi-Tenancy requires a database. Enable one in the Database panel.';
+				'Multi-tenant needs a database. Enable one in the Database panel.';
 		}
 
 		// Rules 4 and 5: Multi-Tenancy takes the tenant only from a Cognito access token

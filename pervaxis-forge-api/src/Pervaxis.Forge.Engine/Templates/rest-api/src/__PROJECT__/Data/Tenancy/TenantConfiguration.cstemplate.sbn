@@ -1,0 +1,51 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace {{ model.names.namespace }}.Data.Tenancy;
+
+/// <summary>Maps <see cref="Tenant"/> to the <c>tenants</c> table and seeds the first tenant.</summary>
+public sealed class TenantConfiguration : IEntityTypeConfiguration<Tenant>
+{
+    /// <inheritdoc />
+    public void Configure(EntityTypeBuilder<Tenant> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        builder.ToTable("tenants");
+        builder.HasKey(tenant => tenant.Id);
+        builder.Property(tenant => tenant.Id).ValueGeneratedNever();
+        builder.Property(tenant => tenant.Name).IsRequired().HasMaxLength(Tenant.NameMaxLength);
+        builder.Property(tenant => tenant.Status).HasConversion<string>().HasMaxLength(32).IsRequired();
+        builder.Property(tenant => tenant.CreatedAt).IsRequired();
+        builder.Property(tenant => tenant.UpdatedAt).IsRequired();
+
+        builder.HasData(new Tenant
+        {
+            Id = Guid.Parse(TenantDefaults.DefaultTenantId),
+            Name = TenantDefaults.DefaultTenantName,
+            Status = Pervaxis.Core.Abstractions.MultiTenancy.TenantStatus.Active,
+            CreatedAt = TenantDefaults.SeededAt,
+            UpdatedAt = TenantDefaults.SeededAt,
+        });
+    }
+}
+{{ end }}
