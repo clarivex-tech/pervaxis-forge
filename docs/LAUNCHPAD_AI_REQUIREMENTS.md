@@ -80,8 +80,9 @@ and what remains to be built by the domain team or added to the platform.
 
 | ID | Pri | Requirement |
 |---|---|---|
-| CAT-1 | Must | The catalog lists every service type, always-included capability, add-on module (Genesis and Canvas), and configuration choice (database, Cognito, single or multi-tenant, background jobs, utilities). |
-| CAT-2 | Must | Each item has: name, one-line description, category, status (available, preview, coming soon), cloud (agnostic or AWS), package and version where relevant, and a link to its developer documentation. |
+| CAT-1 | Must | The catalog lists every service type, always-included capability, add-on module (Genesis and Canvas), configuration choice (database, Cognito, single or multi-tenant, background jobs, utilities), platform library (Pervaxis Core, Genesis, Canvas) and **third-party library shipped in prints** (for example ag-grid, ECharts, PrimeNG, FluentValidation). Appendix A is the starting inventory. |
+| CAT-2 | Must | Each item has: name, one-line description, **capabilities in plain terms** (for example "data grid: sort, filter, inline edit, export"), category, layer (UI, BFF or both), origin (Pervaxis or third-party), status (available, preview, coming soon), cloud (agnostic or AWS), package and version where relevant, and a link to its developer documentation. |
+| CAT-2a | Must | Third-party items also state **license and edition** (for example MIT, ag-grid Community or Enterprise) and any feature limited to a paid edition, so the fit-gap report can say "covered, needs an Enterprise license". |
 | CAT-3 | Must | Each item declares the AWS resources it needs (for example Caching: ElastiCache; File Storage: S3; Database: RDS PostgreSQL; Cognito: user pool and app clients; Messaging: SQS/SNS) and which properties of them are configurable. |
 | CAT-4 | Must | Dependencies and conflicts ("requires", "excludes") come from the same rules the Engine enforces (`ManifestValidator`), not from a separate hand-written list. |
 | CAT-5 | Must | The catalog is kept as data in the Forge Engine and exposed through the Forge API. |
@@ -250,3 +251,123 @@ Acceptance: running the same document twice creates no duplicate backlog items.
 6. Retention period for client documents, and any client contracts that forbid AI processing?
 7. Is Bedrock available in every region where clients require data residency?
 8. Should Launchpad AI also review a design or generated print against the requirements later (traceability to delivery)?
+
+---
+
+## Appendix A. Catalog seed inventory
+
+Taken on 2026-11-08 from the Forge module registry (`GenesisModules.cs`, `CanvasModules.cs`), the REST print
+`Directory.Packages.props`, the angular-monolith `package.json`, and the Genesis and Canvas repositories.
+This is the starting data for the catalog, not the catalog itself: versions change, and licenses and editions must be
+confirmed before the catalog is published (CAT-2a). Fields still to be filled for the catalog are marked "to confirm".
+
+### A.1 BFF: Genesis modules (opt-in per service)
+
+| Module | Capability | AWS resource (IAM scope) | Cloud |
+|---|---|---|---|
+| Caching | Distributed cache | ElastiCache Redis (`elasticache:*`) | AWS |
+| Messaging | Event-driven messaging, publish and subscribe | SQS, SNS (`sqs:*`, `sns:*`) | AWS |
+| FileStorage | Object storage, upload and download | S3 (`s3:*`) | AWS |
+| Search | Full-text search | OpenSearch (`opensearch:*`) | AWS |
+| Notifications | Email, SMS and push notifications | SNS (`sns:*`) | AWS |
+| Workflow | Step-based workflows | Step Functions (`stepfunctions:*`) | AWS |
+| AIAssistance | Generative AI | Bedrock (`bedrock:*`) | AWS |
+| Reporting | Data exports and scheduled reports | Athena, QuickSight (`athena:*`, `quicksight:*`) | AWS |
+| Idempotency | Request deduplication | DynamoDB (`dynamodb:*`) | AWS |
+| TransactionalLogging | Structured transactional audit logging | CloudWatch (`cloudwatch:*`) | AWS |
+| FeatureFlags | Feature flag management | AppConfig (`appconfig:*`) | AWS |
+| OData | `$filter`, `$top`, `$skip`, `$count` on REST lists | none | Agnostic |
+| Sanitization | Server-side input sanitization, XSS prevention | none | Agnostic |
+
+Packages: `Pervaxis.Genesis.<Module>` (abstractions) and `Pervaxis.Genesis.<Module>.AWS` (provider), plus `Pervaxis.Genesis.Base`.
+FeatureFlags and TransactionalLogging ship as AWS providers only. OData and Sanitization have no AWS provider.
+
+### A.2 BFF: Pervaxis Core (in every print)
+
+| Package | Capability |
+|---|---|
+| Pervaxis.Core.Abstractions | Shared contracts: tenant id, repositories, unit of work, Genesis interfaces |
+| Pervaxis.Core.Exceptions | Platform exceptions (including tenant exceptions mapped to 403, 404, 409) |
+| Pervaxis.Core.Observability | Logging, tracing and metrics conventions |
+| Pervaxis.Core.Resilience | Retry, circuit breaker and timeout policies |
+| Pervaxis.Core.Security | Security helpers |
+| Pervaxis.Core.Messaging | Messaging abstractions |
+| Pervaxis.Core.Data | Data access abstractions |
+| Pervaxis.Core.AI | AI abstractions |
+| Pervaxis.Core.MultiTenancy | Tenant resolution (single and multi-tenant), tenant context, scopes, status checks (prints with a database) |
+| Pervaxis.Core.Data.EntityFrameworkCore | Tenant-isolated EF Core: `TenantDbContext`, `TenantEntity`, tenant repository (prints with a database) |
+
+Current release: 1.8.0.
+
+### A.3 BFF: always included in a REST print
+
+| Capability | Detail |
+|---|---|
+| Authentication | API key, Cognito JWT (access tokens, client allowlist), or both; `AdminOnly` and `PlatformAdmin` policies, configurable group and scope policies |
+| Tenancy (with a database) | Single- or multi-tenant mode, `tenants` table, tenant status checks, tenant management API |
+| Database (optional) | PostgreSQL, Secrets Manager credentials with rotation, readiness check, EF migrations |
+| Middleware | Correlation id, JWT propagation, exception-to-Problem-Details mapping, security headers |
+| Observability | Serilog structured logs (CloudWatch sink), OpenTelemetry tracing and metrics |
+| Resilience | HTTP client pipeline: retry, circuit breaker, timeout |
+| API | URL versioning, Swagger, health (`/health`, `/health/ready`), output caching, rate limiting, response compression, CORS |
+| Utilities | Paged results, `.xlsx` reader, content-hash deduplication, confirmation phrases, hashing |
+| Delivery | Dockerfile, CI workflow, generated tests |
+
+### A.4 BFF: third-party libraries shipped in prints
+
+| Library | Version | Capability | License (to confirm) |
+|---|---|---|---|
+| Swashbuckle.AspNetCore | 7.3 | Swagger / OpenAPI UI | MIT |
+| Npgsql.EntityFrameworkCore.PostgreSQL | 10.0 | PostgreSQL provider for EF Core | PostgreSQL |
+| Microsoft.EntityFrameworkCore | 10.0 | ORM, migrations | MIT |
+| FluentValidation | 12.0 | Request validation | Apache-2.0 |
+| Serilog (+ AWS.Logger.SeriLog) | 9.0 | Structured logging, CloudWatch sink | Apache-2.0 |
+| OpenTelemetry | 1.15 | Tracing and metrics export (OTLP) | Apache-2.0 |
+| Asp.Versioning | 8.1 | API versioning | MIT |
+| Microsoft.Extensions.Http.Resilience | 10.0 | HTTP resilience (Polly) | MIT |
+| BCrypt.Net-Next | 4.0 | Password and API-key hashing | MIT |
+| HtmlSanitizer + AngleSharp | 9.2 / 1.7 | HTML sanitization (Sanitization module) | MIT |
+| StackExchange.Redis | (Genesis) | Redis client (Caching module) | MIT |
+| OpenSearch.Client | (Genesis) | OpenSearch client (Search module) | Apache-2.0 |
+| YamlDotNet, Scrutor | (Genesis) | Configuration parsing, DI assembly scanning | MIT |
+| AWS SDK for .NET | 4.x | AWS service clients | Apache-2.0 |
+
+Test stack in prints: xUnit, Moq, FluentAssertions 7, coverlet, `Microsoft.AspNetCore.Mvc.Testing`, EF Core SQLite.
+Note: FluentAssertions 8 and later is commercially licensed; prints pin 7.
+
+### A.5 UI: Canvas libraries
+
+| Package group | Packages | Capability |
+|---|---|---|
+| Platform | `canvas-platform-auth`, `-http`, `-error`, `-i18n`, `-state` | Sign-in, HTTP layer, error handling, translations, state |
+| Shell | `canvas-shell-core`, `-auth`, `-layout`, `-routing` | App shell, protected routes, layout, navigation |
+| Components | `canvas-components-web` (charts, forms, grid, components), `canvas-components-mobile` | Ready-made web and Ionic mobile controls |
+| Micro-frontends | `canvas-mfe-bootstrap`, `-contracts`, `-testing` | Loading MFEs, shared contracts, MFE test helpers |
+| Reference | `canvas-domain-customer` | Sample domain library to copy |
+
+Canvas feature modules offered in Launchpad (descriptions to confirm): Workspace, Shell, Layout, Navigation, Auth,
+Settings, Profile, Dashboard, Notifications, Search, Reports, Analytics, Admin, Support.
+
+### A.6 UI: third-party libraries
+
+| Library | Version | Capability | License / edition (to confirm) |
+|---|---|---|---|
+| ag-grid-angular | 33.3 | Data grid: sort, filter, edit, export | Community (MIT) or Enterprise (commercial) |
+| ECharts | 5.6 | Charts | Apache-2.0 |
+| PrimeNG + PrimeIcons + @primeng/themes | 21 / 7 | UI component set (angular-monolith) | MIT; premium themes and blocks are commercial |
+| Ionic Angular | 8.8 | Mobile UI | MIT |
+| Capacitor (app, browser, core, network, preferences, push-notifications) | 6 | Native mobile APIs | MIT |
+| angular-oauth2-oidc | 20 | OIDC / Cognito sign-in | MIT |
+| Transloco | 8.3 | Translations (i18n) | MIT |
+| NgRx Signals | 21 | State management | MIT |
+
+### A.7 Known gaps (as of this inventory)
+
+| Need | Status |
+|---|---|
+| Excel beyond simple reading (formulas, styles, writing) | Gap. `WorkbookReader` reads plain `.xlsx` only. Candidate: ClosedXML (MIT). |
+| PDF generation | Launchpad option marked "coming soon"; no library in the templates. |
+| Template engine (documents, emails) | Launchpad option marked "coming soon"; no library in the templates. |
+| Tenant partitioning in Genesis providers (cache, S3, search, queues) | Not audited or finished (multi-tenancy spec, section 7). |
+| Machine-to-machine tenancy | Not supported in v1. |
+| Roslyn analyzers for tenancy | Not started. |
