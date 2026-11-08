@@ -45,7 +45,7 @@
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" />
 {{ end }}
-{{- if model.manifest.multi_tenancy }}
+{{- if model.manifest.tenant_ready }}
     <PackageReference Include="Pervaxis.Core.MultiTenancy" />
     <PackageReference Include="Pervaxis.Core.Data.EntityFrameworkCore" />
 {{- end }}

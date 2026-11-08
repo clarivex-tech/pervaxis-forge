@@ -28,7 +28,7 @@ using Moq;
 using Npgsql;
 using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Infrastructure.Database;
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
 using {{ model.names.namespace }}.Infrastructure.Tenancy;
 {{- else }}
 using Pervaxis.Core.Abstractions.MultiTenancy;
@@ -318,7 +318,7 @@ public sealed class DatabaseCredentialsReaderTests
 
 public sealed class DatabaseRegistrationTests
 {
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
     private sealed class FakeTenantContext : ITenantContext
     {
         public string? TenantId => "tenant-1";
@@ -331,7 +331,7 @@ public sealed class DatabaseRegistrationTests
 
         var services = new ServiceCollection();
         services.AddLogging();
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
         services.AddScoped<ITenantContext, FakeTenantContext>();
 {{- else }}
         services.AddSingleton<ITenantContext>(DesignTimeTenantContext.Instance);

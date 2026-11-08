@@ -1,0 +1,443 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using System.Reflection;
+using System.Security.Claims;
+using FluentAssertions;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.Data.EntityFrameworkCore;
+using Pervaxis.Core.Exceptions.Exceptions;
+using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Controllers;
+using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Data.Tenancy;
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Infrastructure.Tenancy;
+using {{ model.names.namespace }}.Models.Configuration;
+using {{ model.names.namespace }}.Services.Tenancy;
+using Xunit;
+
+namespace {{ model.names.test_project_name }};
+
+// These tests cover the platform tenancy code: the tenants table, tenant management, the status check and
+// tenant isolation in this service's DbContext. They use in-memory SQLite, so no PostgreSQL is needed. Keep them.
+
+/// <summary>An in-memory SQLite database with this service's schema, including the seeded first tenant.</summary>
+public sealed class TenantTestDatabase : IDisposable
+{
+    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+
+    public TenantTestDatabase()
+    {
+        _connection.Open();
+        Options = new DbContextOptionsBuilder<{{ model.names.dot_net_class_name }}DbContext>().UseSqlite(_connection).Options;
+        using var context = new {{ model.names.dot_net_class_name }}DbContext(Options, DesignTimeTenantContext.Instance);
+        context.Database.EnsureCreated();
+    }
+
+    public DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> Options { get; }
+
+    /// <summary>Services as Program.cs registers them for tenancy, backed by this database.</summary>
+    public ServiceProvider BuildServices(TenancyMode mode = TenancyMode.SingleTenant)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddPervaxisClaimsMultiTenancy(options =>
+        {
+            options.Mode = mode;
+            options.DefaultTenantId = TenantDefaults.DefaultTenantId;
+            options.EnableDirectoryChecks = true;
+        });
+        services.AddScoped(provider => new {{ model.names.dot_net_class_name }}DbContext(Options, provider.GetRequiredService<ITenantContext>()));
+        services.AddScoped<ITenantDirectory, EfTenantDirectory>();
+        services.AddScoped<ITenantManagementService, TenantManagementService>();
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    }
+
+    public void Dispose() => _connection.Dispose();
+}
+
+public sealed class TenantManagementTests : IDisposable
+{
+    private readonly TenantTestDatabase _database = new();
+    private readonly ServiceProvider _services;
+
+    public TenantManagementTests()
+    {
+        _services = _database.BuildServices();
+    }
+
+    private static Guid DefaultTenant => Guid.Parse(TenantDefaults.DefaultTenantId);
+
+    private async Task<T> UseAsync<T>(Func<ITenantManagementService, Task<T>> action)
+    {
+        using var scope = _services.CreateScope();
+        return await action(scope.ServiceProvider.GetRequiredService<ITenantManagementService>());
+    }
+
+    [Fact]
+    public async Task TheFirstTenant_IsSeededAndActive()
+    {
+        var tenant = await UseAsync(t => t.GetAsync(DefaultTenant));
+
+        tenant.Should().NotBeNull();
+        tenant!.Name.Should().Be(TenantDefaults.DefaultTenantName);
+        tenant.Status.Should().Be(TenantStatus.Active);
+    }
+
+    [Fact]
+    public async Task Create_AddsAnActiveTenant_ThatIsListed()
+    {
+        var created = await UseAsync(t => t.CreateAsync("  Contoso  "));
+
+        created.Succeeded.Should().BeTrue();
+        created.Tenant!.Name.Should().Be("Contoso");
+        created.Tenant.Status.Should().Be(TenantStatus.Active);
+        (await UseAsync(t => t.ListAsync())).Select(t => t.Id).Should().Contain([DefaultTenant, created.Tenant.Id]);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task Create_RejectsAnEmptyName(string name)
+    {
+        (await UseAsync(t => t.CreateAsync(name))).Error.Should().Be(TenantChangeError.InvalidName);
+    }
+
+    [Fact]
+    public async Task Create_RejectsATooLongName()
+    {
+        (await UseAsync(t => t.CreateAsync(new string('a', Tenant.NameMaxLength + 1)))).Error.Should().Be(TenantChangeError.InvalidName);
+    }
+
+    [Fact]
+    public async Task Rename_ChangesTheName()
+    {
+        var renamed = await UseAsync(t => t.RenameAsync(DefaultTenant, "Acme Ltd"));
+
+        renamed.Succeeded.Should().BeTrue();
+        (await UseAsync(t => t.GetAsync(DefaultTenant)))!.Name.Should().Be("Acme Ltd");
+    }
+
+    [Fact]
+    public async Task SuspendAndReactivate_MoveTheStatusBackAndForth()
+    {
+        (await UseAsync(t => t.SuspendAsync(DefaultTenant))).Tenant!.Status.Should().Be(TenantStatus.Suspended);
+        (await UseAsync(t => t.ReactivateAsync(DefaultTenant))).Tenant!.Status.Should().Be(TenantStatus.Active);
+    }
+
+    [Fact]
+    public async Task InvalidTransitions_AreRefused()
+    {
+        (await UseAsync(t => t.ReactivateAsync(DefaultTenant))).Error.Should().Be(TenantChangeError.InvalidTransition, "an active tenant cannot be reactivated");
+
+        var other = (await UseAsync(t => t.CreateAsync("Contoso"))).Tenant!.Id;
+        (await UseAsync(t => t.OffboardAsync(other))).Succeeded.Should().BeTrue();
+        (await UseAsync(t => t.ReactivateAsync(other))).Error.Should().Be(TenantChangeError.InvalidTransition, "offboarding is final");
+        (await UseAsync(t => t.SuspendAsync(other))).Error.Should().Be(TenantChangeError.InvalidTransition);
+    }
+
+    [Fact]
+    public async Task UnknownTenant_IsNotFound()
+    {
+        var unknown = Guid.NewGuid();
+
+        (await UseAsync(t => t.GetAsync(unknown))).Should().BeNull();
+        (await UseAsync(t => t.SuspendAsync(unknown))).Error.Should().Be(TenantChangeError.NotFound);
+        (await UseAsync(t => t.RenameAsync(unknown, "x"))).Error.Should().Be(TenantChangeError.NotFound);
+    }
+
+    [Fact]
+    public async Task SingleTenant_TheOnlyTenantCannotBeOffboarded()
+    {
+        (await UseAsync(t => t.OffboardAsync(DefaultTenant))).Error.Should().Be(TenantChangeError.ProtectedTenant);
+    }
+
+    [Fact]
+    public async Task MultiTenant_TheFirstTenantCanBeOffboarded()
+    {
+        using var services = _database.BuildServices(TenancyMode.MultiTenant);
+        using var scope = services.CreateScope();
+
+        var result = await scope.ServiceProvider.GetRequiredService<ITenantManagementService>().OffboardAsync(DefaultTenant);
+
+        result.Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task Directory_ReportsKnownTenantsAndTheirStatus()
+    {
+        using var scope = _services.CreateScope();
+        var directory = scope.ServiceProvider.GetRequiredService<ITenantDirectory>();
+
+        (await directory.FindAsync(new TenantId(TenantDefaults.DefaultTenantId)))!.Status.Should().Be(TenantStatus.Active);
+        (await directory.FindAsync(new TenantId(Guid.NewGuid().ToString("D")))).Should().BeNull();
+    }
+
+    [Fact]
+    public async Task Suspension_AppliesToTheNextStatusCheckImmediately()
+    {
+        var tenant = new TenantId(TenantDefaults.DefaultTenantId);
+        using (var scope = _services.CreateScope())
+        {
+            var gate = scope.ServiceProvider.GetRequiredService<TenantAdmissionGate>();
+            (await gate.EvaluateAsync(tenant)).Admission.Should().Be(TenantAdmission.Allowed);
+        }
+
+        await UseAsync(t => t.SuspendAsync(DefaultTenant));
+
+        using (var scope = _services.CreateScope())
+        {
+            var gate = scope.ServiceProvider.GetRequiredService<TenantAdmissionGate>();
+            (await gate.EvaluateAsync(tenant)).Admission.Should().Be(TenantAdmission.Denied, "suspending evicts the cached status");
+        }
+    }
+
+    public void Dispose()
+    {
+        _services.Dispose();
+        _database.Dispose();
+    }
+}
+
+/// <summary>A tenant-owned entity used only to prove isolation in this service's DbContext.</summary>
+public sealed class IsolationProbe : TenantEntity<Guid>
+{
+    public IsolationProbe(Guid id, string label)
+    {
+        Id = id;
+        Label = label;
+    }
+
+    public string Label { get; set; }
+}
+
+/// <summary>This service's DbContext plus <see cref="IsolationProbe"/>, so isolation is tested with the real model and rules.</summary>
+public sealed class IsolationTestDbContext : {{ model.names.dot_net_class_name }}DbContext
+{
+    public IsolationTestDbContext(DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> options, ITenantContext tenantContext)
+        : base(options, tenantContext)
+    {
+    }
+
+    protected override void OnTenantModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnTenantModelCreating(modelBuilder);
+        modelBuilder.Entity<IsolationProbe>();
+    }
+}
+
+public sealed class TenantIsolationInDbContextTests : IDisposable
+{
+    private static readonly TenantId TenantA = new(TenantDefaults.DefaultTenantId);
+    private static readonly TenantId TenantB = new(Guid.NewGuid().ToString("D"));
+
+    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    private readonly DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> _options;
+    private readonly ServiceProvider _services;
+
+    public TenantIsolationInDbContextTests()
+    {
+        _connection.Open();
+        _options = new DbContextOptionsBuilder<{{ model.names.dot_net_class_name }}DbContext>().UseSqlite(_connection).Options;
+        using (var context = new IsolationTestDbContext(_options, DesignTimeTenantContext.Instance))
+            context.Database.EnsureCreated();
+
+        _services = new ServiceCollection().AddLogging().AddPervaxisClaimsMultiTenancy().BuildServiceProvider();
+    }
+
+    private ITenantScopeFactory Scopes => _services.GetRequiredService<ITenantScopeFactory>();
+
+    private IsolationTestDbContext NewContext() => new(_options, _services.GetRequiredService<ITenantContext>());
+
+    private async Task AddAsync(TenantId tenant, string label)
+    {
+        using var scope = Scopes.BeginScope(tenant);
+        await using var context = NewContext();
+        context.Add(new IsolationProbe(Guid.NewGuid(), label));
+        await context.SaveChangesAsync();
+    }
+
+    private async Task<List<string>> LabelsAsync(TenantId tenant)
+    {
+        using var scope = Scopes.BeginScope(tenant);
+        await using var context = NewContext();
+        return await context.Set<IsolationProbe>().Select(p => p.Label).ToListAsync();
+    }
+
+    [Fact]
+    public async Task EachTenant_SeesOnlyItsOwnRows()
+    {
+        await AddAsync(TenantA, "a-row");
+        await AddAsync(TenantB, "b-row");
+
+        (await LabelsAsync(TenantA)).Should().Equal("a-row");
+        (await LabelsAsync(TenantB)).Should().Equal("b-row");
+    }
+
+    [Fact]
+    public async Task WithoutATenant_NoRowsAreVisible_AndWritesAreRejected()
+    {
+        await AddAsync(TenantA, "a-row");
+
+        await using var context = NewContext();
+        (await context.Set<IsolationProbe>().CountAsync()).Should().Be(0);
+
+        context.Add(new IsolationProbe(Guid.NewGuid(), "orphan"));
+        await context.Invoking(c => c.SaveChangesAsync()).Should().ThrowAsync<TenantContextRequiredException>();
+    }
+
+    [Fact]
+    public async Task AnotherTenantsRow_CannotBeDeleted()
+    {
+        Guid id;
+        using (Scopes.BeginScope(TenantA))
+        await using (var context = NewContext())
+        {
+            var row = new IsolationProbe(Guid.NewGuid(), "a-row");
+            context.Add(row);
+            await context.SaveChangesAsync();
+            id = row.Id;
+        }
+
+        using (Scopes.BeginScope(TenantB))
+        await using (var context = NewContext())
+        {
+            var forged = new IsolationProbe(id, "forged");
+            context.Attach(forged);
+            context.Remove(forged);
+            await context.Invoking(c => c.SaveChangesAsync()).Should().ThrowAsync<TenantResourceNotFoundException>();
+        }
+
+        (await LabelsAsync(TenantA)).Should().Equal("a-row");
+    }
+
+    public void Dispose()
+    {
+        _services.Dispose();
+        _connection.Dispose();
+    }
+}
+
+/// <summary>A small host with the real Core tenancy middleware in single-tenant mode and the tenants table.</summary>
+public sealed class SingleTenantHostTests : IAsyncLifetime
+{
+    private readonly TenantTestDatabase _database = new();
+    private WebApplication? _app;
+    private HttpClient _client = null!;
+
+    public async Task InitializeAsync()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
+        builder.Configuration.Sources.Clear();
+        builder.WebHost.UseTestServer();
+        builder.Services.AddPervaxisClaimsMultiTenancy(options =>
+        {
+            options.Mode = TenancyMode.SingleTenant;
+            options.DefaultTenantId = TenantDefaults.DefaultTenantId;
+            options.EnableDirectoryChecks = true;
+        });
+        builder.Services.AddScoped(provider => new {{ model.names.dot_net_class_name }}DbContext(_database.Options, provider.GetRequiredService<ITenantContext>()));
+        builder.Services.AddScoped<ITenantDirectory, EfTenantDirectory>();
+        builder.Services.AddScoped<ITenantManagementService, TenantManagementService>();
+
+        _app = builder.Build();
+        _app.UseRouting();
+        _app.UsePervaxisClaimsTenancy();
+        _app.MapGet("/whoami", (ITenantContext tenant) => tenant.IsResolved ? tenant.TenantId.Value : "unresolved");
+        _app.MapGet("/health", () => "ok").WithTenantExempt();
+        await _app.StartAsync();
+        _client = _app.GetTestClient();
+    }
+
+    public async Task DisposeAsync()
+    {
+        _client.Dispose();
+        if (_app is not null)
+            await _app.DisposeAsync();
+        _database.Dispose();
+    }
+
+    private async Task ChangeAsync(Func<ITenantManagementService, Task<TenantChangeResult>> change)
+    {
+        using var scope = _app!.Services.CreateScope();
+        (await change(scope.ServiceProvider.GetRequiredService<ITenantManagementService>())).Succeeded.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task EveryRequest_RunsAsTheServicesTenant_WithoutATenantClaim()
+    {
+        var response = await _client.GetAsync("/whoami");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadAsStringAsync()).Should().Be(TenantDefaults.DefaultTenantId);
+    }
+
+    [Fact]
+    public async Task SuspendedTenant_Gets403_UntilReactivated()
+    {
+        var tenant = Guid.Parse(TenantDefaults.DefaultTenantId);
+
+        await ChangeAsync(t => t.SuspendAsync(tenant));
+        (await _client.GetAsync("/whoami")).StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        (await _client.GetAsync("/health")).StatusCode.Should().Be(HttpStatusCode.OK, "tenant-exempt endpoints keep working");
+
+        await ChangeAsync(t => t.ReactivateAsync(tenant));
+        (await _client.GetAsync("/whoami")).StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+}
+
+public sealed class TenantManagementAccessTests
+{
+    [Fact]
+    public void TenantsController_IsTenantExempt_AndPlatformAdminOnly()
+    {
+        var controller = typeof(TenantsController);
+
+        controller.GetCustomAttribute<TenantExemptAttribute>().Should().NotBeNull();
+        controller.GetCustomAttribute<AuthorizeAttribute>()!.Policy.Should().Be(AuthorizationPolicyExtensions.PlatformAdminPolicy);
+    }
+
+    [Theory]
+    [InlineData("PlatformAdmin", true)]
+    [InlineData("Admin", false)]
+    public async Task PlatformAdminPolicy_RequiresThePlatformAdminGroup(string group, bool allowed)
+    {
+        await using var services = new ServiceCollection()
+            .AddLogging()
+            .AddAuthorization(options => options.AddForgePolicies(new ForgeAuthorizationOptions(), "Cognito"))
+            .BuildServiceProvider();
+        var user = new ClaimsPrincipal(new ClaimsIdentity([new Claim("cognito:groups", group)], "test"));
+
+        var result = await services.GetRequiredService<IAuthorizationService>()
+            .AuthorizeAsync(user, AuthorizationPolicyExtensions.PlatformAdminPolicy);
+
+        result.Succeeded.Should().Be(allowed);
+    }
+}
+{{ end }}

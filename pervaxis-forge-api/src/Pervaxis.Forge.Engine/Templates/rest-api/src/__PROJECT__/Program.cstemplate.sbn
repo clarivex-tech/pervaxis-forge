@@ -21,11 +21,15 @@ using {{ model.names.namespace }}.Infrastructure.Extensions;
 using {{ model.names.namespace }}.Infrastructure.Http;
 using {{ model.names.namespace }}.Infrastructure.Middleware;
 using {{ model.names.namespace }}.Infrastructure.Security;
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
 using {{ model.names.namespace }}.Infrastructure.Tenancy;
 {{- else }}
+using Pervaxis.Core.Abstractions.MultiTenancy;
 using Pervaxis.Core.Data.EntityFrameworkCore;
 using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Data.Tenancy;
+using {{ model.names.namespace }}.Infrastructure.Tenancy;
+using {{ model.names.namespace }}.Services.Tenancy;
 {{- end }}
 {{- if model.manifest.has_messaging }}
 using {{ model.names.namespace }}.Infrastructure.Outbox;
@@ -126,11 +130,21 @@ builder.Services.AddCors(options =>
 // -- Authentication (API Key + optional JWT/OIDC) ------------------------------------
 builder.Services.AddForgeAuthentication(builder.Configuration);
 builder.Services.Configure<ForgeOidcOptions>(builder.Configuration.GetSection(ForgeOidcOptions.SectionName));
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
 builder.Services.Configure<ForgeTenantOptions>(builder.Configuration.GetSection(ForgeTenantOptions.SectionName));
 {{- else }}
-// -- Multi-tenancy: tenant comes only from the validated access token claim (never from a header) --
-builder.Services.AddPervaxisClaimsMultiTenancy(options => builder.Configuration.GetSection("Forge:Tenant").Bind(options));
+// -- Tenancy (see DeveloperReference/Tenancy.md) ------------------------------------------
+// Forge:Tenant:Mode = SingleTenant: every request runs as DefaultTenantId (this service's one customer).
+// Forge:Tenant:Mode = MultiTenant: the tenant comes only from the validated access-token claim, never from a header.
+builder.Services.AddPervaxisClaimsMultiTenancy(options =>
+{
+    builder.Configuration.GetSection("Forge:Tenant").Bind(options);
+    if (string.IsNullOrWhiteSpace(options.DefaultTenantId))
+        options.DefaultTenantId = TenantDefaults.DefaultTenantId;
+});
+// Tenant status checks read the tenants table (Data/Tenancy). Suspended or unknown tenants get 403.
+builder.Services.AddScoped<ITenantDirectory, EfTenantDirectory>();
+builder.Services.AddScoped<ITenantManagementService, TenantManagementService>();
 {{- end }}
 {{- if model.manifest.has_messaging }}
 builder.Services.Configure<ForgeOutboxOptions>(builder.Configuration.GetSection(ForgeOutboxOptions.SectionName));
@@ -164,9 +178,9 @@ builder.Services.AddTransient<HttpLoggingHandler>();
 builder.Services.AddTransient<ExternalAuthHandler>();
 builder.Services.AddTransient<JwtPropagationHandler>();
 builder.Services.AddSingleton<IForgeHashingService, ForgeHashingService>();
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
 builder.Services.AddScoped<ITenantContext, TenantContext>();
-{{- else if model.manifest.database != null }}
+{{- else }}
 builder.Services.AddPervaxisTenantRepositories<{{ model.names.dot_net_class_name }}DbContext>();
 {{- end }}
 {{- if model.manifest.has_messaging }}
@@ -244,7 +258,7 @@ app.Use(async (context, next) =>
 });
 app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
-{{- if model.manifest.multi_tenancy }}
+{{- if model.manifest.tenant_ready }}
 // Tenant resolution: after authentication (the claim is trusted only once the token is validated), before authorization.
 app.UsePervaxisClaimsTenancy();
 {{- end }}
@@ -255,8 +269,8 @@ app.UseRateLimiter();
 // Health checks are anonymous -- load balancers must reach them without an API key.
 // /health is liveness: it never touches the database, so a short database outage does not restart healthy containers.
 // /health/ready is readiness: it runs the checks tagged "ready" (the database check when a database is configured).
-app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous(){{ if model.manifest.multi_tenancy }}.WithTenantExempt(){{ end }};
-app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous(){{ if model.manifest.multi_tenancy }}.WithTenantExempt(){{ end }};
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous(){{ if model.manifest.tenant_ready }}.WithTenantExempt(){{ end }};
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous(){{ if model.manifest.tenant_ready }}.WithTenantExempt(){{ end }};
 app.MapControllers().RequireAuthorization();
 
 app.Run();

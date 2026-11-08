@@ -1,0 +1,54 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.Data.EntityFrameworkCore;
+
+namespace {{ model.names.namespace }}.Data.Tenancy;
+
+/// <summary>
+/// The tenant master table: one row per customer of this service. Platform code; manage rows through the
+/// tenant management API (<c>api/v1/tenants</c>), not directly.
+/// </summary>
+/// <remarks>
+/// A tenant is not owned by a tenant, so it is a <see cref="SharedEntityAttribute">shared entity</see>.
+/// Requests for a tenant whose <see cref="Status"/> is not <see cref="TenantStatus.Active"/> are rejected with 403.
+/// </remarks>
+[SharedEntity]
+public sealed class Tenant
+{
+    /// <summary>Maximum length of <see cref="Name"/>.</summary>
+    public const int NameMaxLength = 200;
+
+    /// <summary>The tenant identifier. This is the value of the <c>tenant_id</c> token claim in multi-tenant mode.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>The display name, for example the customer's company name.</summary>
+    public string Name { get; set; } = string.Empty;
+
+    /// <summary>The lifecycle status. Only <see cref="TenantStatus.Active"/> tenants are served.</summary>
+    public TenantStatus Status { get; set; } = TenantStatus.Active;
+
+    /// <summary>When the tenant was created.</summary>
+    public DateTimeOffset CreatedAt { get; set; }
+
+    /// <summary>When the tenant was last changed.</summary>
+    public DateTimeOffset UpdatedAt { get; set; }
+}
+{{ end }}

@@ -1,17 +1,69 @@
-{{- if model.manifest.multi_tenancy -}}
-# Multi-tenancy
+{{- if model.manifest.tenant_ready -}}
+# Tenancy
 
-This service is multi-tenant. Many customers (tenants) share one PostgreSQL database and one schema. The platform keeps each tenant's rows apart. You do not write tenant checks yourself, and you must not work around them.
+Every service with a database is tenant-ready. The data of each customer (tenant) is kept apart in a shared
+database and schema, and tenants are managed through a small API. You do not write tenant checks yourself, and
+you must not work around them.
 
-## How the tenant is known
+This service runs in **{{ if model.manifest.multi_tenancy }}multi-tenant{{ else }}single-tenant{{ end }}** mode.
+To move from single-tenant to multi-tenant later, follow [`GoingMultiTenant.md`](GoingMultiTenant.md).
 
-- The tenant is the `tenant_id` claim in the caller's validated Cognito **access token**. It is one GUID string.
-- Nothing else sets it. Request headers such as `X-Tenant-ID` are ignored.
-- A token with a missing, malformed, duplicated or list-valued `tenant_id` is authenticated but gets **403** on tenant endpoints. No token gets **401**.
-- Roles and groups only decide what a user may do **inside** their tenant. An admin cannot cross tenants.
-- Health endpoints are marked tenant-exempt. For any tenant-exempt endpoint the tenant is deliberately unresolved, even when the token carries one.
+## The two modes
 
-You can read the current tenant from `ITenantContext` (`Pervaxis.Core.Abstractions.MultiTenancy`). Do not store it in a singleton field.
+| | Single-tenant (`SingleTenant`) | Multi-tenant (`MultiTenant`) |
+|---|---|---|
+| Customers | One | Several |
+| Where the tenant comes from | `Forge:Tenant:DefaultTenantId` in configuration | The `tenant_id` claim of the caller's validated Cognito access token |
+| Cognito trigger needed | No | Yes (adds `tenant_id` to access tokens) |
+| API keys | Work | Cannot reach tenant data |
+| Data | Every row carries `TenantId` | Every row carries `TenantId` |
+
+The mode is the setting `Forge:Tenant:Mode` in `appsettings.json`. Because rows are tenant-tagged in both modes,
+switching from single to multi needs no data migration.
+
+Request headers such as `X-Tenant-ID` are ignored in both modes.
+
+## The tenants table
+
+`Data/Tenancy/Tenant.cs` is the master table (`tenants`): id, name, status, created and updated time.
+
+- The first tenant is created by Forge. Its id is in `Data/Tenancy/TenantDefaults.cs` and in
+  `Forge:Tenant:DefaultTenantId`, and the `AddTenants` migration inserts it. Do not change that id after the migration has run.
+- Status is `Active`, `Suspended` or `Offboarded`. Only `Active` tenants are served.
+- Every tenant-protected request checks the table (`Forge:Tenant:EnableDirectoryChecks`, on by default).
+  Unknown or inactive tenants get **403**. If the database cannot be read, the request gets **503**.
+  Each answer is cached for `Forge:Tenant:DirectoryCacheTtl` (60 seconds).
+
+Create the table before the first request: `dotnet ef database update` (see [`Database.md`](Database.md)).
+Until the table exists, tenant-protected endpoints return 503. Health endpoints still work.
+
+## Tenant management API
+
+`Controllers/TenantsController.cs`, all under `api/v1/tenants`:
+
+| Call | What it does |
+|---|---|
+| `GET api/v1/tenants` | List tenants |
+| `GET api/v1/tenants/{id}` | One tenant |
+| `POST api/v1/tenants` with `{ "name": "Contoso" }` | Create an active tenant. Its id is generated. |
+| `PATCH api/v1/tenants/{id}` with `{ "name": "..." }` | Rename |
+| `POST api/v1/tenants/{id}/suspend` | Active to Suspended: its requests get 403 |
+| `POST api/v1/tenants/{id}/reactivate` | Suspended to Active |
+| `POST api/v1/tenants/{id}/offboard` | Active or Suspended to Offboarded. Final; the data is kept. |
+
+- Only users in the **PlatformAdmin** group can call it (`Forge:Authorization:PlatformAdminGroup`). This is a different
+  group from `Admin`: `Admin` acts inside one tenant, `PlatformAdmin` manages all tenants. API keys cannot call it.
+- The API is tenant-exempt, so it keeps working for a suspended tenant (you can reactivate it).
+- In single-tenant mode the only tenant cannot be offboarded; suspend it instead.
+- A status change applies immediately on the instance that made it, and within the cache time on other instances.
+
+## How the tenant is known in code
+
+Inject `ITenantContext` (`Pervaxis.Core.Abstractions.MultiTenancy`) when you need it. Do not store it in a singleton field.
+Roles and groups only decide what a user may do **inside** their tenant.
+
+Endpoints that must not run as a tenant (health checks, for example) are marked `.WithTenantExempt()` or `[TenantExempt]`.
+On those, the tenant is deliberately unresolved: tenant-owned queries return nothing and writes are rejected.
 
 ## Tenant-owned entities
 
@@ -55,9 +107,12 @@ public sealed class InvoiceConfiguration : IEntityTypeConfiguration<Invoice>
 }
 ```
 
+Then run `dotnet ef migrations add AddInvoices`.
+
 - Give every id yourself (`Guid.NewGuid()`). Composite keys do not auto-generate.
-- Data that every tenant shares (for example a country list) carries `[SharedEntity]` and is not tenant-owned.
-- The model is checked on first use. An entity that is neither tenant-owned nor `[SharedEntity]`, or a unique index without `TenantId`, stops the service with a clear message.
+- Data that every tenant shares (for example a country list, or the tenants table itself) carries `[SharedEntity]`.
+- The model is checked on first use. An entity that is neither tenant-owned nor `[SharedEntity]`, or a unique index
+  without `TenantId`, stops the service with a clear message.
 
 ## Reading and writing
 
@@ -70,7 +125,7 @@ Inject `IRepository<Invoice, Guid>` (or the read and write halves). It looks up 
 
 ## Background work
 
-There is no tenant outside a request. A hosted service, message handler or job must open a scope for each unit of work:
+There is no tenant outside a request. A hosted service or job must open a scope for each unit of work:
 
 ```csharp
 using (_tenantScopes.BeginScope(tenantId))   // ITenantScopeFactory
@@ -80,21 +135,20 @@ using (_tenantScopes.BeginScope(tenantId))   // ITenantScopeFactory
 }
 ```
 
-- Take `tenantId` from trusted data (for example a message whose producer you authenticated), never from an unchecked attribute.
+- In single-tenant mode, use `TenantDefaults.DefaultTenantId`.
+- In multi-tenant mode, take `tenantId` from trusted data, never from an unchecked input.
 - Dispose the scope in the code that opened it. Opening a different tenant inside an active scope is rejected.
 
 ## Do not
 
 - Accept `TenantId` in a request body, query string or route.
-- Call `IgnoreQueryFilters()` without names, `FromSql*`, `ExecuteSql*`, `ExecuteUpdate` or `ExecuteDelete` on tenant-owned tables. They skip the checks above. To include soft-deleted rows only, use `IgnoreQueryFilters(["SoftDelete"])`.
+- Call `IgnoreQueryFilters()` without names, `FromSql*`, `ExecuteSql*`, `ExecuteUpdate` or `ExecuteDelete` on tenant-owned tables.
+  They skip the checks above. To include soft-deleted rows only, use `IgnoreQueryFilters(["SoftDelete"])`.
 - Use `Find`/`FindAsync` with one key value on a tenant-owned entity. Use the repository.
+- Edit tenant rows directly in the database. Use the management API.
 
-## Before you go live
+## Tests
 
-These live outside the generated service and the service cannot verify them:
-
-- The Cognito user pool is on the Essentials or Plus plan with a V2_0 or V3_0 pre-token-generation trigger that emits `tenant_id`.
-- Only trusted provisioning can set a user's tenant.
-- Suspending a tenant does not stop tokens already issued. Turn on `Forge:Tenant:EnableDirectoryChecks` and register an `ITenantDirectory` if you need suspension to take effect within about a minute.
-- If you already have data, it needs a mapping from old tenant ids to GUIDs before keys are converted. Do not run that from service startup.
+`TenantManagementTests.cs` covers the tenants table, the management rules, the status check, isolation between
+two tenants in this service's `DbContext`, and single-tenant requests. They use in-memory SQLite. Keep them.
 {{- end -}}

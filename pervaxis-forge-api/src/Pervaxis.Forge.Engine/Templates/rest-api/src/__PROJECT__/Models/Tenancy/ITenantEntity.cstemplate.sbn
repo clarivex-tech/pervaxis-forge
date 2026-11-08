@@ -1,4 +1,4 @@
-{{ if !model.manifest.multi_tenancy }}
+{{ if !model.manifest.tenant_ready }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited

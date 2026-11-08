@@ -78,12 +78,17 @@
       "AdminGroup": "Admin",
 {{- end }}
       "GroupClaimType": "",
+{{- if model.manifest.tenant_ready }}
+      "PlatformAdminGroup": "PlatformAdmin",
+{{- end }}
       "Policies": {}
     },
-{{- if model.manifest.multi_tenancy }}
+{{- if model.manifest.tenant_ready }}
     "Tenant": {
+      "Mode": "{{ if model.manifest.multi_tenancy }}MultiTenant{{ else }}SingleTenant{{ end }}",
+      "DefaultTenantId": "{{ model.default_tenant_id }}",
       "ClaimType": "tenant_id",
-      "EnableDirectoryChecks": false,
+      "EnableDirectoryChecks": true,
       "DirectoryCacheTtl": "00:01:00"
     },
 {{- else }}

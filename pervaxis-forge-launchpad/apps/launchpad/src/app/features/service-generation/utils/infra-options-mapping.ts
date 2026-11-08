@@ -163,8 +163,8 @@ export function getInfraReviewSummary(formValue: InfraOptionsFormValue): InfraRe
 	// Multi-Tenancy
 	if (formValue.multiTenancy !== defaults.multiTenancy) {
 		groups.push({
-			label: 'Multi-Tenancy',
-			items: [{ name: 'Multi-Tenancy', value: formValue.multiTenancy ? 'Enabled' : 'Disabled', isNonDefault: true }],
+			label: 'Tenancy',
+			items: [{ name: 'Tenancy', value: formValue.multiTenancy ? 'Multi-tenant' : 'Single tenant', isNonDefault: true }],
 		});
 	}
 

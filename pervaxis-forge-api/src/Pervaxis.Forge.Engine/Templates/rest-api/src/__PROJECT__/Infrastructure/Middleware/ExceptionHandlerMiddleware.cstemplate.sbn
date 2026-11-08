@@ -24,7 +24,7 @@ using {{ model.names.namespace }}.Infrastructure.Exceptions;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
 using Polly.CircuitBreaker;
-{{- if model.manifest.multi_tenancy }}
+{{- if model.manifest.tenant_ready }}
 using Microsoft.EntityFrameworkCore;
 using Pervaxis.Core.Exceptions.Exceptions;
 {{- end }}
@@ -145,7 +145,7 @@ public sealed class ExceptionHandlerMiddleware
                 Detail = unauthorizedEx.Message
             },
 
-{{- if model.manifest.multi_tenancy }}
+{{- if model.manifest.tenant_ready }}
             // Tenant isolation. The 404 is identical for "missing" and "belongs to another tenant".
             TenantResourceNotFoundException => new ProblemDetails
             {

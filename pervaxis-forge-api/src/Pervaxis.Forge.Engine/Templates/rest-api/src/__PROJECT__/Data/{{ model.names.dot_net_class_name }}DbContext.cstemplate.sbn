@@ -16,7 +16,7 @@
  ************************************************************************
  */
 
-{{ if !model.manifest.multi_tenancy }}
+{{ if !model.manifest.tenant_ready }}
 using System.Reflection;
 using Microsoft.EntityFrameworkCore;
 using {{ model.names.namespace }}.Infrastructure.Tenancy;
