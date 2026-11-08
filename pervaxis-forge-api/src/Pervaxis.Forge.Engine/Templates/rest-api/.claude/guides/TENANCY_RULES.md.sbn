@@ -1,0 +1,63 @@
+{{- if model.manifest.tenant_ready -}}
+# Tenancy rules (mandatory)
+
+This service is tenant-ready ({{ if model.manifest.multi_tenancy }}multi-tenant{{ else }}single-tenant{{ end }} mode).
+Every customer's data is isolated in one shared database. Apply these rules to every change that stores, reads or
+caches data. They are enforced partly at runtime; breaking them can leak one customer's data to another.
+
+Human-readable version with a complete example: `DeveloperReference/TenancyQuickStart.md`.
+
+## Entities
+
+- An entity holding customer data derives from `Pervaxis.Core.Data.EntityFrameworkCore.TenantEntity<Guid>`.
+- Never declare a `TenantId` property on such an entity, and never set it. The platform stamps it on insert.
+- Assign `Id` in code (`Guid.NewGuid()`). The key is `(TenantId, Id)` and is not database-generated.
+- Data shared by all tenants (reference lists) is a plain class marked `[SharedEntity]`.
+- Every entity is one or the other. The service refuses to start on an unclassified entity.
+
+## Model configuration
+
+- One `IEntityTypeConfiguration<T>` class next to each entity, under `Domains/<Feature>/Data/`.
+  `{{ model.names.dot_net_class_name }}DbContext` applies them automatically.
+- Never create another `DbContext`, never register one, never use `AddDbContextPool`.
+- Do not call `HasKey` on tenant-owned entities.
+- Relationships between tenant-owned entities: `HasForeignKey("TenantId", nameof(Child.ParentId))`.
+- Unique indexes on tenant-owned entities include tenant: `HasIndex("TenantId", nameof(Entity.Code)).IsUnique()`.
+- After a model change, add a migration: `dotnet ef migrations add <Name> --project src/{{ model.names.namespace }} --output-dir Data/Migrations`.
+
+## Reading and writing
+
+- Use `IRepository<TEntity, Guid>` (or `IReadRepository` / `IWriteRepository`) and `IUnitOfWork.CommitAsync`.
+  Both are already registered.
+- A record of another tenant is indistinguishable from a missing one: `GetByIdAsync` returns `null`, map it to 404.
+- Forbidden on tenant-owned data: `IgnoreQueryFilters()` without filter names, `FromSql*`, `SqlQuery*`, `ExecuteSql*`,
+  `ExecuteUpdate*`, `ExecuteDelete*`, and `Find`/`FindAsync` with a single key value.
+- Do not catch `TenantContextRequiredException`, `TenantResourceNotFoundException` or `DbUpdateConcurrencyException`
+  to hide them. The exception middleware maps them to 403, 404 and 409.
+
+## The current tenant
+
+- Never accept a tenant id from a request body, route, query string or header, and never add one to a request model.
+- Never pass a tenant id as a method parameter that could be filled from a request.
+- When code needs the tenant (cache keys, file paths, log scopes, calls to other systems), inject
+  `Pervaxis.Core.Abstractions.MultiTenancy.ITenantContext` and read `TenantId.Value`. Do not store it in a field of a singleton.
+- Cache keys and storage paths for tenant data must contain the tenant id.
+
+## Background work
+
+- There is no tenant outside an HTTP request. Hosted services, jobs and message handlers wrap each unit of work in
+  `using (scopeFactory.BeginScope(tenantId)) { ... }` (`ITenantScopeFactory`).
+- In single-tenant mode, use `TenantDefaults.DefaultTenantId`. In multi-tenant mode, take the tenant id from trusted data only.
+- Dispose each scope in the method that opened it.
+
+## Platform code you must not change
+
+`Data/{{ model.names.dot_net_class_name }}DbContext.cs`, `Data/Tenancy/*`, `Data/Migrations/*_AddTenants*`,
+`Infrastructure/Tenancy/*`, `Services/Tenancy/*`, `Controllers/TenantsController.cs`, and the tenancy registration in
+`Program.cs`. Tenants are managed through `api/v1/tenants` (PlatformAdmin only), never by editing rows directly.
+
+## Tests
+
+For every new tenant-owned entity, add a test that writes as one tenant and proves another tenant sees nothing.
+Use `TenantTestDatabase` from `TenantManagementTests.cs`; an example is in `DeveloperReference/TenancyQuickStart.md`, step 6.
+{{- end -}}
