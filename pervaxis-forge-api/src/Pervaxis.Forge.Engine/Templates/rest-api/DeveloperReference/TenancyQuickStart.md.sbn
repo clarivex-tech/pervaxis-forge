@@ -1,0 +1,275 @@
+{{- if model.manifest.tenant_ready -}}
+# Tenancy quick start: your first feature
+
+Read this before you write any code that stores data. It takes about 10 minutes.
+
+## The idea in one paragraph
+
+This service keeps each customer's (tenant's) data apart inside one database. You never filter by tenant yourself.
+You mark an entity as tenant-owned, and the platform does the rest: every read sees only the current tenant's rows,
+every insert is stamped with the current tenant, and an update or delete can never touch another tenant's row.
+The current tenant comes from configuration (single-tenant mode) or from the caller's access token (multi-tenant mode),
+never from the request body, query string, route or a header. This service is in
+**{{ if model.manifest.multi_tenancy }}multi-tenant{{ else }}single-tenant{{ end }}** mode. Your code is the same in both.
+
+## Six steps
+
+The example adds a `Projects` feature. Replace the names with yours.
+
+### 1. The entity: derive from `TenantEntity<Guid>`
+
+`src/{{ model.names.namespace }}/Domains/Projects/Data/Project.cs`
+
+```csharp
+using Pervaxis.Core.Data.EntityFrameworkCore;
+
+namespace {{ model.names.namespace }}.Domains.Projects.Data;
+
+public sealed class Project : TenantEntity<Guid>
+{
+    public Project(Guid id, string code, string name)
+    {
+        Id = id;
+        Code = code;
+        Name = name;
+    }
+
+    public string Code { get; set; }
+
+    public string Name { get; set; }
+}
+```
+
+- Do **not** add a `TenantId` property. It comes from `TenantEntity`, and the platform sets it.
+- Give the id yourself (`Guid.NewGuid()`). The key is `(TenantId, Id)`, which does not auto-generate.
+- Data shared by all tenants (a list of countries, for example) is not tenant-owned: mark it `[SharedEntity]` instead.
+
+### 2. The configuration: one class next to the entity
+
+`src/{{ model.names.namespace }}/Domains/Projects/Data/ProjectConfiguration.cs`
+
+```csharp
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+
+namespace {{ model.names.namespace }}.Domains.Projects.Data;
+
+public sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
+{
+    public void Configure(EntityTypeBuilder<Project> builder)
+    {
+        builder.ToTable("projects");
+        builder.Property(p => p.Code).IsRequired().HasMaxLength(50);
+        builder.Property(p => p.Name).IsRequired().HasMaxLength(200);
+
+        // Unique per tenant: two tenants may both have project "P-1".
+        builder.HasIndex("TenantId", nameof(Project.Code)).IsUnique();
+    }
+}
+```
+
+- It is picked up automatically by `{{ model.names.dot_net_class_name }}DbContext`. Do **not** create another `DbContext`:
+  a separate one would not isolate tenants.
+- A relationship between two tenant-owned entities uses a tenant-inclusive foreign key:
+  `builder.HasOne(t => t.Project).WithMany().HasForeignKey("TenantId", nameof(ProjectTask.ProjectId));`
+- A unique index must include `TenantId`. The service refuses to start if it does not.
+
+### 3. The migration
+
+```bash
+dotnet ef migrations add AddProjects --project src/{{ model.names.namespace }} --output-dir Data/Migrations
+dotnet ef database update --project src/{{ model.names.namespace }}
+```
+
+Commit the generated files. See [`Database.md`](Database.md) for how migrations reach test and production.
+
+### 4. The service: use the repository
+
+`src/{{ model.names.namespace }}/Domains/Projects/Services/ProjectService.cs`
+
+```csharp
+using Pervaxis.Core.Abstractions.Data;
+using {{ model.names.namespace }}.Domains.Projects.Data;
+
+namespace {{ model.names.namespace }}.Domains.Projects.Services;
+
+public interface IProjectService
+{
+    Task<Project?> GetAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<Project>> ListAsync(CancellationToken cancellationToken);
+
+    Task<Project> CreateAsync(string code, string name, CancellationToken cancellationToken);
+}
+
+public sealed class ProjectService : IProjectService
+{
+    private readonly IRepository<Project, Guid> _projects;
+    private readonly IUnitOfWork _unitOfWork;
+
+    public ProjectService(IRepository<Project, Guid> projects, IUnitOfWork unitOfWork)
+    {
+        _projects = projects;
+        _unitOfWork = unitOfWork;
+    }
+
+    // Only the current tenant's project. Another tenant's id simply returns null.
+    public Task<Project?> GetAsync(Guid id, CancellationToken cancellationToken)
+        => _projects.GetByIdAsync(id, cancellationToken);
+
+    // Only the current tenant's projects.
+    public Task<IReadOnlyList<Project>> ListAsync(CancellationToken cancellationToken)
+        => _projects.GetAllAsync(cancellationToken);
+
+    public async Task<Project> CreateAsync(string code, string name, CancellationToken cancellationToken)
+    {
+        var project = new Project(Guid.NewGuid(), code, name);
+        await _projects.AddAsync(project, cancellationToken);   // TenantId is stamped on save
+        await _unitOfWork.CommitAsync(cancellationToken);
+        return project;
+    }
+}
+```
+
+Register it in `Extensions/ServiceCollectionExtensions.cs`:
+
+```csharp
+services.AddScoped<IProjectService, ProjectService>();
+```
+
+`IRepository<,>` and `IUnitOfWork` are already registered for every tenant-owned entity.
+
+### 5. The endpoint: no tenant in the request
+
+`src/{{ model.names.namespace }}/Domains/Projects/Controllers/ProjectsController.cs`
+
+```csharp
+using Microsoft.AspNetCore.Mvc;
+using {{ model.names.namespace }}.Domains.Projects.Services;
+
+namespace {{ model.names.namespace }}.Domains.Projects.Controllers;
+
+public sealed record CreateProjectRequest(string Code, string Name);   // no TenantId here, ever
+
+public sealed record ProjectResponse(Guid Id, string Code, string Name);
+
+[ApiController]
+[Route("{{ model.names.api_base_route }}/projects")]
+public sealed class ProjectsController : ControllerBase
+{
+    private readonly IProjectService _projects;
+
+    public ProjectsController(IProjectService projects) => _projects = projects;
+
+    [HttpGet("{id:guid}")]
+    public async Task<IActionResult> GetAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var project = await _projects.GetAsync(id, cancellationToken);
+        return project is null ? NotFound() : Ok(new ProjectResponse(project.Id, project.Code, project.Name));
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> ListAsync(CancellationToken cancellationToken)
+        => Ok((await _projects.ListAsync(cancellationToken)).Select(p => new ProjectResponse(p.Id, p.Code, p.Name)));
+
+    [HttpPost]
+    public async Task<IActionResult> CreateAsync([FromBody] CreateProjectRequest request, CancellationToken cancellationToken)
+    {
+        var project = await _projects.CreateAsync(request.Code, request.Name, cancellationToken);
+        return Created($"{{ model.names.api_base_route }}/projects/{project.Id}", new ProjectResponse(project.Id, project.Code, project.Name));
+    }
+}
+```
+
+The platform answers for you: another tenant's project is **404**, a missing tenant is **403**,
+and a concurrent edit is **409**. Do not catch these.
+
+### 6. The test: prove tenant A cannot see tenant B
+
+`tests/{{ model.names.test_project_name }}/ProjectIsolationTests.cs`
+
+```csharp
+using FluentAssertions;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Domains.Projects.Data;
+using Xunit;
+
+namespace {{ model.names.test_project_name }};
+
+public sealed class ProjectIsolationTests : IDisposable
+{
+    private static readonly TenantId TenantA = new(Guid.NewGuid().ToString("D"));
+    private static readonly TenantId TenantB = new(Guid.NewGuid().ToString("D"));
+
+    // In-memory SQLite with this service's schema (see TenantManagementTests.cs).
+    private readonly TenantTestDatabase _database = new();
+    private readonly ServiceProvider _services;
+
+    public ProjectIsolationTests() => _services = _database.BuildServices();
+
+    private async Task<int> CountAsync(TenantId tenant)
+    {
+        using var scope = _services.CreateScope();
+        using var asTenant = scope.ServiceProvider.GetRequiredService<ITenantScopeFactory>().BeginScope(tenant);
+        var db = scope.ServiceProvider.GetRequiredService<{{ model.names.dot_net_class_name }}DbContext>();
+        return await db.Set<Project>().CountAsync();
+    }
+
+    [Fact]
+    public async Task EachTenant_SeesOnlyItsOwnProjects()
+    {
+        using (var scope = _services.CreateScope())
+        using (scope.ServiceProvider.GetRequiredService<ITenantScopeFactory>().BeginScope(TenantA))
+        {
+            var db = scope.ServiceProvider.GetRequiredService<{{ model.names.dot_net_class_name }}DbContext>();
+            db.Add(new Project(Guid.NewGuid(), "P-1", "Apollo"));
+            await db.SaveChangesAsync();
+        }
+
+        (await CountAsync(TenantA)).Should().Be(1);
+        (await CountAsync(TenantB)).Should().Be(0);
+    }
+
+    public void Dispose()
+    {
+        _services.Dispose();
+        _database.Dispose();
+    }
+}
+```
+
+## Checklist before every pull request
+
+- [ ] Every new entity derives from `TenantEntity<TId>`, or is marked `[SharedEntity]` on purpose.
+- [ ] No `TenantId` in any request model, route, query string or header.
+- [ ] Relationships between tenant-owned entities use `HasForeignKey("TenantId", ...)`.
+- [ ] Unique indexes include `TenantId`.
+- [ ] A migration was added and committed.
+- [ ] Data access goes through `IRepository<,>` or `{{ model.names.dot_net_class_name }}DbContext`. No new `DbContext`.
+- [ ] No `IgnoreQueryFilters()` without names, `FromSql*`, `ExecuteSql*`, `ExecuteUpdate` or `ExecuteDelete` on tenant-owned data.
+- [ ] No single-key `Find`/`FindAsync` on tenant-owned entities.
+- [ ] Background jobs wrap each unit of work in `ITenantScopeFactory.BeginScope(tenantId)`.
+- [ ] Cache keys and file paths for tenant data include `ITenantContext.TenantId` (read it, never take it from the request).
+- [ ] A test proves another tenant cannot see the new data.
+
+## When you need the current tenant in code
+
+Usually you do not. If you do (cache keys, logs, calls to other systems), inject `ITenantContext`:
+
+```csharp
+public sealed class ReportService(ITenantContext tenant)
+{
+    private string CacheKey(string report) => $"reports:{tenant.TenantId.Value}:{report}";
+}
+```
+
+Never pass the tenant as a method parameter that a caller could fill from a request.
+
+## More
+
+- [`Tenancy.md`](Tenancy.md): how it all works, the tenants table, the tenant management API, background work.
+- [`GoingMultiTenant.md`](GoingMultiTenant.md): moving this service from one customer to several.
+{{- end -}}

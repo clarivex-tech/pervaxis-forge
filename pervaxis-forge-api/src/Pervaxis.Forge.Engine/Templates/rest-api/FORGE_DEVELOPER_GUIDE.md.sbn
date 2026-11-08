@@ -450,6 +450,45 @@ public sealed class {{ model.names.dot_net_class_name }}Controller : ControllerB
 
 If this service aggregates multiple downstream APIs for a frontend, apply the BFF pattern in the service layer:
 
+{{ if model.manifest.tenant_ready -}}
+```csharp
+public sealed class {{ model.names.dot_net_class_name }} : I{{ model.names.dot_net_class_name }}
+{
+    private readonly IDownstreamOrdersClient _orders;
+    private readonly IDownstreamProductsClient _products;
+    private readonly ICache _cache;
+    private readonly ITenantContext _tenant;    // Pervaxis.Core.Abstractions.MultiTenancy
+
+    // Aggregate downstream responses — shape data for UI, hide internal complexity.
+    // The tenant is never a parameter: read it from ITenantContext, so a caller cannot choose it.
+    public async Task<DashboardSummaryResponse> GetDashboardAsync(CancellationToken ct)
+    {
+        // Tenant data in a cache must be keyed by tenant.
+        var cacheKey = $"{{ model.names.cache_prefix }}dashboard:{_tenant.TenantId.Value}";
+        var cached = await _cache.GetAsync<DashboardSummaryResponse>(cacheKey, ct);
+        if (cached is not null)
+            return cached;
+
+        // Fan-out calls — run in parallel. Downstream services get the caller's token (JwtPropagationHandler)
+        // and resolve the same tenant themselves.
+        var (orders, products) = await (
+            _orders.GetSummaryAsync(ct),
+            _products.GetActiveCountAsync(ct)
+        ).WhenAll();
+
+        var response = new DashboardSummaryResponse
+        {
+            TotalOrders = orders.Count,
+            ActiveProducts = products.Count,
+            GeneratedAt = DateTimeOffset.UtcNow
+        };
+
+        await _cache.SetAsync(cacheKey, response, TimeSpan.FromMinutes(2), ct);
+        return response;
+    }
+}
+```
+{{- else -}}
 ```csharp
 public sealed class {{ model.names.dot_net_class_name }} : I{{ model.names.dot_net_class_name }}
 {
@@ -460,7 +499,7 @@ public sealed class {{ model.names.dot_net_class_name }} : I{{ model.names.dot_n
     // Aggregate downstream responses — shape data for UI, hide internal complexity
     public async Task<DashboardSummaryResponse> GetDashboardAsync(string tenantId, CancellationToken ct)
     {
-        var cacheKey = "{{ model.names.cache_prefix }}dashboard:{tenantId}";
+        var cacheKey = $"{{ model.names.cache_prefix }}dashboard:{tenantId}";
         var cached = await _cache.GetAsync<DashboardSummaryResponse>(cacheKey, ct);
         if (cached is not null)
             return cached;
@@ -483,6 +522,7 @@ public sealed class {{ model.names.dot_net_class_name }} : I{{ model.names.dot_n
     }
 }
 ```
+{{- end }}
 
 Register downstream HTTP clients in `Extensions/ServiceCollectionExtensions.cs`:
 
@@ -529,6 +569,73 @@ services.AddDbContext<YourDomainDbContext>(opts =>
 ```
 {{- end }}
 
+{{ if model.manifest.tenant_ready -}}
+### Entity, configuration, repository
+
+This service is tenant-ready, so entities that hold customer data are **tenant-owned**. Follow
+[`DeveloperReference/TenancyQuickStart.md`](DeveloperReference/TenancyQuickStart.md) for the full six steps; the short version:
+
+```csharp
+// Domains/YourDomain/Data/YourDomainEntity.cs
+public sealed class YourDomainEntity : TenantEntity<Guid>      // key is (TenantId, Id); TenantId is set for you
+{
+    public YourDomainEntity(Guid id, string reference, string status)
+    {
+        Id = id;
+        Reference = reference;
+        Status = status;
+    }
+
+    public string Reference { get; set; }
+    public string Status { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+// Domains/YourDomain/Data/YourDomainConfiguration.cs  (the platform DbContext finds it automatically)
+public sealed class YourDomainConfiguration : IEntityTypeConfiguration<YourDomainEntity>
+{
+    public void Configure(EntityTypeBuilder<YourDomainEntity> entity)
+    {
+        entity.Property(e => e.Reference).HasMaxLength(100).IsRequired();
+        entity.HasIndex("TenantId", nameof(YourDomainEntity.Reference)).IsUnique();   // unique per tenant
+    }
+}
+
+// Domains/YourDomain/Services: use the platform repository; no custom repository or DbContext needed.
+public sealed class YourDomainService(IRepository<YourDomainEntity, Guid> records, IUnitOfWork unitOfWork)
+{
+    public Task<YourDomainEntity?> GetAsync(Guid id, CancellationToken ct) => records.GetByIdAsync(id, ct);
+
+    public async Task<YourDomainEntity> CreateAsync(string reference, CancellationToken ct)
+    {
+        var entity = new YourDomainEntity(Guid.NewGuid(), reference, "Active");
+        await records.AddAsync(entity, ct);
+        await unitOfWork.CommitAsync(ct);
+        return entity;
+    }
+}
+```
+
+- Do not create a feature `DbContext`, and never accept `TenantId` from a request.
+- Another tenant's record is reported as not found (404).
+
+### Explicit mapping — no AutoMapper
+
+```csharp
+// Domains/YourDomain/Data/YourDomainMappings.cs
+internal static class YourDomainMappings
+{
+    internal static {{ model.names.dot_net_class_name }}Response ToResponse(this YourDomainEntity entity) =>
+        new()
+        {
+            Id = entity.Id.ToString("D"),
+            CreatedAt = entity.CreatedAt,
+        };
+}
+```
+
+{{- else -}}
 ### Entity, DbContext, Repository
 
 ```csharp
@@ -603,6 +710,8 @@ internal static class YourDomainMappings
         };
 }
 ```
+
+{{- end }}
 
 ### Migrations
 

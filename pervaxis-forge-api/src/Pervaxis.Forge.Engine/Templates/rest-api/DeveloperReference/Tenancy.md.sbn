@@ -5,6 +5,8 @@ Every service with a database is tenant-ready. The data of each customer (tenant
 database and schema, and tenants are managed through a small API. You do not write tenant checks yourself, and
 you must not work around them.
 
+Writing your first feature? Start with [`TenancyQuickStart.md`](TenancyQuickStart.md) instead: six steps and a checklist.
+
 This service runs in **{{ if model.manifest.multi_tenancy }}multi-tenant{{ else }}single-tenant{{ end }}** mode.
 To move from single-tenant to multi-tenant later, follow [`GoingMultiTenant.md`](GoingMultiTenant.md).
 
