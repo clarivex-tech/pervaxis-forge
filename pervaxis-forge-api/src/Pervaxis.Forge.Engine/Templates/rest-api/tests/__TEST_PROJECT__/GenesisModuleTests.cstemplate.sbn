@@ -1,0 +1,515 @@
+{{- has_odata = false -}}
+{{- has_sanitization = false -}}
+{{- for module in model.selected_modules -}}
+{{- if module.display_name == "OData" -}}{{- has_odata = true -}}{{- end -}}
+{{- if module.display_name == "Sanitization" -}}{{- has_sanitization = true -}}{{- end -}}
+{{- end -}}
+{{- if has_odata || has_sanitization -}}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using FluentAssertions;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
+{{- if has_odata }}
+using Pervaxis.Genesis.OData.Extensions;
+using Pervaxis.Genesis.OData.Filters;
+using Pervaxis.Genesis.OData.Options;
+using Pervaxis.Genesis.OData.Results;
+using Pervaxis.Genesis.OData.Services;
+{{- if model.manifest.tenant_ready }}
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.Data.EntityFrameworkCore;
+using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Data.Tenancy;
+{{- end }}
+using {{ model.names.namespace }}.Infrastructure.Validation;
+{{- end }}
+{{- if has_sanitization }}
+using FluentValidation;
+using Pervaxis.Genesis.Sanitization.Abstractions;
+using Pervaxis.Genesis.Sanitization.Extensions;
+using Pervaxis.Genesis.Sanitization.Filters;
+using Pervaxis.Genesis.Sanitization.Options;
+using {{ model.names.namespace }}.Infrastructure.Middleware;
+{{- end }}
+using Xunit;
+
+namespace {{ model.names.test_project_name }};
+
+// These tests cover the platform wiring of the Genesis modules selected for this service: that their settings are read,
+// and that their protections behave as documented. They use an in-process test host. Keep them.
+
+/// <summary>Builds a test host with the given settings and the probe controllers of this test project.</summary>
+internal static class GenesisTestHost
+{
+    public static async Task<WebApplication> StartAsync(
+        Dictionary<string, string?> settings,
+        Action<IServiceCollection, IConfiguration> configureServices,
+        Action<WebApplication> configurePipeline)
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
+        builder.Configuration.Sources.Clear();
+        builder.Configuration.AddInMemoryCollection(settings);
+        builder.WebHost.UseTestServer();
+        builder.Services.AddControllers().AddApplicationPart(typeof(GenesisTestHost).Assembly);
+        configureServices(builder.Services, builder.Configuration);
+
+        var app = builder.Build();
+        configurePipeline(app);
+        app.MapControllers();
+        await app.StartAsync();
+        return app;
+    }
+
+    /// <summary>The service's own appsettings.json, found by walking up from the test output folder.</summary>
+    public static IConfiguration ServiceAppsettings()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            var candidate = Path.Combine(directory.FullName, "src", "{{ model.names.namespace }}", "appsettings.json");
+            if (File.Exists(candidate))
+                return new ConfigurationBuilder().AddJsonFile(candidate).Build();
+
+            directory = directory.Parent;
+        }
+
+        throw new FileNotFoundException("The service's appsettings.json was not found above " + AppContext.BaseDirectory);
+    }
+}
+
+/// <summary>
+/// Program.cs passes the root configuration to modules that read <c>Genesis:&lt;Module&gt;</c>. If that wiring breaks,
+/// every setting of the module is silently ignored; these tests catch it.
+/// </summary>
+public sealed class GenesisConfigurationBindingTests
+{
+{{- if has_odata }}
+    [Fact]
+    public void OData_ReadsItsLimitsFromTheGenesisSection()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["Genesis:OData:MaxTop"] = "7", ["Genesis:OData:DefaultPageSize"] = "3" })
+            .Build();
+        using var services = new ServiceCollection().AddLogging().AddGenesisOData(configuration).BuildServiceProvider();
+
+        var options = services.GetRequiredService<IOptions<ODataOptions>>().Value;
+
+        options.MaxTop.Should().Be(7);
+        options.DefaultPageSize.Should().Be(3);
+    }
+
+    [Fact]
+    public void TheServicesAppsettings_HasTheODataSectionWhereItIsRead()
+    {
+        var appsettings = GenesisTestHost.ServiceAppsettings();
+
+        appsettings.GetSection("Genesis:OData").Exists().Should().BeTrue();
+        appsettings.GetSection("OData").Exists().Should().BeFalse("OData reads Genesis:OData; a top-level section would be ignored");
+    }
+{{- end }}
+{{- if has_sanitization }}
+    [Fact]
+    public void Sanitization_ReadsItsSettingsFromTheGenesisSection()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Genesis:Sanitization:MaxInputLength"] = "1234",
+                ["Genesis:Sanitization:EnableMiddleware"] = "true",
+            })
+            .Build();
+        using var services = new ServiceCollection().AddLogging().AddGenesisSanitization(configuration).BuildServiceProvider();
+
+        var options = services.GetRequiredService<IOptions<SanitizationOptions>>().Value;
+
+        options.MaxInputLength.Should().Be(1234);
+        options.EnableMiddleware.Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheServicesAppsettings_HasTheSanitizationSectionWhereItIsRead()
+    {
+        var appsettings = GenesisTestHost.ServiceAppsettings();
+
+        appsettings.GetSection("Genesis:Sanitization").Exists().Should().BeTrue();
+        appsettings.GetSection("Sanitization").Exists().Should().BeFalse("Sanitization reads Genesis:Sanitization; a top-level section would be ignored");
+        appsettings.GetValue<bool>("Genesis:Sanitization:EnableMiddleware").Should().BeFalse("the middleware changes every field, so it is opt-in");
+    }
+{{- end }}
+}
+{{- if has_sanitization }}
+
+public sealed record AttributeProbeRequest
+{
+    [Sanitize]
+    public string? Comment { get; init; }
+
+    // Not marked: values such as passwords must reach the service exactly as typed.
+    public string? Password { get; init; }
+}
+
+public sealed record NestedProbeValue
+{
+    public string? Text { get; init; }
+}
+
+public sealed record BodyProbeRequest
+{
+    public string? Text { get; init; }
+
+    public NestedProbeValue? Inner { get; init; }
+
+    public List<string>? Items { get; init; }
+}
+
+[ApiController]
+[Route("test/sanitization")]
+public sealed class SanitizationProbeController : ControllerBase
+{
+    [HttpPost("attribute")]
+    public ActionResult<AttributeProbeRequest> Attribute([FromBody] AttributeProbeRequest request) => request;
+
+    [HttpPost("body")]
+    public ActionResult<BodyProbeRequest> Body([FromBody] BodyProbeRequest request) => request;
+}
+
+public sealed class SanitizationTests
+{
+    private const int MaxInputLength = 2_000;
+
+    private static Task<WebApplication> StartAsync(bool middleware) => GenesisTestHost.StartAsync(
+        new Dictionary<string, string?>
+        {
+            ["Genesis:Sanitization:MaxInputLength"] = MaxInputLength.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["Genesis:Sanitization:EnableMiddleware"] = middleware ? "true" : "false",
+        },
+        (services, configuration) => services.AddGenesisSanitization(configuration),
+        app =>
+        {
+            // The same order as Program.cs.
+            app.UseMiddleware<JsonBodyLimitMiddleware>();
+            app.UseGenesisSanitization();
+        });
+
+    private static async Task<T> PostAsync<T>(WebApplication app, string path, object body)
+    {
+        using var client = app.GetTestClient();
+        using var response = await client.PostAsJsonAsync(path, body);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        return (await response.Content.ReadFromJsonAsync<T>())!;
+    }
+
+    [Fact]
+    public async Task MarkedField_IsCleaned_UnmarkedFieldIsUntouched()
+    {
+        await using var app = await StartAsync(middleware: false);
+
+        var echoed = await PostAsync<AttributeProbeRequest>(app, "test/sanitization/attribute",
+            new { comment = "<script>alert(1)</script>Hello <b>world</b>", password = "p<w>d & more" });
+
+        echoed.Comment.Should().Be("Hello world");
+        echoed.Password.Should().Be("p<w>d & more");
+    }
+
+    [Fact]
+    public async Task WithTheMiddlewareOff_BodiesAreNotChanged()
+    {
+        await using var app = await StartAsync(middleware: false);
+
+        var echoed = await PostAsync<BodyProbeRequest>(app, "test/sanitization/body",
+            new { text = "<b>bold</b>", inner = new { text = "<i>x</i>" }, items = new[] { "<u>y</u>" } });
+
+        echoed.Text.Should().Be("<b>bold</b>");
+        echoed.Inner!.Text.Should().Be("<i>x</i>");
+        echoed.Items.Should().Equal("<u>y</u>");
+    }
+
+    [Fact]
+    public async Task WithTheMiddlewareOn_NestedObjectsAndArraysAreCleaned()
+    {
+        await using var app = await StartAsync(middleware: true);
+
+        var echoed = await PostAsync<BodyProbeRequest>(app, "test/sanitization/body",
+            new { text = "<script>steal()</script>ok", inner = new { text = "<img src=x onerror=alert(1)>fine" }, items = new[] { "<b>a</b>", "plain" } });
+
+        echoed.Text.Should().Be("ok");
+        echoed.Inner!.Text.Should().Be("fine");
+        echoed.Items.Should().Equal("a", "plain");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task AJsonBodyAboveTheLimit_IsRejected_NeverPassedThroughUnsanitized(bool middleware)
+    {
+        await using var app = await StartAsync(middleware);
+        using var client = app.GetTestClient();
+
+        // A string longer than MaxInputLength cannot be sanitized, so the whole body must be refused.
+        var payload = new { comment = "<script>alert(1)</script>" + new string('a', MaxInputLength) };
+        using var response = await client.PostAsJsonAsync("test/sanitization/attribute", payload);
+
+        response.StatusCode.Should().Be(HttpStatusCode.RequestEntityTooLarge);
+    }
+
+    [Fact]
+    public async Task AJsonBodyWithinTheLimit_IsAccepted()
+    {
+        await using var app = await StartAsync(middleware: true);
+
+        var echoed = await PostAsync<AttributeProbeRequest>(app, "test/sanitization/attribute",
+            new { comment = new string('a', MaxInputLength / 2) });
+
+        echoed.Comment.Should().HaveLength(MaxInputLength / 2);
+    }
+
+    [Fact]
+    public void ValidatorRules_CleanOrReject()
+    {
+        using var services = new ServiceCollection()
+            .AddLogging()
+            .AddGenesisSanitization(new ConfigurationBuilder().Build())
+            .BuildServiceProvider();
+        var sanitizer = services.GetRequiredService<ISanitizer>();
+
+        var rejecting = new InlineValidator<NestedProbeValue>();
+        rejecting.RuleFor(x => x.Text!).MustBeSanitized(sanitizer);
+
+        rejecting.Validate(new NestedProbeValue { Text = "<script>x</script>" }).IsValid.Should().BeFalse();
+        rejecting.Validate(new NestedProbeValue { Text = "plain text" }).IsValid.Should().BeTrue();
+    }
+}
+{{- end }}
+{{- if has_odata }}
+
+public sealed record ODataProbeItem(string Label);
+
+[ApiController]
+[Route("test/odata")]
+public sealed class ODataProbeController : ControllerBase
+{
+    public const int EndpointMaxTop = 10;
+
+    [HttpGet("items")]
+    [ODataQueryable(MaxTop = EndpointMaxTop, AllowedQueryOptions = ODataQueryOptions.Top | ODataQueryOptions.Skip | ODataQueryOptions.Count)]
+{{- if model.manifest.tenant_ready }}
+    public async Task<ActionResult<PageResult<ODataProbeItem>>> ListAsync([FromServices] IsolationTestDbContext dbContext, CancellationToken cancellationToken)
+    {
+        var query = (ODataQueryContext)HttpContext.Items["Genesis.OData.QueryContext"]!;
+
+        // Only the current tenant's rows: the tenant filter of the service's DbContext applies to OData lists too.
+        var rows = dbContext.Set<IsolationProbe>().AsNoTracking().OrderBy(p => p.Label);
+        long? total = query.CountRequested ? await rows.LongCountAsync(cancellationToken) : null;
+        var items = await rows.Skip(query.Skip).Take(query.EffectiveTop).Select(p => new ODataProbeItem(p.Label)).ToListAsync(cancellationToken);
+
+        return new PageResult<ODataProbeItem> { Value = items, Count = total };
+    }
+{{- else }}
+    public ActionResult<PageResult<ODataProbeItem>> List()
+    {
+        var query = (ODataQueryContext)HttpContext.Items["Genesis.OData.QueryContext"]!;
+
+        var rows = Enumerable.Range(1, 5).Select(i => new ODataProbeItem($"item-{i}")).ToList();
+        var items = rows.Skip(query.Skip).Take(query.EffectiveTop).ToList();
+
+        return new PageResult<ODataProbeItem> { Value = items, Count = query.CountRequested ? rows.Count : null };
+    }
+{{- end }}
+}
+
+public sealed class ODataTests{{ if model.manifest.tenant_ready }} : IDisposable{{ end }}
+{
+    private const int DefaultPageSize = 3;
+{{- if model.manifest.tenant_ready }}
+
+    private static readonly TenantId TenantA = new(TenantDefaults.DefaultTenantId);
+    private static readonly TenantId TenantB = new(Guid.NewGuid().ToString("D"));
+
+    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    private readonly DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> _options;
+
+    public ODataTests()
+    {
+        _connection.Open();
+        _options = new DbContextOptionsBuilder<{{ model.names.dot_net_class_name }}DbContext>().UseSqlite(_connection).Options;
+        using (var context = new IsolationTestDbContext(_options, DesignTimeTenantContext.Instance))
+            context.Database.EnsureCreated();
+
+        Seed(TenantA, "a1", "a2", "a3", "a4", "a5");
+        Seed(TenantB, "b1", "b2");
+    }
+
+    private void Seed(TenantId tenant, params string[] labels)
+    {
+        using var services = new ServiceCollection().AddLogging().AddPervaxisClaimsMultiTenancy().BuildServiceProvider();
+        using var scope = services.GetRequiredService<ITenantScopeFactory>().BeginScope(tenant);
+        using var context = new IsolationTestDbContext(_options, services.GetRequiredService<ITenantContext>());
+        foreach (var label in labels)
+            context.Add(new IsolationProbe(Guid.NewGuid(), label));
+        context.SaveChanges();
+    }
+
+    // A single-tenant host for the given tenant, with the service's tenancy middleware and DbContext model.
+    private Task<WebApplication> StartAsync(TenantId? tenant = null) => GenesisTestHost.StartAsync(
+        new Dictionary<string, string?>
+        {
+            ["Genesis:OData:MaxTop"] = "50",
+            ["Genesis:OData:DefaultPageSize"] = DefaultPageSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        },
+        (services, configuration) =>
+        {
+            services.AddGenesisOData(configuration);
+            services.AddODataPagingGuard();
+            services.AddPervaxisClaimsMultiTenancy(options =>
+            {
+                options.Mode = TenancyMode.SingleTenant;
+                options.DefaultTenantId = (tenant ?? TenantA).Value;
+            });
+            services.AddScoped(provider => new IsolationTestDbContext(_options, provider.GetRequiredService<ITenantContext>()));
+        },
+        app =>
+        {
+            app.UseRouting();
+            app.UsePervaxisClaimsTenancy();
+        });
+
+    public void Dispose() => _connection.Dispose();
+{{- else }}
+
+    private static Task<WebApplication> StartAsync() => GenesisTestHost.StartAsync(
+        new Dictionary<string, string?>
+        {
+            ["Genesis:OData:MaxTop"] = "50",
+            ["Genesis:OData:DefaultPageSize"] = DefaultPageSize.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        },
+        (services, configuration) =>
+        {
+            services.AddGenesisOData(configuration);
+            services.AddODataPagingGuard();
+        },
+        _ => { });
+{{- end }}
+
+    private static async Task<(HttpStatusCode Status, JsonElement Body)> GetAsync(WebApplication app, string query)
+    {
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync("test/odata/items" + query);
+        var text = await response.Content.ReadAsStringAsync();
+        return (response.StatusCode, string.IsNullOrEmpty(text) ? default : JsonDocument.Parse(text).RootElement.Clone());
+    }
+
+    private static List<string> Labels(JsonElement body) =>
+        body.GetProperty("value").EnumerateArray().Select(item => item.GetProperty("label").GetString()!).ToList();
+
+    [Fact]
+    public async Task TopSkipAndCount_PageTheResults()
+    {
+        await using var app = await StartAsync();
+
+        var (status, body) = await GetAsync(app, "?$top=2&$skip=1&$count=true");
+
+        status.Should().Be(HttpStatusCode.OK);
+        Labels(body).Should().HaveCount(2);
+        body.GetProperty("@odata.count").GetInt64().Should().Be(5);
+    }
+
+    [Fact]
+    public async Task WithoutTop_TheConfiguredDefaultPageSizeApplies()
+    {
+        await using var app = await StartAsync();
+
+        var (status, body) = await GetAsync(app, string.Empty);
+
+        status.Should().Be(HttpStatusCode.OK);
+        Labels(body).Should().HaveCount(DefaultPageSize);
+    }
+
+    [Fact]
+    public async Task TopAboveTheEndpointLimit_IsRejected()
+    {
+        await using var app = await StartAsync();
+
+        (await GetAsync(app, $"?$top={ODataProbeController.EndpointMaxTop + 1}")).Status.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData("?$filter=Label eq 'a1'")]
+    [InlineData("?$orderby=Label desc")]
+    [InlineData("?$select=TenantId")]
+    [InlineData("?$expand=Tenant")]
+    public async Task QueryOptionsTheEndpointDoesNotAllow_AreRejected(string query)
+    {
+        await using var app = await StartAsync();
+
+        (await GetAsync(app, query)).Status.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Theory]
+    [InlineData("?$top=-1")]
+    [InlineData("?$skip=-1")]
+    public async Task NegativePagingValues_AreRejected(string query)
+    {
+        await using var app = await StartAsync();
+
+        (await GetAsync(app, query)).Status.Should().Be(HttpStatusCode.BadRequest);
+    }
+
+    [Fact]
+    public async Task NonNumericTop_IsIgnored_AndTheDefaultPageSizeApplies()
+    {
+        await using var app = await StartAsync();
+
+        var (status, body) = await GetAsync(app, "?$top=all");
+
+        status.Should().Be(HttpStatusCode.OK);
+        Labels(body).Should().HaveCount(DefaultPageSize);
+    }
+{{- if model.manifest.tenant_ready }}
+
+    [Fact]
+    public async Task EachTenant_ListsAndCountsOnlyItsOwnRows()
+    {
+        await using var asA = await StartAsync(TenantA);
+        await using var asB = await StartAsync(TenantB);
+
+        var (_, bodyA) = await GetAsync(asA, "?$top=10&$count=true");
+        var (_, bodyB) = await GetAsync(asB, "?$top=10&$count=true");
+
+        Labels(bodyA).Should().OnlyContain(label => label.StartsWith('a'));
+        bodyA.GetProperty("@odata.count").GetInt64().Should().Be(5);
+        Labels(bodyB).Should().BeEquivalentTo("b1", "b2");
+        bodyB.GetProperty("@odata.count").GetInt64().Should().Be(2);
+    }
+{{- end }}
+}
+{{- end }}
+{{- end -}}

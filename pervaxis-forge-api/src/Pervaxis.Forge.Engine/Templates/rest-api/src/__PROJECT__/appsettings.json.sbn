@@ -135,6 +135,29 @@
   }{{ if model.manifest.database != null }},
   "ConnectionStrings": {
     "Default": ""
-  }{{ end }}{{ for module in model.selected_modules }},
-  "{{ module.name }}": {}{{ end }}
+  }{{ end }}{{ genesis_count = 0 }}{{ for module in model.selected_modules }}{{ if module.uses_genesis_section }}{{ genesis_count = genesis_count + 1 }}{{ else }},
+  "{{ module.display_name }}": {}{{ end }}{{ end }}{{ if genesis_count > 0 }},
+  "Genesis": {
+{{- genesis_index = 0 }}{{ for module in model.selected_modules }}{{ if module.uses_genesis_section }}{{ if genesis_index > 0 }},{{ end }}{{ genesis_index = genesis_index + 1 }}
+{{- if module.display_name == "OData" }}
+    "OData": {
+      "MaxTop": 100,
+      "DefaultPageSize": 20,
+      "MaxExpandDepth": 2,
+      "MaxFilterDepth": 3,
+      "MaxOrderByProperties": 3,
+      "EnableCount": true,
+      "MaxQueryComplexityScore": 50
+    }
+{{- else if module.display_name == "Sanitization" }}
+    "Sanitization": {
+      "DefaultProfile": "PlainText",
+      "MaxInputLength": 1000000,
+      "EnableMiddleware": false,
+      "MiddlewareExcludedRoutes": []
+    }
+{{- else }}
+    "{{ module.display_name }}": {}
+{{- end }}{{ end }}{{ end }}
+  }{{ end }}
 }
