@@ -20,6 +20,8 @@ public static class TemplateModelBuilder
                 PackageName = GenesisModules.GetPackageName(moduleName, cloudProvider),
                 DiExtensionName = GenesisModules.GetDiExtensionName(moduleName, cloudProvider),
                 Version = genesisVersion,
+                DisplayName = GenesisModules.GetById(moduleName)?.DisplayName ?? moduleName,
+                UsesGenesisSection = GenesisModules.UsesGenesisSection(moduleName),
             })
             .ToList();
 

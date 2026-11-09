@@ -7,7 +7,21 @@
 
 Package: `Pervaxis.Genesis.Sanitization` (already referenced and registered in this service).
 
-Sanitize every free-text value that comes from a user and is later stored or shown, such as comments, notes, names and descriptions. Do not sanitize IDs, enums or numbers.
+Sanitize free-text values that come from a user and are later stored or shown as text, such as comments, notes, names
+and descriptions. Choose the fields on purpose: sanitization changes the value.
+
+## What the platform already does
+
+| Protection | Where | Default |
+|---|---|---|
+| Settings read from `Genesis:Sanitization` in `appsettings.json` | `Program.cs` | On |
+| `[Sanitize]` properties are cleaned before validation | Global filter from `AddGenesisSanitization` | On |
+| JSON bodies larger than `MaxInputLength` are rejected with **413** | `Infrastructure/Middleware/JsonBodyLimitMiddleware.cs` | On |
+| Every string in every JSON POST, PUT and PATCH body is cleaned, including nested values | `app.UseGenesisSanitization()` | **Off** (`EnableMiddleware: false`) |
+
+Why the body limit: the sanitizer refuses strings longer than `MaxInputLength`. Without the limit, the body-wide
+middleware would pass such a request through **unsanitized**, and a `[Sanitize]` property would fail with 500.
+A JSON string cannot be longer than its body, so capping the body closes both. File uploads (multipart) are not affected.
 
 ## Profiles
 
@@ -19,22 +33,33 @@ Sanitize every free-text value that comes from a user and is later stored or sho
 
 Custom profiles can be added in configuration (`CustomProfiles`).
 
+### What `PlainText` does to a value
+
+- Removes script and style content, then anything that looks like a tag (`<...>`). `5 < 6 and 7 > 3` becomes `5 3`.
+- Decodes HTML entities: `&amp;` becomes `&`.
+- Collapses all whitespace, including line breaks, to single spaces and trims the ends.
+
+So **never** apply it to passwords, secrets, tokens, codes, identifiers, raw JSON or XML, or multi-line text whose line
+breaks matter. Leave those fields unmarked, or use `SafeHtml` / `Markdown` where formatting is wanted.
+
 ## Settings
 
-Read from the `Genesis:Sanitization` configuration section. All values are optional. The defaults are shown.
+Read from the `Genesis:Sanitization` section of `appsettings.json`. The generated values are shown.
 
 ```json
 {
   "Genesis": {
     "Sanitization": {
       "DefaultProfile": "PlainText",
-      "AllowCustomProfiles": true,
       "MaxInputLength": 1000000,
-      "EnableMiddleware": false
+      "EnableMiddleware": false,
+      "MiddlewareExcludedRoutes": []
     }
   }
 }
 ```
+
+`MaxInputLength` is both the longest string the sanitizer accepts and the largest JSON body the service accepts.
 
 ## Option 1: mark the property on the request model (simplest)
 
@@ -58,32 +83,32 @@ public sealed record CreateCommentRequest
 ```
 
 Limits of Option 1:
-- It only cleans **top-level string properties** of the action's arguments. A string inside a nested object or a list is not touched, even if it has `[Sanitize]`. Option 3 (`Sanitized`) also only works on top-level properties. Use Option 2 for nested values.
+- It only cleans **top-level string properties** of the action's arguments. A string inside a nested object or a list is not touched, even if it has `[Sanitize]`. Option 3 (`Sanitized`) also only works on top-level properties. Use Option 2, or the middleware, for nested values.
 - It only runs for values that are not `null`.
 
 ## Option 2: call the sanitizer in the service
 
-Use this when the value does not come straight from a request model.
+Use this when the value does not come straight from a request model, or is nested.
 
 ```csharp
 using Pervaxis.Genesis.Sanitization.Abstractions;
 
 namespace {{ model.names.namespace }}.Domains.Comments.Services;
 
-public sealed class CommentService(ISanitizer sanitizer, CommentDbContext dbContext) : ICommentService
+public sealed class CommentService(ISanitizer sanitizer) : ICommentService
 {
-    public async Task CreateAsync(string body, string title, CancellationToken cancellationToken)
-    {
-        var safeBody = sanitizer.SanitizeHtml(body);               // keeps safe HTML
-        var safeTitle = sanitizer.StripAll(title);                 // plain text only
-        var custom = sanitizer.Sanitize(body, "MyCustomProfile");  // named profile
+    public string CleanBody(string body) => sanitizer.SanitizeHtml(body)!;        // keeps safe HTML
 
-        // ... store the sanitized values
-    }
+    public string CleanTitle(string title) => sanitizer.StripAll(title)!;         // plain text only
+
+    public string CleanCustom(string body) => sanitizer.Sanitize(body, "MyCustomProfile")!;  // named profile
 }
 ```
 
 `ISanitizer` methods: `StripAll`, `SanitizeHtml`, `Sanitize(input, profileName)` and `Sanitize(input, profile)`. All of them return `null` for `null` input.
+{{- if model.manifest.tenant_ready }}
+Store the cleaned values through the service's repository or `{{ model.names.dot_net_class_name }}DbContext` as usual (see `TenancyQuickStart.md`). Do not create a feature `DbContext`.
+{{- end }}
 
 ## Option 3: inside a FluentValidation validator
 
@@ -112,14 +137,31 @@ public sealed class CreateCommentRequestValidator : AbstractValidator<CreateComm
 }
 ```
 
+## Option 4: clean every JSON body (the middleware)
+
+`app.UseGenesisSanitization()` is already in `Program.cs`, but does nothing until `EnableMiddleware` is `true`.
+When on, it cleans **every** string in **every** JSON POST, PUT and PATCH body with `DefaultProfile`, including values in
+nested objects and lists. That includes fields such as passwords, so before turning it on:
+
+- List the routes whose bodies must arrive unchanged in `MiddlewareExcludedRoutes` (exact paths, or a prefix ending in `*`).
+- Check every field of the remaining endpoints against "What `PlainText` does" above.
+- Ask the platform team; it changes every endpoint.
+
 ## Which option to use
 
-- Request models from the API: Option 1.
-- Values built or loaded inside a service: Option 2.
+- Specific free-text fields of request models: Option 1.
+- Values built or loaded inside a service, or nested values: Option 2.
 - You already have a validator and want the rule next to the others: Option 3.
+- A service whose every body is display text and that has no secrets in its bodies: Option 4.
 - Do not apply the same property to more than one option. It is wasted work.
 
-## Not enabled by default
+## Sanitizing input does not replace encoding output
 
-A middleware can clean every POST, PUT and PATCH body automatically (`UseGenesisSanitization()` together with `EnableMiddleware: true`). It is off by default and is **not** added to `Program.cs` in this service. Ask the platform team before turning it on, because it changes every endpoint.
+Always encode a value for the place it is shown. Angular templates escape bound values by default; never put stored
+values into `innerHTML` or `bypassSecurityTrust*`. Encode values in e-mails, PDFs, CSV exports and log viewers as well.
+
+## Tests
+
+`GenesisModuleTests.cs` checks the settings binding, `[Sanitize]`, the middleware on and off (including nested values),
+the 413 body limit and the validator rules. Keep them.
 {{- end -}}

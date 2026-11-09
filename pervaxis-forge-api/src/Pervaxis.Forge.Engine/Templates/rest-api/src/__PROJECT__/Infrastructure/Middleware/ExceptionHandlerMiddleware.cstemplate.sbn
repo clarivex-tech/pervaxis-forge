@@ -169,6 +169,16 @@ public sealed class ExceptionHandlerMiddleware
                 Detail = "The resource was changed by another request. Reload it and try again."
             },
 {{- end }}
+            // Thrown by the server for malformed or oversized requests (for example a body above the size limit).
+            Microsoft.AspNetCore.Http.BadHttpRequestException badRequestEx => new ProblemDetails
+            {
+                Type = "https://tools.ietf.org/html/rfc7807",
+                Title = badRequestEx.StatusCode == StatusCodes.Status413PayloadTooLarge ? "Payload Too Large" : "Bad Request",
+                Status = badRequestEx.StatusCode,
+                Detail = badRequestEx.StatusCode == StatusCodes.Status413PayloadTooLarge
+                    ? "The request body is too large."
+                    : "The request could not be read."
+            },
             OperationCanceledException => new ProblemDetails
             {
                 Type = "https://tools.ietf.org/html/rfc7807",
@@ -219,6 +229,13 @@ public sealed class ExceptionHandlerMiddleware
                 _logger.LogInformation(
                     ex,
                     "Not found {ErrorId} {CorrelationId} {StatusCode}",
+                    errorId, correlationId, statusCode);
+                break;
+
+            case 413:
+                _logger.LogWarning(
+                    ex,
+                    "Request body too large {ErrorId} {CorrelationId} {StatusCode}",
                     errorId, correlationId, statusCode);
                 break;
 

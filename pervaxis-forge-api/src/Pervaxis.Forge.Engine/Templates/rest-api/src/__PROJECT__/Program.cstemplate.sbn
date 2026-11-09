@@ -21,6 +21,9 @@ using {{ model.names.namespace }}.Infrastructure.Extensions;
 using {{ model.names.namespace }}.Infrastructure.Http;
 using {{ model.names.namespace }}.Infrastructure.Middleware;
 using {{ model.names.namespace }}.Infrastructure.Security;
+{{- for module in model.selected_modules }}{{ if module.display_name == "OData" }}
+using {{ model.names.namespace }}.Infrastructure.Validation;
+{{- end }}{{ end }}
 {{- if !model.manifest.tenant_ready }}
 using {{ model.names.namespace }}.Infrastructure.Tenancy;
 {{- else }}
@@ -67,9 +70,22 @@ builder.AddForgeSerilog();
 builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonSecretsManager>();
+{{- has_sanitization = false }}
+{{- has_odata = false }}
 {{- for module in model.selected_modules }}
+{{- if module.display_name == "Sanitization" }}{{ has_sanitization = true }}{{ end }}
+{{- if module.display_name == "OData" }}{{ has_odata = true }}{{ end }}
+{{- if module.uses_genesis_section }}
+// {{ module.display_name }} reads its settings from "Genesis:{{ module.display_name }}".
+builder.Services.{{ module.di_extension_name }}(builder.Configuration);
+{{- else }}
 builder.Services.{{ module.di_extension_name }}(
-    builder.Configuration.GetSection("{{ module.name }}"));
+    builder.Configuration.GetSection("{{ module.display_name }}"));
+{{- end }}
+{{- end }}
+{{- if has_odata }}
+// Rejects negative $top/$skip on [ODataQueryable] endpoints (Genesis OData 3.4 passes them through).
+builder.Services.AddODataPagingGuard();
 {{- end }}
 
 builder.Services.AddControllers();
@@ -266,6 +282,14 @@ app.UseAuthorization();
 // Rate limiting runs after authentication so per-user limits partition by the authenticated
 // user. Before authentication the user is unknown and every caller falls back to the IP partition.
 app.UseRateLimiter();
+{{- if has_sanitization }}
+// Input sanitization (see DeveloperReference/Sanitization.md).
+// 1. JSON bodies are capped at Genesis:Sanitization:MaxInputLength (413), so no string exceeds the sanitizer's limit.
+app.UseMiddleware<JsonBodyLimitMiddleware>();
+// 2. Cleans every string in JSON POST, PUT and PATCH bodies, including nested values, but only when
+//    Genesis:Sanitization:EnableMiddleware is true. Off by default: it changes every field of every request.
+app.UseGenesisSanitization();
+{{- end }}
 // Health checks are anonymous -- load balancers must reach them without an API key.
 // /health is liveness: it never touches the database, so a short database outage does not restart healthy containers.
 // /health/ready is readiness: it runs the checks tagged "ready" (the database check when a database is configured).

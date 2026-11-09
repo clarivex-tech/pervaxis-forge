@@ -1,4 +1,5 @@
 <!-- Central package versions for REST API scaffolds. -->
+{{- core_version = "1.8.0" }}
 <Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
@@ -43,8 +44,8 @@
     <!-- Transitive version pins — override vulnerable versions pulled in by dependencies -->
 {{- if model.manifest.tenant_ready }}
     <!-- Claims-based multi-tenancy (Core). Single-tenant mode needs Core 1.8.0 (tag v1.8.0). -->
-    <PackageVersion Include="Pervaxis.Core.MultiTenancy" Version="1.8.0" />
-    <PackageVersion Include="Pervaxis.Core.Data.EntityFrameworkCore" Version="1.8.0" />
+    <PackageVersion Include="Pervaxis.Core.MultiTenancy" Version="{{ core_version }}" />
+    <PackageVersion Include="Pervaxis.Core.Data.EntityFrameworkCore" Version="{{ core_version }}" />
     <!-- In-memory SQLite for the generated tenant tests. -->
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.8" />
     <!-- Test-only security override: EF Sqlite 10.0.8 pulls SQLitePCLRaw.lib.e_sqlite3 2.1.11 (GHSA-2m69-gcr7-jv3q); 3.50.3 is fixed. -->
@@ -52,6 +53,13 @@
 {{- end }}
     <PackageVersion Include="AngleSharp" Version="1.7.2" />
     <PackageVersion Include="HtmlSanitizer" Version="9.2.1039" />
+{{- if model.selected_modules.size > 0 }}
+    <!-- Genesis 3.4.x asks for Core Abstractions 1.5.0, Observability 1.3.0 and Resilience 1.1.1, which are not on nuget.org.
+         Pin them to the Core release this service uses, so restore does not fail on the substitution (NU1603). -->
+    <PackageVersion Include="Pervaxis.Core.Abstractions" Version="{{ core_version }}" />
+    <PackageVersion Include="Pervaxis.Core.Observability" Version="{{ core_version }}" />
+    <PackageVersion Include="Pervaxis.Core.Resilience" Version="{{ core_version }}" />
+{{- end }}
 {{- for module in model.selected_modules }}
     <PackageVersion Include="{{ module.package_name }}" Version="{{ module.version }}" />
 {{- end }}

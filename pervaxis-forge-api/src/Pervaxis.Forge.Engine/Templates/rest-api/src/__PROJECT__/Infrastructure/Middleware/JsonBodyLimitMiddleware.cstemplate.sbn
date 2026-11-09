@@ -1,0 +1,118 @@
+{{- has_sanitization = false -}}
+{{- for module in model.selected_modules -}}
+{{- if module.display_name == "Sanitization" -}}{{- has_sanitization = true -}}{{- end -}}
+{{- end -}}
+{{- if has_sanitization -}}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Text.Json;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.Extensions.Options;
+using Pervaxis.Genesis.Sanitization.Options;
+
+namespace {{ model.names.namespace }}.Infrastructure.Middleware;
+
+/// <summary>
+/// Rejects JSON request bodies larger than <c>Genesis:Sanitization:MaxInputLength</c> with 413.
+/// </summary>
+/// <remarks>
+/// The sanitizer refuses strings longer than that limit. Without this cap, the sanitization middleware would pass such a
+/// body through unsanitized and a <c>[Sanitize]</c> property would fail with 500. A JSON string can never be longer
+/// than the body that holds it, so capping the body keeps every string within the sanitizer's limit.
+/// Only JSON bodies are limited; file uploads (multipart) keep the server's normal limit.
+/// Platform code; do not edit.
+/// </remarks>
+public sealed class JsonBodyLimitMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly long _maxBodyBytes;
+
+    public JsonBodyLimitMiddleware(RequestDelegate next, IOptions<SanitizationOptions> options)
+    {
+        _next = next ?? throw new ArgumentNullException(nameof(next));
+        _maxBodyBytes = (options ?? throw new ArgumentNullException(nameof(options))).Value.MaxInputLength;
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (IsJson(context.Request.ContentType))
+        {
+            if (context.Request.ContentLength > _maxBodyBytes)
+            {
+                await RejectAsync(context).ConfigureAwait(false);
+                return;
+            }
+
+            // Let the server stop an oversized body early where it supports a per-request limit (Kestrel does).
+            var bodySize = context.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            if (bodySize is { IsReadOnly: false } && (bodySize.MaxRequestBodySize is null || bodySize.MaxRequestBodySize > _maxBodyBytes))
+                bodySize.MaxRequestBodySize = _maxBodyBytes;
+
+            // A body without a Content-Length (chunked) is measured here, so the limit holds on every server.
+            if (context.Request.ContentLength is null && await ExceedsLimitAsync(context).ConfigureAwait(false))
+            {
+                await RejectAsync(context).ConfigureAwait(false);
+                return;
+            }
+        }
+
+        await _next(context).ConfigureAwait(false);
+    }
+
+    private async Task<bool> ExceedsLimitAsync(HttpContext context)
+    {
+        context.Request.EnableBuffering();
+        var buffer = new byte[81_920];
+        long total = 0;
+        int read;
+        while ((read = await context.Request.Body.ReadAsync(buffer, context.RequestAborted).ConfigureAwait(false)) > 0)
+        {
+            total += read;
+            if (total > _maxBodyBytes)
+                return true;
+        }
+
+        context.Request.Body.Position = 0;
+        return false;
+    }
+
+    private static Task RejectAsync(HttpContext context)
+    {
+        context.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
+        return context.Response.WriteAsJsonAsync(
+            new
+            {
+                type = "https://tools.ietf.org/html/rfc7807",
+                title = "Payload Too Large",
+                status = StatusCodes.Status413PayloadTooLarge,
+                detail = "The request body is too large.",
+            },
+            (JsonSerializerOptions?)null,
+            "application/problem+json",
+            context.RequestAborted);
+    }
+
+    private static bool IsJson(string? contentType) =>
+        !string.IsNullOrEmpty(contentType)
+        && (contentType.Contains("application/json", StringComparison.OrdinalIgnoreCase)
+            || contentType.Contains("+json", StringComparison.OrdinalIgnoreCase));
+}
+{{- end -}}
