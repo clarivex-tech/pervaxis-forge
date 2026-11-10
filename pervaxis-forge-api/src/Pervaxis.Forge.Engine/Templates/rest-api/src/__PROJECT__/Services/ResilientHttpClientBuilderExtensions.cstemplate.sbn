@@ -28,7 +28,9 @@ public static class ResilientHttpClientBuilderExtensions
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            if (!_options.Enabled)
+            // Only requests that are safe to repeat are retried: a repeated POST can create a duplicate
+            // order or payment. Writes opt in by sending an Idempotency-Key the receiver deduplicates on.
+            if (!_options.Enabled || !IsRetrySafe(request))
             {
                 return await base.SendAsync(request, cancellationToken);
             }
@@ -54,6 +56,13 @@ public static class ResilientHttpClientBuilderExtensions
 
             return response!;
         }
+
+        private static bool IsRetrySafe(HttpRequestMessage request) =>
+            request.Method == HttpMethod.Get
+            || request.Method == HttpMethod.Head
+            || request.Method == HttpMethod.Options
+            || request.Method == HttpMethod.Trace
+            || request.Headers.Contains("Idempotency-Key");
 
         private static bool IsTransient(HttpStatusCode statusCode) =>
             statusCode is HttpStatusCode.RequestTimeout

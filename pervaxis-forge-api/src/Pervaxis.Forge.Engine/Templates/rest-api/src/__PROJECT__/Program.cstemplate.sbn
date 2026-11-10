@@ -107,7 +107,16 @@ builder.Services.AddOptions<ForgeSecretsOptions>()
 builder.Services.AddSingleton<ForgeDataRedaction>();
 builder.Services.AddOptions<ForgeOutputCachingOptions>()
     .BindConfiguration(ForgeOutputCachingOptions.SectionName);
-builder.Services.AddOutputCache();
+var outputCaching = builder.Configuration.GetSection(ForgeOutputCachingOptions.SectionName)
+    .Get<ForgeOutputCachingOptions>() ?? new ForgeOutputCachingOptions();
+builder.Services.AddOutputCache(options =>
+{
+    // Nothing is cached unless an endpoint opts in with [OutputCache(PolicyName = ForgeOutputCachingOptions.PublicPolicy)].
+    // That policy caches anonymous responses only. Do not add a policy for authenticated callers
+    // without varying the cache key by user and tenant.
+    options.AddPolicy(ForgeOutputCachingOptions.PublicPolicy,
+        policy => policy.AddForgeDefaultOutputCache(outputCaching.DefaultExpirationSeconds));
+});
 builder.Services.AddOptions<ForgeRateLimitingOptions>()
     .BindConfiguration(ForgeRateLimitingOptions.SectionName);
 builder.Services.AddRateLimiter(limiterOptions =>
@@ -134,9 +143,11 @@ builder.Services.AddRateLimiter(limiterOptions =>
 const string ForgeUiCorsPolicy = "ForgeUi";
 builder.Services.AddCors(options =>
 {
+    // No built-in fallback: an environment without Forge:Cors:AllowedOrigins allows no browser origins.
+    // localhost is listed only in appsettings.Development.json; set real UI origins per environment.
     var allowedOrigins = builder.Configuration
         .GetSection("Forge:Cors:AllowedOrigins")
-        .Get<string[]>() ?? ["http://localhost:4200"];
+        .Get<string[]>() ?? [];
 
     options.AddPolicy(ForgeUiCorsPolicy, policy => policy
         .WithOrigins(allowedOrigins)
@@ -204,12 +215,19 @@ builder.Services.AddScoped<IOutboxPublisher, OutboxPublisher>();
 builder.Services.AddHostedService<OutboxRelayService>();
 {{- end }}
 
+// External (third-party) client: sends only its own ExternalServices:ApiKey, and only to ExternalServices:BaseUrl.
+// It never forwards the caller's token. Use IForgeInternalHttpClient to call Pervaxis services as the caller.
+builder.Services.AddOptions<ForgeExternalServicesOptions>()
+    .BindConfiguration(ForgeExternalServicesOptions.SectionName);
 builder.Services.AddHttpClient<IForgeExternalHttpClient, ForgeExternalHttpClient>(client =>
 {
-    var baseUrl = builder.Configuration["ExternalServices:BaseUrl"];
+    var baseUrl = builder.Configuration[$"{ForgeExternalServicesOptions.SectionName}:BaseUrl"];
     if (!string.IsNullOrEmpty(baseUrl))
         client.BaseAddress = new Uri(baseUrl);
 })
+// No automatic redirects: they are followed below ExternalAuthHandler and would carry the API key to
+// whatever host the redirect names. A 3xx is returned to the caller, who decides whether to follow it.
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })
 .AddHttpMessageHandler<CorrelationIdHandler>()
 .AddHttpMessageHandler<ExternalAuthHandler>()
 .AddHttpMessageHandler<HttpLoggingHandler>()
@@ -251,27 +269,55 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 
 app.UseHttpsRedirection();
 app.UseResponseCompression();
-app.UseOutputCache();
-app.Use(async (context, next) =>
+// Request audit log: one entry per request, including requests that throw (Forge:AuditLogging:Enabled).
+// Business actions with target IDs (who changed which record) are not covered here; see docs/BACKLOG.md.
+var auditLogging = app.Configuration.GetSection(ForgeAuditLoggingOptions.SectionName)
+    .Get<ForgeAuditLoggingOptions>() ?? new ForgeAuditLoggingOptions();
+if (auditLogging.Enabled)
 {
-    var startedAt = Stopwatch.GetTimestamp();
-    await next();
+    app.Use(async (context, next) =>
+    {
+        var startedAt = Stopwatch.GetTimestamp();
+        string? error = null;
+        try
+        {
+            await next();
+        }
+        catch (Exception ex)
+        {
+            // ExceptionHandlerMiddleware (further out) turns this into the error response; record it, then let it through.
+            error = ex.GetType().Name;
+            throw;
+        }
+        finally
+        {
+            var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            // The actor is the stable user ID (sub claim), not the display name, which is often an email address.
+            var actor = context.User.Identity?.IsAuthenticated == true
+                ? context.User.FindFirst("sub")?.Value
+                    ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? "authenticated-user"
+                : "anonymous";
+            var statusCode = context.Response.StatusCode;
+            var outcome = error is not null || statusCode >= StatusCodes.Status500InternalServerError ? "failed"
+                : statusCode >= StatusCodes.Status400BadRequest ? "rejected"
+                : "succeeded";
 
-    var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
-    var actor = context.User.Identity?.IsAuthenticated == true
-        ? context.User.Identity?.Name ?? "authenticated-user"
-        : "anonymous";
-
-    app.Logger.LogInformation(
-        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {CorrelationId}",
-        "request",
-        context.Request.Method,
-        context.Request.Path.Value,
-        context.Response.StatusCode,
-        elapsedMs,
-        actor,
-        context.Items["CorrelationId"]?.ToString() ?? context.TraceIdentifier);
-});
+            app.Logger.Log(
+                outcome == "failed" ? LogLevel.Warning : LogLevel.Information,
+                "Audit event {AuditAction} {Method} {Path} {StatusCode} {Outcome} {Error} {ElapsedMs}ms {Actor} {CorrelationId}",
+                "request",
+                context.Request.Method,
+                context.Request.Path.Value,
+                error is null ? (int?)statusCode : null,
+                outcome,
+                error,
+                elapsedMs,
+                actor,
+                context.Items["CorrelationId"]?.ToString() ?? context.TraceIdentifier);
+        }
+    });
+}
 app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
 {{- if model.manifest.tenant_ready }}
@@ -282,6 +328,12 @@ app.UseAuthorization();
 // Rate limiting runs after authentication so per-user limits partition by the authenticated
 // user. Before authentication the user is unknown and every caller falls back to the IP partition.
 app.UseRateLimiter();
+// Output caching runs after authentication, tenancy, authorization and rate limiting, so a cached
+// response is never served to a caller who would be rejected. Off unless Forge:OutputCaching:Enabled is true.
+if (outputCaching.Enabled)
+{
+    app.UseOutputCache();
+}
 {{- if has_sanitization }}
 // Input sanitization (see DeveloperReference/Sanitization.md).
 // 1. JSON bodies are capped at Genesis:Sanitization:MaxInputLength (413), so no string exceeds the sanitizer's limit.

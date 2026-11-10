@@ -44,7 +44,8 @@ public sealed class HttpLoggingHandler : DelegatingHandler
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var method = request.Method;
-        var uri = request.RequestUri;
+        // Query strings often carry API keys, tokens or personal data, so only scheme, host and path are logged.
+        var uri = WithoutQuery(request.RequestUri);
         var correlationId = _httpContextAccessor.HttpContext?.Items["CorrelationId"]?.ToString();
 
         using var scope = _logger.BeginScope(
@@ -85,6 +86,19 @@ public sealed class HttpLoggingHandler : DelegatingHandler
 
             throw;
         }
+    }
+
+    public static string? WithoutQuery(Uri? uri)
+    {
+        if (uri is null)
+            return null;
+
+        if (uri.IsAbsoluteUri)
+            return uri.GetLeftPart(UriPartial.Path);
+
+        var original = uri.OriginalString;
+        var cut = original.IndexOfAny(['?', '#']);
+        return cut < 0 ? original : original[..cut];
     }
 
     internal static bool IsSensitiveHeader(string headerName)

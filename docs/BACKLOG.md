@@ -28,6 +28,26 @@ Items tracked for future implementation. Prioritized by impact.
 - [ ] VERTICAL_HANDBOOK.md (proto versioning, backward compatibility)
 - [ ] Production readiness audit + fixes
 
+### REST Print Hardening — Deferred Review Findings
+- [ ] Rate limiting: enabled by default with sensible limits; distributed limits across instances (Redis or API gateway). Until then, document that limits are per instance and off by default.
+- [ ] Business audit trail: business action names, target record IDs and before/after values (who changed which record), as a Core `IAuditLogger` package. Prints already log one request-level audit entry per request with actor ID and outcome.
+- [ ] Application data encryption: field-level encryption with KMS-managed keys; decide searchability and key rotation. Database encryption at rest covers the baseline meanwhile.
+- [ ] Data classification enforcement: field-level PII/sensitivity tags that drive redaction, exports, AI prompts and encryption (shared Core design with encryption). Until then, document that classification is a label only.
+
+- [ ] gRPC template: apply the same retry safety (safe methods or `Idempotency-Key` only) to its `ForgeRetryDelegatingHandler`.
+- [ ] Redaction when Serilog is disabled: the redaction enricher only runs on the Serilog pipeline.
+
+### Genesis Follow-ups (from OData/Sanitization fixes, PR #212)
+- [ ] Rebuild and republish Genesis against Core 1.8.0, then remove the Core pins from `Directory.Packages.props.sbn` (NU1603 workaround).
+- [ ] `QueryValidator` rejects negative `$top`/`$skip`, then remove `ODataPagingGuardFilter` from prints.
+- [ ] Sanitization middleware fails closed on over-long input, then reconsider `JsonBodyLimitMiddleware`.
+- [ ] Sanitization `PlainText` mode must not alter passwords or free text, so middleware can be enabled by default.
+- [ ] Update fallback Genesis versions (`PrintGenerator` 3.2.0, `NuGetVersionResolver` 3.4.1) to a version that includes Sanitization (3.4.4+).
+- [ ] Multi-tenancy audit: per-module tenant source, provider lifetimes, partitioning (Search holds `ITenantContext?` in a singleton); OData `EnableTenantIsolation` does not filter rows.
+
+### Search
+- [ ] OpenSearch ingestion pattern: outbox-driven indexer, full reindex job, alias swap for zero-downtime rebuilds.
+
 ---
 
 ## Angular Template Deferred Items

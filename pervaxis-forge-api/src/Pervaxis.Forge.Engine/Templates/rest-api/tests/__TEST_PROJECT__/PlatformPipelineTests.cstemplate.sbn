@@ -1,0 +1,138 @@
+{{- has_resilience = model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled -}}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using System.Net.Http.Headers;
+using FluentAssertions;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using {{ model.names.namespace }}.Models.Configuration;
+using {{ model.names.namespace }}.Services;
+{{- if has_resilience }}
+using Microsoft.Extensions.Configuration;
+using Polly.CircuitBreaker;
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+{{- end }}
+using Xunit;
+
+namespace {{ model.names.test_project_name }};
+
+// Platform checks for the output cache policy and the circuit breaker settings. Keep them.
+
+public class OutputCachePolicyTests
+{
+    private static async Task<(WebApplication App, Func<int> Hits)> StartAsync()
+    {
+        var hits = 0;
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
+        builder.WebHost.UseTestServer();
+        builder.Services.AddOutputCache(options =>
+            options.AddPolicy(ForgeOutputCachingOptions.PublicPolicy, policy => policy.AddForgeDefaultOutputCache(60)));
+
+        var app = builder.Build();
+        app.UseOutputCache();
+        app.MapGet("/probe", () => Results.Text($"response {Interlocked.Increment(ref hits)}"))
+            .CacheOutput(ForgeOutputCachingOptions.PublicPolicy);
+        await app.StartAsync();
+        return (app, () => Volatile.Read(ref hits));
+    }
+
+    [Fact]
+    public async Task AnonymousResponses_AreCached()
+    {
+        var (app, hits) = await StartAsync();
+        await using var _ = app;
+        var client = app.GetTestClient();
+
+        await client.GetStringAsync("/probe");
+        await client.GetStringAsync("/probe");
+
+        hits().Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AuthenticatedRequests_AreNeverCachedOrServedFromCache()
+    {
+        var (app, hits) = await StartAsync();
+        await using var _ = app;
+        var client = app.GetTestClient();
+        await client.GetStringAsync("/probe");
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/probe");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", "user-token");
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        hits().Should().Be(2);
+    }
+
+    [Fact]
+    public async Task DifferentQueries_DoNotShareAnEntry()
+    {
+        var (app, hits) = await StartAsync();
+        await using var _ = app;
+        var client = app.GetTestClient();
+
+        await client.GetStringAsync("/probe?$filter=status eq 'open'");
+        await client.GetStringAsync("/probe?$filter=status eq 'closed'");
+
+        hits().Should().Be(2);
+    }
+}
+{{- if has_resilience }}
+
+public class CircuitBreakerSettingsTests
+{
+    [Fact]
+    public async Task Circuit_OpensAfterMinimumThroughput_AtTheConfiguredFailureRatio()
+    {
+        var inner = new RecordingHandler(HttpStatusCode.ServiceUnavailable);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["CircuitBreakerFailureRatio"] = "1.0",
+                ["CircuitBreakerMinimumThroughput"] = "3",
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHttpClient("breaker-probe")
+            .ConfigurePrimaryHttpMessageHandler(() => inner)
+            .AddForgeResilience(configuration);
+        await using var provider = services.BuildServiceProvider();
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("breaker-probe");
+
+        // POSTs are not retried, so each call is exactly one attempt.
+        for (var call = 0; call < 3; call++)
+        {
+            using var response = await client.PostAsync("https://partner.example.com/v1/orders", new StringContent("{}"));
+            response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        }
+
+        var open = () => client.PostAsync("https://partner.example.com/v1/orders", new StringContent("{}"));
+        await open.Should().ThrowAsync<BrokenCircuitException>();
+        inner.Calls.Should().Be(3);
+    }
+}
+{{- end }}

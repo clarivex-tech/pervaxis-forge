@@ -25,21 +25,25 @@
   "Resilience": {
     "Default": {
       "MaxRetryAttempts": 3,
-      "CircuitBreakerFailureThreshold": 5,
+      "CircuitBreakerFailureRatio": 0.5,
+      "CircuitBreakerMinimumThroughput": 10,
       "CircuitBreakerSamplingWindowSeconds": 30,
       "CircuitBreakerBreakDurationSeconds": 60,
       "TimeoutSeconds": 30
     },
     "External": {
       "MaxRetryAttempts": 2,
-      "CircuitBreakerFailureThreshold": 3,
+      "CircuitBreakerFailureRatio": 0.5,
+      "CircuitBreakerMinimumThroughput": 5,
       "CircuitBreakerSamplingWindowSeconds": 60,
       "CircuitBreakerBreakDurationSeconds": 120,
       "TimeoutSeconds": 15
     }
   },
   "ExternalServices": {
-    "BaseUrl": ""
+    "BaseUrl": "",
+    "ApiKey": "",
+    "ApiKeyHeader": "X-Api-Key"
   },
 {{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
   "OpenTelemetry": {
@@ -130,7 +134,7 @@
       "WindowMinutes": 1
     },
     "Cors": {
-      "AllowedOrigins": ["http://localhost:4200"]
+      "AllowedOrigins": []
     }
   }{{ if model.manifest.database != null }},
   "ConnectionStrings": {

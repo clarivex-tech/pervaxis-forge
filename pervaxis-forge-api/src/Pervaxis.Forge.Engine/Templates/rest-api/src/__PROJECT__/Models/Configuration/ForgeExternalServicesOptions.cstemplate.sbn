@@ -1,0 +1,23 @@
+namespace {{ model.names.namespace }}.Models.Configuration;
+
+/// <summary>
+/// Settings for calls to third-party services through <c>IForgeExternalHttpClient</c>.
+/// The external client never forwards the caller's token or this service's inbound API key.
+/// It sends only the outbound credential configured here, and only to <see cref="BaseUrl"/>.
+/// </summary>
+public sealed class ForgeExternalServicesOptions
+{
+    public const string SectionName = "ExternalServices";
+
+    /// <summary>Base address of the external service. The outbound credential is sent only to this host.</summary>
+    public string BaseUrl { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Credential issued to this service by the external provider. Load it from Secrets Manager,
+    /// never commit it. Empty means no credential header is sent.
+    /// </summary>
+    public string ApiKey { get; init; } = string.Empty;
+
+    /// <summary>Header that carries <see cref="ApiKey"/>.</summary>
+    public string ApiKeyHeader { get; init; } = "X-Api-Key";
+}
