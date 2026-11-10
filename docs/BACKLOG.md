@@ -37,6 +37,14 @@ Items tracked for future implementation. Prioritized by impact.
 - [ ] gRPC template: apply the same retry safety (safe methods or `Idempotency-Key` only) to its `ForgeRetryDelegatingHandler`.
 - [ ] Redaction when Serilog is disabled: the redaction enricher only runs on the Serilog pipeline.
 
+### Documents Module (Genesis)
+- [ ] `Pervaxis.Genesis.Documents`: a cloud-agnostic, optional module for Excel read/write (`.xlsx` with formulas and styles; candidate ClosedXML, MIT), PDF generation (candidates QuestPDF, whose community licence has a revenue limit, or PDFsharp/MigraDoc, MIT) and document/email templates (Scriban). Files are stored through the FileStorage module; Reporting can use it for exports.
+- [ ] Move the print-local `WorkbookReader` into the module.
+- [ ] Launchpad: replace the "PDF Generation" and "Template Engine" (Coming Soon) utilities with a "Documents" entry in the Genesis modules step, then remove the empty Utilities panel.
+
+### Use Core Packages Instead of Print-Local Copies
+- [ ] Prints carry their own hashing, resilience, logging and exception-handling code and reference only `Pervaxis.Core.MultiTenancy` and `Pervaxis.Core.Data.EntityFrameworkCore`. Compare each Core package (`Security`, `Exceptions`, `Resilience`, `Observability`, `Abstractions`) with the print code and switch prints to Core where it covers the same need, so fixes reach every service through a package update. Core stays always-on (not a wizard option).
+
 ### Genesis Follow-ups (from OData/Sanitization fixes, PR #212)
 - [ ] Rebuild and republish Genesis against Core 1.8.0, then remove the Core pins from `Directory.Packages.props.sbn` (NU1603 workaround).
 - [ ] `QueryValidator` rejects negative `$top`/`$skip`, then remove `ODataPagingGuardFilter` from prints.

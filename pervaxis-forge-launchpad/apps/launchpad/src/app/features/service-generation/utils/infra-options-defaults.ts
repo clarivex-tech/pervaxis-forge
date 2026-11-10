@@ -55,7 +55,6 @@ export interface InfraOptionsFormValue {
 	backgroundJobProvider: string | null;
 	pdfEnabled: boolean;
 	templateEngineEnabled: boolean;
-	hashingEnabled: boolean;
 }
 
 // ─── Typed FormControls Interface ────────────────────────────────────────────
@@ -92,7 +91,7 @@ export interface InfraOptionsFormControls {
 	// Utilities
 	pdfEnabled: FormControl<boolean>; // disabled — Coming Soon
 	templateEngineEnabled: FormControl<boolean>; // disabled — Coming Soon
-	hashingEnabled: FormControl<boolean>;
+	// Hashing is not an option: every print includes the BCrypt hashing service.
 }
 
 // ─── Payload Interface (output of mapping function) ──────────────────────────
@@ -148,5 +147,4 @@ export const INFRA_OPTIONS_DEFAULTS: InfraOptionsFormValue = {
 	// Utilities
 	pdfEnabled: false,
 	templateEngineEnabled: false,
-	hashingEnabled: false,
 };

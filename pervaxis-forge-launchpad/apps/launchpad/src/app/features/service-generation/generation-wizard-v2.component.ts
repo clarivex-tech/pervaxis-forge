@@ -1692,7 +1692,6 @@ export class GenerationWizardV2Component {
 		backgroundJobProvider: new FormControl<string | null>(INFRA_OPTIONS_DEFAULTS.backgroundJobProvider),
 		pdfEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.pdfEnabled, disabled: true }, { nonNullable: true }),
 		templateEngineEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.templateEngineEnabled, disabled: true }, { nonNullable: true }),
-		hashingEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.hashingEnabled, { nonNullable: true }),
 	}, {
 		validators: [
 			infraOptionsValidator(

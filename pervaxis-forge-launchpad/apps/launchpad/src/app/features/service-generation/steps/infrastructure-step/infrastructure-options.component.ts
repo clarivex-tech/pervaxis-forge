@@ -150,7 +150,6 @@ import { countNonDefaultToggles } from '../../utils/infra-options-mapping';
 							<mat-checkbox formControlName="templateEngineEnabled" [disabled]="true">Template Engine</mat-checkbox>
 							<span class="coming-soon-label">Coming Soon</span>
 						</div>
-						<mat-checkbox formControlName="hashingEnabled">Encryption / Hashing</mat-checkbox>
 					</div>
 				</div>
 			</div>

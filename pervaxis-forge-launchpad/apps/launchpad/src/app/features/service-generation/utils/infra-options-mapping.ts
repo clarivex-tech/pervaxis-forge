@@ -70,7 +70,7 @@ export function mapInfraOptionsToRequest(formValue: InfraOptionsFormValue): Infr
 		utilities: {
 			pdfEnabled: false, // Coming Soon — always false
 			templateEngineEnabled: false, // Coming Soon — always false
-			hashingEnabled: formValue.hashingEnabled,
+			hashingEnabled: false, // Not an option: every print includes hashing; the API ignores this flag.
 		},
 		multiTenancy: formValue.multiTenancy,
 	};
@@ -189,14 +189,7 @@ export function getInfraReviewSummary(formValue: InfraOptionsFormValue): InfraRe
 		});
 	}
 
-	// Utilities
-	const utilitiesItems: InfraReviewGroup['items'] = [];
-	if (formValue.hashingEnabled !== defaults.hashingEnabled) {
-		utilitiesItems.push({ name: 'Encryption / Hashing', value: formValue.hashingEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (utilitiesItems.length > 0) {
-		groups.push({ label: 'Utilities', items: utilitiesItems });
-	}
+	// Utilities: PDF and template engine are "Coming Soon" (always off), so there is nothing to review yet.
 
 	return groups;
 }
