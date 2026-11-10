@@ -1674,22 +1674,15 @@ export class GenerationWizardV2Component {
 
 	/** Nested FormGroup for infrastructure toggle options */
 	readonly infraOptionsForm = new FormGroup<InfraOptionsFormControls>({
-		apiKeyEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.apiKeyEnabled, { nonNullable: true }),
-		jwtEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.jwtEnabled, { nonNullable: true }),
 		mtlsEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.mtlsEnabled, disabled: true }, { nonNullable: true }),
 		retryEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.retryEnabled, { nonNullable: true }),
-		circuitBreakerEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.circuitBreakerEnabled, { nonNullable: true }),
-		timeoutEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.timeoutEnabled, { nonNullable: true }),
-		internalHttpClient: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.internalHttpClient, { nonNullable: true }),
-		externalHttpClient: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.externalHttpClient, { nonNullable: true }),
 		serilogEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.serilogEnabled, { nonNullable: true }),
-		cloudWatchEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.cloudWatchEnabled, { nonNullable: true }),
 		openTelemetryEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.openTelemetryEnabled, { nonNullable: true }),
 		correlationIdEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.correlationIdEnabled, { nonNullable: true }),
 		prometheusEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.prometheusEnabled, disabled: true }, { nonNullable: true }),
 		multiTenancy: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.multiTenancy, { nonNullable: true }),
 		fluentValidationEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.fluentValidationEnabled, { nonNullable: true }),
-		backgroundJobProvider: new FormControl<string | null>(INFRA_OPTIONS_DEFAULTS.backgroundJobProvider),
+		backgroundJobProvider: new FormControl<string | null>({ value: INFRA_OPTIONS_DEFAULTS.backgroundJobProvider, disabled: true }),
 		pdfEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.pdfEnabled, disabled: true }, { nonNullable: true }),
 		templateEngineEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.templateEngineEnabled, disabled: true }, { nonNullable: true }),
 	}, {

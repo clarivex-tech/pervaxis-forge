@@ -37,6 +37,13 @@ Items tracked for future implementation. Prioritized by impact.
 - [ ] gRPC template: apply the same retry safety (safe methods or `Idempotency-Key` only) to its `ForgeRetryDelegatingHandler`.
 - [ ] Redaction when Serilog is disabled: the redaction enricher only runs on the Serilog pipeline.
 
+### Launchpad Infrastructure Options Not Yet Implemented
+- [ ] Background jobs (EventBridge Scheduler, SQS + Lambda): shown as Coming Soon; no template generates them yet.
+- [ ] Optional typed HTTP clients: both clients are always generated; the `InternalHttpClient`/`ExternalHttpClient` manifest flags are unused (toggles removed from the wizard).
+- [ ] Manifest `Auth` flags (`ApiKeyEnabled`, `JwtEnabled`, `MtlsEnabled`) are unused: sign-in comes from the Cognito settings. Remove them from the manifest or wire them (toggles removed from the wizard).
+- [ ] Separate retry, circuit breaker and timeout: templates generate all three when any flag is on; the wizard offers one switch.
+- [ ] CloudWatch independent of Serilog: the manifest flag is unused; the CloudWatch sink follows Serilog.
+
 ### Documents Module (Genesis)
 - [ ] `Pervaxis.Genesis.Documents`: a cloud-agnostic, optional module for Excel read/write (`.xlsx` with formulas and styles; candidate ClosedXML, MIT), PDF generation (candidates QuestPDF, whose community licence has a revenue limit, or PDFsharp/MigraDoc, MIT) and document/email templates (Scriban). Files are stored through the FileStorage module; Reporting can use it for exports.
 - [ ] Move the print-local `WorkbookReader` into the module.

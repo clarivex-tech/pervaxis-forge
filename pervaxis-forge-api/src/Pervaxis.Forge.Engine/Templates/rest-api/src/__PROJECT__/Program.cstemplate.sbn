@@ -228,10 +228,16 @@ builder.Services.AddHttpClient<IForgeExternalHttpClient, ForgeExternalHttpClient
 // No automatic redirects: they are followed below ExternalAuthHandler and would carry the API key to
 // whatever host the redirect names. A 3xx is returned to the caller, who decides whether to follow it.
 .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })
+{{- if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
 .AddHttpMessageHandler<CorrelationIdHandler>()
+{{- end }}
 .AddHttpMessageHandler<ExternalAuthHandler>()
+{{- if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
 .AddHttpMessageHandler<HttpLoggingHandler>()
-.AddForgeResilience(builder.Configuration.GetSection("Resilience:External"));
+{{- end }}
+{{- if model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled }}
+.AddForgeResilience(builder.Configuration.GetSection("Resilience:External"))
+{{- end }};
 
 builder.Services.AddSwaggerGen(options =>
 {

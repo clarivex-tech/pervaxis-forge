@@ -34,19 +34,15 @@ export type ValidationConfig = GenerationValidationConfig;
 export type BackgroundJobConfig = GenerationBackgroundJobConfig;
 export type UtilitiesConfig = GenerationUtilitiesConfig;
 
-// ─── Form Value Type (flat representation of all 19 toggle fields) ───────────
+// ─── Form Value Type (flat representation of the toggle fields) ──────────────
 
+// Not toggles (every print includes them, or another step decides them), so they are not in the form:
+// API key / JWT (decided by the Cognito sign-in step), internal and external typed HTTP clients (always
+// included), circuit breaker and timeout (follow retryEnabled), CloudWatch (follows serilogEnabled).
 export interface InfraOptionsFormValue {
-	apiKeyEnabled: boolean;
-	jwtEnabled: boolean;
 	mtlsEnabled: boolean;
 	retryEnabled: boolean;
-	circuitBreakerEnabled: boolean;
-	timeoutEnabled: boolean;
-	internalHttpClient: boolean;
-	externalHttpClient: boolean;
 	serilogEnabled: boolean;
-	cloudWatchEnabled: boolean;
 	openTelemetryEnabled: boolean;
 	correlationIdEnabled: boolean;
 	prometheusEnabled: boolean;
@@ -61,20 +57,13 @@ export interface InfraOptionsFormValue {
 
 export interface InfraOptionsFormControls {
 	// Authentication
-	apiKeyEnabled: FormControl<boolean>;
-	jwtEnabled: FormControl<boolean>;
 	mtlsEnabled: FormControl<boolean>; // disabled — Coming Soon
 
-	// Resilience
+	// Resilience: one switch for retry, circuit breaker and timeout
 	retryEnabled: FormControl<boolean>;
-	circuitBreakerEnabled: FormControl<boolean>;
-	timeoutEnabled: FormControl<boolean>;
-	internalHttpClient: FormControl<boolean>;
-	externalHttpClient: FormControl<boolean>;
 
 	// Observability
-	serilogEnabled: FormControl<boolean>;
-	cloudWatchEnabled: FormControl<boolean>;
+	serilogEnabled: FormControl<boolean>; // Serilog with the CloudWatch sink
 	openTelemetryEnabled: FormControl<boolean>;
 	correlationIdEnabled: FormControl<boolean>;
 	prometheusEnabled: FormControl<boolean>; // disabled — Coming Soon
@@ -86,7 +75,7 @@ export interface InfraOptionsFormControls {
 	fluentValidationEnabled: FormControl<boolean>;
 
 	// Background Jobs
-	backgroundJobProvider: FormControl<string | null>;
+	backgroundJobProvider: FormControl<string | null>; // disabled — Coming Soon
 
 	// Utilities
 	pdfEnabled: FormControl<boolean>; // disabled — Coming Soon
@@ -117,20 +106,13 @@ export interface InfraReviewGroup {
 
 export const INFRA_OPTIONS_DEFAULTS: InfraOptionsFormValue = {
 	// Authentication
-	apiKeyEnabled: true,
-	jwtEnabled: false,
 	mtlsEnabled: false,
 
 	// Resilience
 	retryEnabled: true,
-	circuitBreakerEnabled: true,
-	timeoutEnabled: true,
-	internalHttpClient: true,
-	externalHttpClient: false,
 
 	// Observability
 	serilogEnabled: true,
-	cloudWatchEnabled: true,
 	openTelemetryEnabled: true,
 	correlationIdEnabled: true,
 	prometheusEnabled: false,
