@@ -22,7 +22,9 @@ public sealed class ForgeResilienceClientOptions
 {
     public int? MaxRetryAttempts { get; set; }
 
-    public int? CircuitBreakerFailureThreshold { get; set; }
+    public double? CircuitBreakerFailureRatio { get; set; }
+
+    public int? CircuitBreakerMinimumThroughput { get; set; }
 
     public int? CircuitBreakerSamplingWindowSeconds { get; set; }
 

@@ -4,10 +4,15 @@ namespace {{ model.names.namespace }}.Services;
 
 public static class OutputCachePolicyExtensions
 {
-    public static void AddForgeDefaultOutputCache(this OutputCachePolicyBuilder policy)
+    /// <summary>
+    /// The <c>ForgePublic</c> policy. It keeps the ASP.NET Core default rules: only GET and HEAD
+    /// requests without an Authorization header or cookies, answered with 200, are stored. A response
+    /// for an authenticated caller (or another tenant) is therefore never cached or served from cache.
+    /// The full query string is part of the cache key, so different filters never share an entry.
+    /// </summary>
+    public static void AddForgeDefaultOutputCache(this OutputCachePolicyBuilder policy, int expirationSeconds)
     {
-        policy.Expire(TimeSpan.FromSeconds(60));
+        policy.Expire(TimeSpan.FromSeconds(Math.Max(1, expirationSeconds)));
         policy.Tag("forge-default");
-        policy.SetVaryByQuery("page", "pageSize", "sort");
     }
 }

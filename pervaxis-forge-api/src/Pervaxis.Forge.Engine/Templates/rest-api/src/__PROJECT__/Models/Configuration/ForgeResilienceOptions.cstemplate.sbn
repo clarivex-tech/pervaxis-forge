@@ -30,7 +30,17 @@ public sealed class ForgeResilienceOptions
 
     public int MaxRetryAttempts { get; set; } = 3;
 
-    public int CircuitBreakerFailureThreshold { get; set; } = 5;
+    /// <summary>
+    /// Share of failed calls (0.01 to 1.0) within the sampling window that opens the circuit.
+    /// 0.5 means "half of the calls failed".
+    /// </summary>
+    public double CircuitBreakerFailureRatio { get; set; } = 0.5;
+
+    /// <summary>
+    /// Calls that must be made within the sampling window before the circuit can open (at least 2),
+    /// so a single failure on a quiet client does not cut it off.
+    /// </summary>
+    public int CircuitBreakerMinimumThroughput { get; set; } = 10;
 
     public int CircuitBreakerSamplingWindowSeconds { get; set; } = 30;
 

@@ -1,0 +1,111 @@
+{{ if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using {{ model.names.namespace }}.Services;
+using Serilog.Core;
+using Serilog.Events;
+
+namespace {{ model.names.namespace }}.Infrastructure.Extensions;
+
+/// <summary>
+/// Redacts personal data from every log event before any sink writes it.
+/// <list type="bullet">
+/// <item>Properties whose name contains a <c>Forge:DataClassification:SensitiveKeys</c> entry
+/// (password, secret, token, apiKey, email, phone) are replaced with <c>[redacted]</c>.</item>
+/// <item>Email addresses in any other string property are masked as <c>***@***</c>.</item>
+/// </list>
+/// Nested objects, dictionaries and lists are processed too. The message is rendered from these
+/// properties, so the redacted values are what reach the console and CloudWatch.
+/// Exception messages are not rewritten: do not put personal data in exception messages.
+/// </summary>
+public sealed class RedactionEnricher : ILogEventEnricher
+{
+    private readonly ForgeDataRedaction _redaction;
+
+    public RedactionEnricher(ForgeDataRedaction redaction)
+    {
+        _redaction = redaction;
+    }
+
+    public void Enrich(LogEvent logEvent, ILogEventPropertyFactory propertyFactory)
+    {
+        foreach (var property in logEvent.Properties.ToList())
+        {
+            var redacted = Redact(property.Key, property.Value);
+            if (!ReferenceEquals(redacted, property.Value))
+            {
+                logEvent.AddOrUpdateProperty(new LogEventProperty(property.Key, redacted));
+            }
+        }
+    }
+
+    private LogEventPropertyValue Redact(string name, LogEventPropertyValue value)
+    {
+        if (_redaction.IsSensitiveName(name))
+        {
+            return value is ScalarValue { Value: null } ? value : new ScalarValue(ForgeDataRedaction.RedactedValue);
+        }
+
+        switch (value)
+        {
+            case ScalarValue { Value: string text }:
+                var masked = _redaction.RedactLogValue(text);
+                return string.Equals(masked, text, StringComparison.Ordinal) ? value : new ScalarValue(masked);
+
+            case StructureValue structure:
+                var changed = false;
+                var properties = new List<LogEventProperty>(structure.Properties.Count);
+                foreach (var child in structure.Properties)
+                {
+                    var redactedChild = Redact(child.Name, child.Value);
+                    changed |= !ReferenceEquals(redactedChild, child.Value);
+                    properties.Add(new LogEventProperty(child.Name, redactedChild));
+                }
+                return changed ? new StructureValue(properties, structure.TypeTag) : value;
+
+            case DictionaryValue dictionary:
+                var dictionaryChanged = false;
+                var entries = new List<KeyValuePair<ScalarValue, LogEventPropertyValue>>(dictionary.Elements.Count);
+                foreach (var entry in dictionary.Elements)
+                {
+                    var key = entry.Key.Value?.ToString() ?? string.Empty;
+                    var redactedEntry = Redact(key, entry.Value);
+                    dictionaryChanged |= !ReferenceEquals(redactedEntry, entry.Value);
+                    entries.Add(new KeyValuePair<ScalarValue, LogEventPropertyValue>(entry.Key, redactedEntry));
+                }
+                return dictionaryChanged ? new DictionaryValue(entries) : value;
+
+            case SequenceValue sequence:
+                var sequenceChanged = false;
+                var elements = new List<LogEventPropertyValue>(sequence.Elements.Count);
+                foreach (var element in sequence.Elements)
+                {
+                    // List items inherit the list's name: they are only masked by content (email addresses).
+                    var redactedElement = Redact(string.Empty, element);
+                    sequenceChanged |= !ReferenceEquals(redactedElement, element);
+                    elements.Add(redactedElement);
+                }
+                return sequenceChanged ? new SequenceValue(elements) : value;
+
+            default:
+                return value;
+        }
+    }
+}
+{{ end }}

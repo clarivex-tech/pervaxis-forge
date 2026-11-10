@@ -63,9 +63,8 @@ import { countNonDefaultToggles } from '../../utils/infra-options-mapping';
 					<h4 class="toggle-group-title">
 						<mat-icon>vpn_key</mat-icon> Authentication
 					</h4>
+					<p class="toggle-note">Sign-in (Cognito, and optionally API keys) is set in the authentication step.</p>
 					<div class="toggle-items">
-						<mat-checkbox formControlName="apiKeyEnabled">API Key</mat-checkbox>
-						<mat-checkbox formControlName="jwtEnabled">JWT / OIDC Auth0</mat-checkbox>
 						<div class="coming-soon-toggle">
 							<mat-checkbox formControlName="mtlsEnabled" [disabled]="true">mTLS</mat-checkbox>
 							<span class="coming-soon-label">Coming Soon</span>
@@ -80,15 +79,8 @@ import { countNonDefaultToggles } from '../../utils/infra-options-mapping';
 					</h4>
 					<div class="toggle-items">
 						<mat-checkbox formControlName="retryEnabled">Retry + Circuit Breaker + Timeout</mat-checkbox>
-						<mat-checkbox formControlName="internalHttpClient">Typed HTTP Clients — Internal</mat-checkbox>
-						<mat-checkbox formControlName="externalHttpClient">Typed HTTP Clients — External</mat-checkbox>
 					</div>
-					@if (infraForm().hasError('externalHttpRequiresResilience')) {
-						<div class="validation-warning">
-							<mat-icon>warning</mat-icon>
-							{{ infraForm().getError('externalHttpRequiresResilience') }}
-						</div>
-					}
+					<p class="toggle-note">Typed HTTP clients (internal and external) are always included.</p>
 				</div>
 
 				<!-- Observability Toggle Group -->
@@ -105,12 +97,6 @@ import { countNonDefaultToggles } from '../../utils/infra-options-mapping';
 							<span class="coming-soon-label">Coming Soon</span>
 						</div>
 					</div>
-					@if (infraForm().hasError('cloudWatchRequiresSerilog')) {
-						<div class="validation-warning">
-							<mat-icon>warning</mat-icon>
-							{{ infraForm().getError('cloudWatchRequiresSerilog') }}
-						</div>
-					}
 				</div>
 
 				<!-- Validation Toggle Group -->
@@ -129,11 +115,14 @@ import { countNonDefaultToggles } from '../../utils/infra-options-mapping';
 					<h4 class="toggle-group-title">
 						<mat-icon>schedule</mat-icon> Background Jobs
 					</h4>
-					<mat-radio-group formControlName="backgroundJobProvider" class="toggle-radio-group">
-						<mat-radio-button value="EventBridge">EventBridge Scheduler</mat-radio-button>
-						<mat-radio-button value="SqsLambda">SQS + Lambda</mat-radio-button>
-						<mat-radio-button [value]="null">None</mat-radio-button>
-					</mat-radio-group>
+					<div class="coming-soon-toggle">
+						<mat-radio-group formControlName="backgroundJobProvider" class="toggle-radio-group">
+							<mat-radio-button value="EventBridge">EventBridge Scheduler</mat-radio-button>
+							<mat-radio-button value="SqsLambda">SQS + Lambda</mat-radio-button>
+							<mat-radio-button [value]="null">None</mat-radio-button>
+						</mat-radio-group>
+						<span class="coming-soon-label">Coming Soon</span>
+					</div>
 				</div>
 
 				<!-- Utilities Toggle Group -->
@@ -150,7 +139,6 @@ import { countNonDefaultToggles } from '../../utils/infra-options-mapping';
 							<mat-checkbox formControlName="templateEngineEnabled" [disabled]="true">Template Engine</mat-checkbox>
 							<span class="coming-soon-label">Coming Soon</span>
 						</div>
-						<mat-checkbox formControlName="hashingEnabled">Encryption / Hashing</mat-checkbox>
 					</div>
 				</div>
 			</div>
@@ -233,6 +221,12 @@ import { countNonDefaultToggles } from '../../utils/infra-options-mapping';
 			display: flex;
 			align-items: center;
 			gap: 0.5rem;
+		}
+
+		.toggle-note {
+			margin: 0.5rem 0 0 1.5rem;
+			font-size: 0.8rem;
+			color: #555;
 		}
 
 		.coming-soon-label {

@@ -38,10 +38,20 @@ public static class ResilienceExtensions
         var defaults = new ForgeResilienceOptions();
 
         var maxRetryAttempts = clientOptions.MaxRetryAttempts ?? defaults.MaxRetryAttempts;
-        var failureThreshold = clientOptions.CircuitBreakerFailureThreshold ?? defaults.CircuitBreakerFailureThreshold;
+        // The circuit opens when at least MinimumThroughput calls were made in the sampling window
+        // and at least FailureRatio of them failed. Values are clamped to what Polly accepts.
+        var failureRatio = Math.Clamp(clientOptions.CircuitBreakerFailureRatio ?? defaults.CircuitBreakerFailureRatio, 0.01, 1.0);
+        var minimumThroughput = Math.Max(2, clientOptions.CircuitBreakerMinimumThroughput ?? defaults.CircuitBreakerMinimumThroughput);
         var samplingWindowSeconds = clientOptions.CircuitBreakerSamplingWindowSeconds ?? defaults.CircuitBreakerSamplingWindowSeconds;
         var breakDurationSeconds = clientOptions.CircuitBreakerBreakDurationSeconds ?? defaults.CircuitBreakerBreakDurationSeconds;
         var timeoutSeconds = clientOptions.TimeoutSeconds ?? defaults.TimeoutSeconds;
+
+        Func<RetryPredicateArguments<HttpResponseMessage>, ValueTask<bool>> isTransientFailure =
+            new PredicateBuilder<HttpResponseMessage>()
+                .HandleResult(r => r.StatusCode >= System.Net.HttpStatusCode.InternalServerError
+                    || r.StatusCode == System.Net.HttpStatusCode.RequestTimeout)
+                .Handle<HttpRequestException>()
+                .Handle<TimeoutRejectedException>();
 
         builder.AddResilienceHandler("forge-resilience", (resilienceBuilder, context) =>
         {
@@ -53,18 +63,18 @@ public static class ResilienceExtensions
                     MaxRetryAttempts = maxRetryAttempts,
                     BackoffType = DelayBackoffType.Exponential,
                     UseJitter = true,
-                    ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
-                        .HandleResult(r => r.StatusCode >= System.Net.HttpStatusCode.InternalServerError
-                            || r.StatusCode == System.Net.HttpStatusCode.RequestTimeout)
-                        .Handle<HttpRequestException>()
-                        .Handle<TimeoutRejectedException>()
+                    // A timed-out POST may already have created the order or taken the payment, so only
+                    // requests that are safe to repeat are retried (see IsRetrySafe).
+                    ShouldHandle = args => IsRetrySafe(args.Context.GetRequestMessage())
+                        ? isTransientFailure(args)
+                        : ValueTask.FromResult(false)
                 })
                 .AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
                 {
-                    FailureRatio = failureThreshold / 100.0,
+                    FailureRatio = failureRatio,
                     SamplingDuration = TimeSpan.FromSeconds(samplingWindowSeconds),
                     BreakDuration = TimeSpan.FromSeconds(breakDurationSeconds),
-                    MinimumThroughput = failureThreshold,
+                    MinimumThroughput = minimumThroughput,
                     ShouldHandle = new PredicateBuilder<HttpResponseMessage>()
                         .HandleResult(r => r.StatusCode >= System.Net.HttpStatusCode.InternalServerError)
                         .Handle<HttpRequestException>()
@@ -94,6 +104,30 @@ public static class ResilienceExtensions
         });
 
         return builder;
+    }
+
+    /// <summary>Header that marks a write as safe to repeat: the receiver deduplicates on its value.</summary>
+    public const string IdempotencyKeyHeader = "Idempotency-Key";
+
+    /// <summary>
+    /// True for read-only methods (GET, HEAD, OPTIONS, TRACE), and for any request carrying an
+    /// <c>Idempotency-Key</c> header. POST, PUT, PATCH and DELETE without the header are not retried.
+    /// </summary>
+    public static bool IsRetrySafe(HttpRequestMessage? request)
+    {
+        if (request is null)
+        {
+            return false;
+        }
+
+        var method = request.Method;
+        if (method == HttpMethod.Get || method == HttpMethod.Head
+            || method == HttpMethod.Options || method == HttpMethod.Trace)
+        {
+            return true;
+        }
+
+        return request.Headers.Contains(IdempotencyKeyHeader);
     }
 }
 {{ end }}

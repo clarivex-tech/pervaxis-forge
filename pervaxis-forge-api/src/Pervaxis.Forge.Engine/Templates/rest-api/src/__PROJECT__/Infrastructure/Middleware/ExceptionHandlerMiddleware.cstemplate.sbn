@@ -23,7 +23,11 @@ using {{ model.names.namespace }}.Common;
 using {{ model.names.namespace }}.Infrastructure.Exceptions;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
+{{- has_resilience = model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled }}
+{{- has_validation = model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
+{{- if has_resilience }}
 using Polly.CircuitBreaker;
+{{- end }}
 {{- if model.manifest.tenant_ready }}
 using Microsoft.EntityFrameworkCore;
 using Pervaxis.Core.Exceptions.Exceptions;
@@ -76,11 +80,13 @@ public sealed class ExceptionHandlerMiddleware
 
             LogException(ex, errorId, correlationId, problemDetails.Status ?? 500);
 
+{{- if has_resilience }}
             if (ex is BrokenCircuitException)
             {
                 context.Response.Headers["Retry-After"] =
                     _resilienceOptions.Value.CircuitBreakerBreakDurationSeconds.ToString();
             }
+{{- end }}
 
             context.Response.Clear();
             context.Response.StatusCode = problemDetails.Status ?? 500;
@@ -105,6 +111,7 @@ public sealed class ExceptionHandlerMiddleware
     {
         return ex switch
         {
+{{- if has_validation }}
             FluentValidation.ValidationException fluentEx => new ProblemDetails
             {
                 Type = "https://tools.ietf.org/html/rfc7807",
@@ -112,6 +119,7 @@ public sealed class ExceptionHandlerMiddleware
                 Status = StatusCodes.Status400BadRequest,
                 Detail = string.Join(" ", fluentEx.Errors.Select(e => e.ErrorMessage))
             },
+{{- end }}
 
             ConfirmationRequiredException confirmEx => new ProblemDetails
             {
@@ -187,6 +195,7 @@ public sealed class ExceptionHandlerMiddleware
                 Detail = "Client disconnected"
             },
 
+{{- if has_resilience }}
             BrokenCircuitException => new ProblemDetails
             {
                 Type = "https://tools.ietf.org/html/rfc7807",
@@ -194,6 +203,7 @@ public sealed class ExceptionHandlerMiddleware
                 Status = StatusCodes.Status503ServiceUnavailable,
                 Detail = "Service temporarily unavailable"
             },
+{{- end }}
 
             _ => new ProblemDetails
             {

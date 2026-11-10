@@ -32,11 +32,18 @@ public static class ServiceCollectionExtensions
 
         // HTTP client with full DelegatingHandler chain:
         // CorrelationId → JwtPropagation → HttpLogging → Resilience (retry + circuit breaker + timeout)
+        // Handlers whose feature is switched off for this service are left out of the chain.
         services.AddHttpClient<IForgeInternalHttpClient, ForgeInternalHttpClient>()
+{{- if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
             .AddHttpMessageHandler<CorrelationIdHandler>()
+{{- end }}
             .AddHttpMessageHandler<JwtPropagationHandler>()
+{{- if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
             .AddHttpMessageHandler<HttpLoggingHandler>()
-            .AddForgeResilience(configuration.GetSection("Resilience:Default"));
+{{- end }}
+{{- if model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled }}
+            .AddForgeResilience(configuration.GetSection("Resilience:Default"))
+{{- end }};
 
         return services;
     }

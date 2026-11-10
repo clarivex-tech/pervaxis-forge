@@ -40,4 +40,38 @@ public sealed class ForgeDataRedaction
         var keys = _options.CurrentValue.SensitiveKeys;
         return keys.Any(candidate => string.Equals(candidate, key, StringComparison.OrdinalIgnoreCase));
     }
+
+    /// <summary>Replacement written to logs in place of a sensitive value.</summary>
+    public const string RedactedValue = "[redacted]";
+
+    /// <summary>
+    /// True when a log property name contains any configured sensitive key, so
+    /// <c>UserEmail</c>, <c>RefreshToken</c> and <c>ApiKeyHash</c> all match.
+    /// </summary>
+    public bool IsSensitiveName(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+        {
+            return false;
+        }
+
+        var keys = _options.CurrentValue.SensitiveKeys;
+        return keys.Any(candidate => !string.IsNullOrEmpty(candidate)
+            && name.Contains(candidate, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Redaction for log values: masks email addresses only. The phone pattern in <see cref="Redact"/>
+    /// also matches digit runs inside IDs and GUIDs, which would make logs useless for tracing,
+    /// so log properties named like phone numbers are masked by name instead.
+    /// </summary>
+    public string RedactLogValue(string value)
+    {
+        if (string.IsNullOrEmpty(value) || !value.Contains('@'))
+        {
+            return value;
+        }
+
+        return EmailPattern.Replace(value, "***@***");
+    }
 }
