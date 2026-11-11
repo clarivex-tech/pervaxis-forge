@@ -1,0 +1,112 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Injectable } from '@angular/core';
+
+export const AUTH_SYNC_CHANNEL = 'pervaxis-auth';
+/** Fallback for browsers without BroadcastChannel: a short-lived localStorage entry fires "storage" in other tabs. */
+export const AUTH_SYNC_STORAGE_KEY = 'pervaxis.auth.sync';
+
+export interface AuthSyncMessage {
+  readonly type: 'logout';
+  readonly sender: string;
+}
+
+/**
+ * HORIZONTAL: Tells other tabs of this app that the user signed out.
+ *
+ * No broadcast loops: only an explicit sign-out calls broadcastLogout(). A tab that receives the
+ * message signs out locally and never broadcasts in turn. Messages from this tab are ignored.
+ * The message carries no token or user data.
+ */
+@Injectable({ providedIn: 'root' })
+export class AuthSyncService {
+  readonly tabId = createTabId();
+  private channel: BroadcastChannel | null = null;
+  private storageListener: ((event: StorageEvent) => void) | null = null;
+  private onRemoteLogout: (() => void) | null = null;
+
+  start(onRemoteLogout: () => void): void {
+    this.stop();
+    this.onRemoteLogout = onRemoteLogout;
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      this.channel = new BroadcastChannel(AUTH_SYNC_CHANNEL);
+      this.channel.onmessage = (event: MessageEvent<unknown>) => this.receive(event.data);
+      return;
+    }
+
+    this.storageListener = (event: StorageEvent) => {
+      if (event.key === AUTH_SYNC_STORAGE_KEY && event.newValue) {
+        this.receive(safeParse(event.newValue));
+      }
+    };
+    window.addEventListener('storage', this.storageListener);
+  }
+
+  stop(): void {
+    this.channel?.close();
+    this.channel = null;
+    if (this.storageListener) {
+      window.removeEventListener('storage', this.storageListener);
+      this.storageListener = null;
+    }
+    this.onRemoteLogout = null;
+  }
+
+  broadcastLogout(): void {
+    const message: AuthSyncMessage = { type: 'logout', sender: this.tabId };
+    if (this.channel) {
+      this.channel.postMessage(message);
+      return;
+    }
+    try {
+      localStorage.setItem(AUTH_SYNC_STORAGE_KEY, JSON.stringify({ ...message, at: Date.now() }));
+      localStorage.removeItem(AUTH_SYNC_STORAGE_KEY);
+    } catch {
+      // Storage unavailable (private mode): other tabs end their sessions when their tokens expire.
+    }
+  }
+
+  private receive(data: unknown): void {
+    if (isLogoutMessage(data) && data.sender !== this.tabId) {
+      this.onRemoteLogout?.();
+    }
+  }
+}
+
+function isLogoutMessage(data: unknown): data is AuthSyncMessage {
+  return typeof data === 'object' && data !== null
+    && (data as Record<string, unknown>)['type'] === 'logout'
+    && typeof (data as Record<string, unknown>)['sender'] === 'string';
+}
+
+function safeParse(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+function createTabId(): string {
+  if (typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}

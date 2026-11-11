@@ -98,7 +98,7 @@ export class YourDomainService {
 }
 ```
 
-The `ApiService` automatically prefixes requests with the environment's `apiUrl`.
+The `ApiService` automatically prefixes requests with `apiUrl` from `assets/app-config.json`.
 
 ---
 
@@ -120,14 +120,33 @@ export const YOUR_ROUTES: Routes = [
 ];
 ```
 
+Routes that show tenant data also use `tenantGuard`; role-restricted routes add `permissionGuard`:
+
+```typescript
+canActivate: [authGuard, tenantGuard, permissionGuard('Admin')]
+```
+
 ### Auth Service
 
-Use `AuthService` to check authentication state:
+Use `AuthService` (from `core/auth/auth.service`) to read the session:
 
 ```typescript
 const auth = inject(AuthService);
 if (auth.isAuthenticated()) { /* ... */ }
+auth.profile();          // name, email, username
+auth.hasRole('Admin');   // from cognito:groups, UI decisions only
 ```
+
+### Clearing user and tenant data
+
+Register stores that hold user or tenant data, so they are emptied on sign-out or a tenant change:
+
+```typescript
+inject(SessionStateRegistry).registerUntilDestroyed(inject(DestroyRef), () => this.items.set([]));
+```
+
+Never send the access token yourself: `ApiService` and the auth interceptor do it, and only for the
+configured API. See `AUTHENTICATION.md`.
 
 ---
 
@@ -226,7 +245,8 @@ These are **horizontal** concerns managed by the platform team:
 
 | Area | Files |
 |------|-------|
-| Authentication | `core/services/auth.service.ts`, `core/guards/auth.guard.ts` |
+| Authentication | `core/auth/`, `core/guards/`, `core/interceptors/auth.interceptor.ts`, `features/auth/`, `features/login/` |
+| Runtime configuration | `core/config/`, `assets/app-config.example.json` |
 | API Base | `core/services/api.service.ts` |
 | App Shell | `app.component.ts`, `app.config.ts` |
 | Environments | `environments/` |

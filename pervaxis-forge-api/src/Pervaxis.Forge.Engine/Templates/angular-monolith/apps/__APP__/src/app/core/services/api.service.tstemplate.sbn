@@ -18,45 +18,54 @@
 
 import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
-import { environment } from '../../../environments/environment';
+import { Observable, defer } from 'rxjs';
+import { AppConfigService } from '../config/app-config.service';
 
 /**
  * HORIZONTAL: Base API service providing a standard way to make HTTP calls.
- * All requests are automatically prefixed with the environment apiUrl.
+ * All requests are prefixed with apiUrl from assets/app-config.json; the auth interceptor adds the
+ * access token to exactly these requests. Without a valid configuration every call fails.
  *
  * VERTICAL: Inject this service in your feature services for API calls:
  *
  *   export class AssetService {
  *     private api = inject(ApiService);
- *     getAssets() { return this.api.get<Asset[]>('/assets'); }
+ *     getAssets() { return this.api.get<Asset[]>('/api/v1/assets'); }
  *   }
  */
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private readonly http = inject(HttpClient);
-  private readonly baseUrl = environment.apiUrl;
+  private readonly appConfig = inject(AppConfigService);
 
   get<T>(path: string, params?: Record<string, string>): Observable<T> {
     const httpParams = params
       ? new HttpParams({ fromObject: params })
       : undefined;
-    return this.http.get<T>(`${this.baseUrl}${path}`, { params: httpParams });
+    return defer(() => this.http.get<T>(this.url(path), { params: httpParams }));
   }
 
   post<T>(path: string, body: unknown): Observable<T> {
-    return this.http.post<T>(`${this.baseUrl}${path}`, body);
+    return defer(() => this.http.post<T>(this.url(path), body));
   }
 
   put<T>(path: string, body: unknown): Observable<T> {
-    return this.http.put<T>(`${this.baseUrl}${path}`, body);
+    return defer(() => this.http.put<T>(this.url(path), body));
   }
 
   patch<T>(path: string, body: unknown): Observable<T> {
-    return this.http.patch<T>(`${this.baseUrl}${path}`, body);
+    return defer(() => this.http.patch<T>(this.url(path), body));
   }
 
   delete<T>(path: string): Observable<T> {
-    return this.http.delete<T>(`${this.baseUrl}${path}`);
+    return defer(() => this.http.delete<T>(this.url(path)));
+  }
+
+  private url(path: string): string {
+    const config = this.appConfig.config();
+    if (!config) {
+      throw new Error('The API is not configured (assets/app-config.json is missing or invalid).');
+    }
+    return `${config.apiUrl}${path.startsWith('/') ? path : `/${path}`}`;
   }
 }

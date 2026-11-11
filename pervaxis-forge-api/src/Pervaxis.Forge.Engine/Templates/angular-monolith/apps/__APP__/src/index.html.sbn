@@ -16,10 +16,14 @@
         tradeoff documented by the Angular team.
       - If your vertical does NOT use component styles, you can remove 'unsafe-inline'.
       - For stricter CSP, consider using ViewEncapsulation.None with external stylesheets.
+      - connect-src allows any https origin (plus localhost for development) because the Cognito
+        domain and API URL come from the runtime configuration. In production, send a CSP header
+        from the web server that limits connect-src to 'self', the Cognito domain and the API
+        origin; browsers enforce both policies. See AUTHENTICATION.md.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self';"
+      content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self' https: http://localhost:* http://127.0.0.1:*; object-src 'none'; base-uri 'self'; form-action 'self';"
     />
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
     <meta name="color-scheme" content="light dark" />

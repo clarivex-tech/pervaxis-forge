@@ -1,0 +1,67 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { DestroyRef, Injectable } from '@angular/core';
+
+/**
+ * signed-out: the user signed out (here or in another tab).
+ * session-ended: the session could not be refreshed.
+ * tenant-changed: the access token now carries a different tenant.
+ */
+export type SessionResetReason = 'signed-out' | 'session-ended' | 'tenant-changed';
+
+export type SessionResetListener = (reason: SessionResetReason) => void;
+
+/**
+ * HORIZONTAL: Clears user- and tenant-specific UI state.
+ *
+ * Every store or cache that holds data for the signed-in user or their tenant registers a reset
+ * listener. The auth layer calls reset() immediately when the user signs out, the session ends or
+ * the tenant changes, so no data from the previous user or tenant stays on screen.
+ * This is UI hygiene only; the API remains responsible for tenant access.
+ *
+ *   constructor() {
+ *     inject(SessionStateRegistry).registerUntilDestroyed(inject(DestroyRef), () => this.items.set([]));
+ *   }
+ */
+@Injectable({ providedIn: 'root' })
+export class SessionStateRegistry {
+  private readonly listeners = new Set<SessionResetListener>();
+
+  /** Registers a listener. Returns a function that removes it. */
+  register(listener: SessionResetListener): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  /** Registers a listener that is removed when the given injector context is destroyed. */
+  registerUntilDestroyed(destroyRef: DestroyRef, listener: SessionResetListener): void {
+    destroyRef.onDestroy(this.register(listener));
+  }
+
+  reset(reason: SessionResetReason): void {
+    for (const listener of [...this.listeners]) {
+      try {
+        listener(reason);
+      } catch (error) {
+        // One failing store must not leave the others holding the previous user's data.
+        console.error('Session state reset listener failed', error);
+      }
+    }
+  }
+}

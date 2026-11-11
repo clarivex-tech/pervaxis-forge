@@ -17,18 +17,22 @@
  */
 
 import { Component } from '@angular/core';
+import { SessionSummaryComponent } from '../../core/auth/session-summary.component';
 
 /**
  * VERTICAL: This is your starting point.
- * Replace this placeholder with your domain-specific dashboard.
+ * Replace this placeholder with your domain-specific dashboard. The session summary shows the
+ * signed-in user, roles and tenant; keep or remove it.
  */
 @Component({
   selector: '{{ model.manifest.component_prefix }}-dashboard',
   standalone: true,
+  imports: [SessionSummaryComponent],
   template: `
     <div class="dashboard">
       <h1>Welcome to {{ model.manifest.service_name }}</h1>
       <p>This scaffold is ready for your business logic. Start building here.</p>
+      <{{ model.manifest.component_prefix }}-session-summary />
     </div>
   `,
   styles: [`

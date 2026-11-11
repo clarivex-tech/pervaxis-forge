@@ -1,0 +1,47 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { CanActivateFn, Router } from '@angular/router';
+import { inject } from '@angular/core';
+import { AuthService } from '../auth/auth.service';
+import { TenantContextService } from '../auth/tenant-context.service';
+
+/**
+ * HORIZONTAL: For routes that show tenant data. Use after authGuard:
+ *   canActivate: [authGuard, tenantGuard]
+ *
+ * Follows the API contract (Forge:Tenant:Mode):
+ *   - SingleTenant: every signed-in user may continue; the API uses its own tenant.
+ *   - MultiTenant: the access token must carry one valid tenant claim, otherwise the API answers
+ *     403 on tenant data, so the user goes to /access-denied?reason=no-tenant.
+ * Leave it off routes that work without a tenant (for example platform administration, which
+ * the API serves from tenant-exempt endpoints).
+ */
+export const tenantGuard: CanActivateFn = async (_route, state) => {
+  const auth = inject(AuthService);
+  const tenant = inject(TenantContextService);
+  const router = inject(Router);
+
+  if (!(await auth.ensureSession())) {
+    return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+  }
+  if (!tenant.requiresTenant() || tenant.claimStatus() === 'valid') {
+    return true;
+  }
+  return router.createUrlTree(['/access-denied'], { queryParams: { reason: 'no-tenant' } });
+};

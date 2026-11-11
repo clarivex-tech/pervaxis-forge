@@ -16,6 +16,14 @@ server {
         try_files $uri $uri/ /index.html;
     }
 
+    # Runtime configuration (mounted per deployment, see AUTHENTICATION.md). Never cached, and a
+    # missing file is a 404 rather than index.html, so the app reports it and fails closed.
+    location = /assets/app-config.json {
+        try_files $uri =404;
+        add_header Cache-Control "no-store" always;
+        add_header X-Content-Type-Options "nosniff" always;
+    }
+
     # Health check for K8s readiness/liveness probes
     location = /healthz {
         access_log off;

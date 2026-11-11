@@ -1,0 +1,121 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { EnvironmentProviders, inject, provideEnvironmentInitializer } from '@angular/core';
+import { TenancyMode } from '../config/app-config';
+import { AppConfigService } from '../config/app-config.service';
+import { CognitoFetch } from '../auth/cognito-client';
+
+/** Test helpers for specs. Example values only: no real Cognito pool, client or API. */
+export const TEST_APP_ORIGIN = 'https://app.example.test';
+export const TEST_API_URL = 'https://api.example.test';
+export const TEST_COGNITO_DOMAIN = 'https://auth.example.test';
+export const TEST_ISSUER = 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Example';
+export const TEST_CLIENT_ID = 'example-client-id';
+export const TEST_TENANT_ID = '3f2b8c1e-6a4d-4e2f-9b1a-7c5d8e9f0a1b';
+
+export interface TestConfigOptions {
+  readonly tenancyMode?: TenancyMode;
+  readonly apiUrl?: string;
+}
+
+export function testAppConfig(options: TestConfigOptions = {}): Record<string, unknown> {
+  return {
+    apiUrl: options.apiUrl ?? TEST_API_URL,
+    auth: {
+      cognitoDomain: TEST_COGNITO_DOMAIN,
+      issuer: TEST_ISSUER,
+      clientId: TEST_CLIENT_ID,
+      scopes: ['openid', 'email', 'profile'],
+      redirectUri: `${TEST_APP_ORIGIN}/auth/callback`,
+      postLogoutRedirectUri: `${TEST_APP_ORIGIN}/login`,
+    },
+    tenancy: { mode: options.tenancyMode ?? 'MultiTenant' },
+  };
+}
+
+/** Provides a valid runtime configuration (as if assets/app-config.json had loaded). */
+export function provideTestAppConfig(options: TestConfigOptions = {}): EnvironmentProviders {
+  return provideEnvironmentInitializer(() => {
+    inject(AppConfigService).initialize(testAppConfig(options), TEST_APP_ORIGIN);
+  });
+}
+
+function base64Url(value: string): string {
+  return btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** An unsigned JWT-shaped token. The client does not verify signatures (see AUTHENTICATION.md). */
+export function testJwt(claims: Record<string, unknown>): string {
+  return `${base64Url(JSON.stringify({ alg: 'RS256', typ: 'JWT', kid: 'test' }))}.${base64Url(JSON.stringify(claims))}.c2lnbmF0dXJl`;
+}
+
+let tokenCounter = 0;
+
+export function testIdToken(claims: Record<string, unknown> = {}): string {
+  const now = Math.floor(Date.now() / 1000);
+  return testJwt({
+    iss: TEST_ISSUER, aud: TEST_CLIENT_ID, sub: 'user-1', token_use: 'id', iat: now, exp: now + 3600,
+    email: 'user@example.test', 'cognito:username': 'user1', ...claims,
+  });
+}
+
+/** Every call returns a different token (unique jti). */
+export function testAccessToken(claims: Record<string, unknown> = {}): string {
+  const now = Math.floor(Date.now() / 1000);
+  tokenCounter += 1;
+  return testJwt({
+    iss: TEST_ISSUER, client_id: TEST_CLIENT_ID, sub: 'user-1', token_use: 'access', scope: 'openid email profile',
+    username: 'user1', 'cognito:groups': ['Admin'], tenant_id: TEST_TENANT_ID, iat: now, exp: now + 3600,
+    jti: `test-${tokenCounter}`, ...claims,
+  });
+}
+
+export function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
+}
+
+export interface RecordedCall {
+  readonly url: string;
+  readonly body: URLSearchParams;
+  readonly keepalive: boolean;
+}
+
+/** In-memory stand-in for the Cognito token and revocation endpoints. */
+export class FakeCognito {
+  readonly calls: RecordedCall[] = [];
+  tokenHandler: (body: URLSearchParams) => Response | Promise<Response> = () => jsonResponse({ error: 'invalid_request' }, 400);
+  revokeHandler: () => Response | Promise<Response> = () => new Response(null, { status: 200 });
+
+  readonly fetch: CognitoFetch = async (url: string, init: RequestInit) => {
+    const body = new URLSearchParams(init.body as URLSearchParams);
+    this.calls.push({ url, body, keepalive: init.keepalive === true });
+    if (url === `${TEST_COGNITO_DOMAIN}/oauth2/token`) {
+      return this.tokenHandler(body);
+    }
+    if (url === `${TEST_COGNITO_DOMAIN}/oauth2/revoke`) {
+      return this.revokeHandler();
+    }
+    return new Response('not found', { status: 404 });
+  };
+
+  callsTo(path: '/oauth2/token' | '/oauth2/revoke', grantType?: string): RecordedCall[] {
+    return this.calls.filter((call) => call.url === `${TEST_COGNITO_DOMAIN}${path}`
+      && (grantType === undefined || call.body.get('grant_type') === grantType));
+  }
+}

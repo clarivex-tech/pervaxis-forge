@@ -1,0 +1,188 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { InjectionToken } from '@angular/core';
+import * as oauth from 'oauth4webapi';
+import { AuthConfig } from '../config/app-config';
+import { AuthCallbackError } from './auth.models';
+
+/**
+ * fetch used for every Cognito call. These calls never go through Angular's HttpClient, so the
+ * auth, retry and error interceptors cannot touch them (no bearer token, no generic retries).
+ */
+export type CognitoFetch = (url: string, init: RequestInit) => Promise<Response>;
+
+export const COGNITO_FETCH = new InjectionToken<CognitoFetch>('COGNITO_FETCH', {
+  providedIn: 'root',
+  factory: () => (url: string, init: RequestInit) => globalThis.fetch(url, init),
+});
+
+/** One sign-in attempt, kept in sessionStorage between the redirect and the callback. */
+export interface LoginTransaction {
+  readonly state: string;
+  readonly nonce: string;
+  readonly codeVerifier: string;
+  readonly returnUrl: string;
+  readonly createdAt: number;
+}
+
+export interface TokenSet {
+  readonly accessToken: string;
+  /** Seconds, from the token response. */
+  readonly expiresIn: number | null;
+  /** Null when the response has none (Cognito does not return a new one on refresh). */
+  readonly refreshToken: string | null;
+  /** Validated ID token claims (see validation rules in AUTHENTICATION.md). */
+  readonly idTokenClaims: oauth.IDToken | null;
+}
+
+/**
+ * HORIZONTAL: Cognito OAuth 2.0 / OpenID Connect calls for a public client
+ * (authorization code + PKCE, no client secret), built on oauth4webapi.
+ *
+ * ID token checks (oauth4webapi + this class): JWS header alg is RS256 with no "crit"; iss equals the
+ * configured issuer; aud contains the client ID (and azp, if present, equals it); exp is in the future
+ * (30 s tolerance); iat and sub are present; nonce equals the value sent at sign-in; token_use is "id".
+ * The signature is not checked: the token arrives directly from the token endpoint over TLS, which
+ * OpenID Connect Core 3.1.3.7 allows. Access tokens are not validated here; the API validates them.
+ */
+export class CognitoClient {
+  private readonly as: oauth.AuthorizationServer;
+  private readonly client: oauth.Client;
+  private readonly clientAuth = oauth.None();
+
+  constructor(
+    private readonly config: AuthConfig,
+    private readonly fetchFn: CognitoFetch,
+    private readonly requestTimeoutMs: number,
+  ) {
+    this.as = {
+      issuer: config.issuer,
+      authorization_endpoint: `${config.cognitoDomain}/oauth2/authorize`,
+      token_endpoint: `${config.cognitoDomain}/oauth2/token`,
+      revocation_endpoint: `${config.cognitoDomain}/oauth2/revoke`,
+    };
+    this.client = { client_id: config.clientId };
+  }
+
+  /** Builds the authorize URL with PKCE (S256), state and nonce. */
+  async createAuthorizationRequest(returnUrl: string): Promise<{ url: string; transaction: LoginTransaction }> {
+    const transaction: LoginTransaction = {
+      state: oauth.generateRandomState(),
+      nonce: oauth.generateRandomNonce(),
+      codeVerifier: oauth.generateRandomCodeVerifier(),
+      returnUrl,
+      createdAt: Date.now(),
+    };
+
+    const url = new URL(`${this.config.cognitoDomain}/oauth2/authorize`);
+    url.searchParams.set('client_id', this.config.clientId);
+    url.searchParams.set('response_type', 'code');
+    url.searchParams.set('redirect_uri', this.config.redirectUri);
+    url.searchParams.set('scope', this.config.scopes.join(' '));
+    url.searchParams.set('state', transaction.state);
+    url.searchParams.set('nonce', transaction.nonce);
+    url.searchParams.set('code_challenge', await oauth.calculatePKCECodeChallenge(transaction.codeVerifier));
+    url.searchParams.set('code_challenge_method', 'S256');
+    return { url: url.href, transaction };
+  }
+
+  /** Validates the callback (state, provider errors), exchanges the code and validates the ID token. */
+  async exchangeCode(callbackUrl: URL, transaction: LoginTransaction): Promise<TokenSet> {
+    let parameters: URLSearchParams;
+    try {
+      parameters = oauth.validateAuthResponse(this.as, this.client, callbackUrl, transaction.state);
+    } catch (error) {
+      throw error instanceof oauth.AuthorizationResponseError
+        ? new AuthCallbackError('provider_error', `Cognito returned an error: ${error.error}`, { cause: error })
+        : new AuthCallbackError('state_mismatch', 'The callback state does not match this sign-in.', { cause: error });
+    }
+
+    let response: Response;
+    try {
+      response = await oauth.authorizationCodeGrantRequest(
+        this.as, this.client, this.clientAuth, parameters, this.config.redirectUri, transaction.codeVerifier, this.requestOptions());
+    } catch (error) {
+      throw new AuthCallbackError('token_exchange_failed', 'The token request failed.', { cause: error });
+    }
+
+    let result: oauth.TokenEndpointResponse;
+    try {
+      result = await oauth.processAuthorizationCodeResponse(this.as, this.client, response, {
+        expectedNonce: transaction.nonce,
+        requireIdToken: true,
+      });
+    } catch (error) {
+      throw error instanceof oauth.ResponseBodyError
+        ? new AuthCallbackError('token_exchange_failed', `The token endpoint rejected the code: ${error.error}`, { cause: error })
+        : new AuthCallbackError('invalid_id_token', 'The token response failed validation.', { cause: error });
+    }
+
+    const claims = oauth.getValidatedIdTokenClaims(result) ?? null;
+    if (!claims || claims['token_use'] !== 'id') {
+      throw new AuthCallbackError('invalid_id_token', 'The ID token "token_use" claim must be "id".');
+    }
+    return toTokenSet(result, claims);
+  }
+
+  /** Refresh-token grant. Throws on any failure; the caller ends the session. */
+  async refresh(refreshToken: string): Promise<TokenSet> {
+    const response = await oauth.refreshTokenGrantRequest(this.as, this.client, this.clientAuth, refreshToken, this.requestOptions());
+    const result = await oauth.processRefreshTokenResponse(this.as, this.client, response);
+    const claims = oauth.getValidatedIdTokenClaims(result) ?? null;
+    if (claims && claims['token_use'] !== 'id') {
+      throw new Error('The refreshed ID token "token_use" claim must be "id".');
+    }
+    return toTokenSet(result, claims);
+  }
+
+  /**
+   * Revokes a refresh token (and the access tokens issued from it). keepalive lets the request
+   * finish even when the page navigates to the Cognito logout endpoint.
+   */
+  async revoke(refreshToken: string): Promise<void> {
+    const response = await oauth.revocationRequest(this.as, this.client, this.clientAuth, refreshToken, {
+      [oauth.customFetch]: (url: string, options: RequestInit) => this.fetchFn(url, { ...options, keepalive: true }),
+    });
+    await oauth.processRevocationResponse(response);
+  }
+
+  /** Cognito hosted UI logout: ends the Cognito session cookie, then returns to the app. */
+  logoutUrl(): string {
+    const url = new URL(`${this.config.cognitoDomain}/logout`);
+    url.searchParams.set('client_id', this.config.clientId);
+    url.searchParams.set('logout_uri', this.config.postLogoutRedirectUri);
+    return url.href;
+  }
+
+  private requestOptions(): oauth.TokenEndpointRequestOptions {
+    return {
+      signal: AbortSignal.timeout(this.requestTimeoutMs),
+      [oauth.customFetch]: (url: string, options: RequestInit) => this.fetchFn(url, options),
+    };
+  }
+}
+
+function toTokenSet(result: oauth.TokenEndpointResponse, claims: oauth.IDToken | null): TokenSet {
+  return {
+    accessToken: result.access_token,
+    expiresIn: typeof result.expires_in === 'number' ? result.expires_in : null,
+    refreshToken: typeof result.refresh_token === 'string' ? result.refresh_token : null,
+    idTokenClaims: claims,
+  };
+}

@@ -16,7 +16,10 @@
  ************************************************************************
  */
 
+/**
+ * Build-time flags only. Deployment settings (API URL, Cognito) live in the runtime
+ * configuration assets/app-config.json, so one build runs in every environment.
+ */
 export const environment = {
   production: true,
-  apiUrl: '/api',
 };

@@ -16,31 +16,64 @@
  ************************************************************************
  */
 
-import { HttpInterceptorFn } from '@angular/common/http';
+import { HttpErrorResponse, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
-import { AuthService } from '../services/auth.service';
-import { environment } from '../../../environments/environment';
+import { catchError, from, switchMap, throwError } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
+import { isApiRequest } from '../auth/token-destination';
+import { AppConfigService } from '../config/app-config.service';
+
+/** Methods that are safe to send twice. */
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 /**
- * HORIZONTAL: Attaches the Bearer token only to requests targeting our API.
- * Uses AuthService for token retrieval (no direct localStorage access).
+ * HORIZONTAL: Attaches the access token to requests for the configured API, and only those.
+ *
+ *   - Destination: the request URL is parsed and must match the API origin and path prefix
+ *     (see token-destination.ts). Everything else is sent without a token. Cognito calls do not use
+ *     HttpClient at all, so this interceptor never sees them.
+ *   - Before sending, a token close to expiry is refreshed (one shared refresh).
+ *   - On 401 the token is refreshed (shared) and the request is replayed at most once:
+ *       GET/HEAD/OPTIONS: always, because they have no side effects.
+ *       Writes: only when the 401 carries "WWW-Authenticate: Bearer error=\"invalid_token\"". That header
+ *       comes from the API's JWT bearer handler, which rejects the token before any endpoint code runs.
+ *       Other 401s are returned to the caller unchanged: the request may already have had an effect.
+ *       Cross-origin APIs must expose WWW-Authenticate (CORS) for write replay; see AUTHENTICATION.md.
  */
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
-  const auth = inject(AuthService);
-  const token = auth.accessToken();
-
-  const isOwnApi = environment.apiUrl
-    ? req.url.startsWith(environment.apiUrl)
-    : req.url.startsWith('/');
-
-  if (token && isOwnApi) {
-    const cloned = req.clone({
-      setHeaders: {
-        Authorization: `Bearer ${token}`,
-      },
-    });
-    return next(cloned);
+  const destination = inject(AppConfigService).apiDestination();
+  if (!destination || !isApiRequest(req.url, destination, document.baseURI)) {
+    return next(req);
   }
 
-  return next(req);
+  const auth = inject(AuthService);
+  return from(auth.getAccessToken()).pipe(
+    switchMap((token) => next(withToken(req, token)).pipe(
+      catchError((error: unknown) => {
+        if (!token || !(error instanceof HttpErrorResponse) || error.status !== 401) {
+          return throwError(() => error);
+        }
+        return from(auth.refreshAfterRejection(token)).pipe(
+          switchMap((refreshed) => (refreshed && isReplayAllowed(req, error)
+            ? from(auth.getAccessToken())
+            : throwError(() => error))),
+          // The replay goes to next() directly; its own 401 is never handled here again.
+          switchMap((newToken) => (newToken ? next(withToken(req, newToken)) : throwError(() => error))),
+        );
+      }),
+    )),
+  );
 };
+
+function withToken<T>(req: HttpRequest<T>, token: string | null): HttpRequest<T> {
+  return token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
+}
+
+/** See the replay rules above. */
+export function isReplayAllowed(req: HttpRequest<unknown>, error: HttpErrorResponse): boolean {
+  if (SAFE_METHODS.has(req.method.toUpperCase())) {
+    return true;
+  }
+  const challenge = error.headers?.get('WWW-Authenticate') ?? '';
+  return /^\s*Bearer\b/i.test(challenge) && /error\s*=\s*"?invalid_token"?/i.test(challenge);
+}
