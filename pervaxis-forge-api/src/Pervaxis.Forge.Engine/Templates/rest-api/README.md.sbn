@@ -11,6 +11,34 @@ REST API service scaffolded for the **{{ model.manifest.product }}** vertical on
 - **OpenAPI Document:** `v1`
 - **Docker Image:** `{{ model.names.docker_image }}`
 - **Package Source:** `nuget.org` for `Pervaxis.Genesis.*`
+{{- if model.manifest.tenant_ready }}
+- **Tenancy:** {{ if model.manifest.multi_tenancy }}multi-tenant (tenant from the access token){{ else }}single-tenant (one customer, ready to become multi-tenant){{ end }}
+{{- end }}
+
+## Start here
+
+New to this service? Read these in order:
+
+| # | Read | Why |
+|---|---|---|
+| 1 | [`src/{{ model.names.namespace }}/Domains/README.md`](src/{{ model.names.namespace }}/Domains/README.md) | Where your feature code goes and the rules for it |
+{{- if model.manifest.tenant_ready }}
+| 2 | [`DeveloperReference/TenancyQuickStart.md`](DeveloperReference/TenancyQuickStart.md) | **Required.** Your first tenant-owned feature in 6 steps, and the checklist before every PR |
+| 3 | [`DeveloperReference/Tenancy.md`](DeveloperReference/Tenancy.md) | How tenancy works: modes, tenants table, tenant management API, background work |
+| 4 | [`FORGE_DEVELOPER_GUIDE.md`](FORGE_DEVELOPER_GUIDE.md) | Platform conventions: validation, errors, logging, HTTP clients |
+| 5 | [`DeveloperReference/README.md`](DeveloperReference/README.md) | Copy-and-adapt examples for authentication, database and the selected modules |
+{{- else }}
+| 2 | [`FORGE_DEVELOPER_GUIDE.md`](FORGE_DEVELOPER_GUIDE.md) | Platform conventions: validation, errors, logging, HTTP clients |
+| 3 | [`DeveloperReference/README.md`](DeveloperReference/README.md) | Copy-and-adapt examples for authentication and the selected modules |
+{{- end }}
+
+Other documents:
+
+- [`SPEC.md`](SPEC.md): what was generated for this service.
+{{- if model.manifest.tenant_ready }}
+- [`DeveloperReference/GoingMultiTenant.md`](DeveloperReference/GoingMultiTenant.md): step by step, from one customer to several.
+{{- end }}
+- [`.claude/CLAUDE.md`](.claude/CLAUDE.md): context and rules for AI coding assistants. Point your assistant at it.
 
 ## Prerequisites
 
@@ -27,6 +55,17 @@ dotnet test
 ```
 
 ## Running Locally
+
+{{- if model.manifest.database != null }}
+
+Create the database tables first{{ if model.manifest.tenant_ready }} (including the `tenants` table; without it, tenant-protected endpoints return 503){{ end }}:
+
+```bash
+dotnet ef database update --project src/{{ model.names.namespace }}
+```
+
+Then run the service:
+{{- end }}
 
 ```bash
 dotnet run --project src/{{ model.names.namespace }}

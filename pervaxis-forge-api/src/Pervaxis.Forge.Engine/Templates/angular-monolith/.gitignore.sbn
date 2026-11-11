@@ -23,6 +23,9 @@ Thumbs.db
 .env.local
 .env.*.local
 
+# Runtime configuration is per deployment (see AUTHENTICATION.md). Commit only app-config.example.json.
+apps/*/src/assets/app-config.json
+
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
 # Capacitor native platforms
 android/

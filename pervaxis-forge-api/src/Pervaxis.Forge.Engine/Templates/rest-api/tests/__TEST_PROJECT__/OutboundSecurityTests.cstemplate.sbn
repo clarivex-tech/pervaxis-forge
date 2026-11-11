@@ -1,0 +1,273 @@
+{{- has_serilog = model.manifest.observability == null || model.manifest.observability.serilog_enabled -}}
+{{- has_resilience = model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled -}}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using FluentAssertions;
+using Microsoft.Extensions.Options;
+using Moq;
+using {{ model.names.namespace }}.Infrastructure.Http;
+using {{ model.names.namespace }}.Models.Configuration;
+{{- if has_resilience || has_serilog }}
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+{{- end }}
+{{- if has_resilience }}
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+{{- end }}
+{{- if has_serilog }}
+using {{ model.names.namespace }}.Services;
+using Serilog;
+using Serilog.Core;
+using Serilog.Events;
+{{- end }}
+using Xunit;
+
+namespace {{ model.names.test_project_name }};
+
+// Platform security checks for outbound calls and logs: credentials never leak to third parties,
+// writes are never retried blindly, and personal data is redacted from logs. Keep them.
+
+/// <summary>Records the last request it receives and answers with a fixed status.</summary>
+internal sealed class RecordingHandler : HttpMessageHandler
+{
+    private readonly HttpStatusCode _status;
+
+    public RecordingHandler(HttpStatusCode status = HttpStatusCode.OK) => _status = status;
+
+    public HttpRequestMessage? LastRequest { get; private set; }
+
+    public int Calls { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        LastRequest = request;
+        Calls++;
+        return Task.FromResult(new HttpResponseMessage(_status));
+    }
+}
+
+public class ExternalAuthHandlerTests
+{
+    private const string CallerToken = "caller-access-token";
+
+    private static HttpMessageInvoker CreateInvoker(RecordingHandler inner, string baseUrl, string apiKey)
+    {
+        var settings = new ForgeExternalServicesOptions { BaseUrl = baseUrl, ApiKey = apiKey };
+        var options = Mock.Of<IOptionsMonitor<ForgeExternalServicesOptions>>(m => m.CurrentValue == settings);
+        return new HttpMessageInvoker(new ExternalAuthHandler(options) { InnerHandler = inner });
+    }
+
+    [Fact]
+    public async Task CallersBearerToken_IsNeverSentToExternalServices()
+    {
+        var inner = new RecordingHandler();
+        using var invoker = CreateInvoker(inner, "https://partner.example.com", apiKey: "");
+        using var request = new HttpRequestMessage(HttpMethod.Get, "https://partner.example.com/v1/rates");
+        // Simulates a developer copying the caller's token onto the request by hand.
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", CallerToken);
+
+        await invoker.SendAsync(request, CancellationToken.None);
+
+        inner.LastRequest!.Headers.Authorization.Should().BeNull();
+    }
+
+    [Fact]
+    public async Task OutboundApiKey_IsSentToTheConfiguredHost()
+    {
+        var inner = new RecordingHandler();
+        using var invoker = CreateInvoker(inner, "https://partner.example.com", apiKey: "outbound-key");
+
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "https://partner.example.com/v1/rates"), CancellationToken.None);
+
+        inner.LastRequest!.Headers.GetValues("X-Api-Key").Should().ContainSingle().Which.Should().Be("outbound-key");
+    }
+
+    [Fact]
+    public async Task OutboundApiKey_IsNotSentToAnyOtherHost()
+    {
+        var inner = new RecordingHandler();
+        using var invoker = CreateInvoker(inner, "https://partner.example.com", apiKey: "outbound-key");
+
+        await invoker.SendAsync(new HttpRequestMessage(HttpMethod.Get, "https://attacker.example.net/collect"), CancellationToken.None);
+
+        inner.LastRequest!.Headers.Contains("X-Api-Key").Should().BeFalse();
+    }
+}
+{{- if has_resilience }}
+
+public class RetrySafetyTests
+{
+    [Theory]
+    [InlineData("GET", false, true)]
+    [InlineData("HEAD", false, true)]
+    [InlineData("POST", false, false)]
+    [InlineData("PUT", false, false)]
+    [InlineData("PATCH", false, false)]
+    [InlineData("DELETE", false, false)]
+    [InlineData("POST", true, true)]
+    public void OnlyRepeatableRequests_AreRetrySafe(string method, bool withIdempotencyKey, bool expected)
+    {
+        using var request = new HttpRequestMessage(new HttpMethod(method), "https://partner.example.com/v1/orders");
+        if (withIdempotencyKey)
+            request.Headers.Add(ResilienceExtensions.IdempotencyKeyHeader, Guid.NewGuid().ToString());
+
+        ResilienceExtensions.IsRetrySafe(request).Should().Be(expected);
+    }
+
+    [Theory]
+    [InlineData("POST", 1)]
+    [InlineData("GET", 2)]
+    public async Task FailedWrite_IsSentOnce_FailedRead_IsRetried(string method, int expectedCalls)
+    {
+        var inner = new RecordingHandler(HttpStatusCode.ServiceUnavailable);
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["MaxRetryAttempts"] = "1" })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddHttpClient("retry-probe")
+            .ConfigurePrimaryHttpMessageHandler(() => inner)
+            .AddForgeResilience(configuration);
+        await using var provider = services.BuildServiceProvider();
+        var client = provider.GetRequiredService<IHttpClientFactory>().CreateClient("retry-probe");
+
+        using var response = await client.SendAsync(
+            new HttpRequestMessage(new HttpMethod(method), "https://partner.example.com/v1/orders"));
+
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        inner.Calls.Should().Be(expectedCalls);
+    }
+}
+{{- end }}
+{{- if has_serilog }}
+
+public class LogRedactionTests
+{
+    private sealed class CapturingSink : ILogEventSink
+    {
+        public List<LogEvent> Events { get; } = [];
+
+        public void Emit(LogEvent logEvent) => Events.Add(logEvent);
+    }
+
+    private static (Serilog.ILogger Logger, CapturingSink Sink) CreateLogger()
+    {
+        var settings = new ForgeDataClassificationOptions();
+        var options = Mock.Of<IOptionsMonitor<ForgeDataClassificationOptions>>(m => m.CurrentValue == settings);
+        var sink = new CapturingSink();
+        // The same enrichment (and order) the service uses in AddForgeSerilog.
+        var logger = new LoggerConfiguration()
+            .ApplyForgeEnrichment("redaction-probe", "Production", new ForgeDataRedaction(options))
+            .WriteTo.Sink(sink)
+            .CreateLogger();
+        return (logger, sink);
+    }
+
+    private static string AllPropertyValues(LogEvent logEvent) =>
+        string.Join(" | ", logEvent.Properties.Select(p => $"{p.Key}={p.Value}"));
+
+    [Fact]
+    public void LogContextProperties_AreRedacted()
+    {
+        var (logger, sink) = CreateLogger();
+
+        using (Serilog.Context.LogContext.PushProperty("UserEmail", "jane.doe@example.com"))
+        using (Serilog.Context.LogContext.PushProperty("Password", "hunter2"))
+        using (Serilog.Context.LogContext.PushProperty("Note", "reach jane.doe@example.com"))
+        {
+            logger.Information("Inside a scope");
+        }
+
+        var properties = AllPropertyValues(sink.Events.Single());
+        properties.Should().NotContain("jane.doe@example.com").And.NotContain("hunter2");
+        properties.Should().Contain("UserEmail=\"[redacted]\"");
+    }
+
+    [Fact]
+    public void MicrosoftLoggerScopes_AreRedacted()
+    {
+        var (logger, sink) = CreateLogger();
+        using var factory = new Serilog.Extensions.Logging.SerilogLoggerFactory(logger);
+        var msLogger = factory.CreateLogger("ScopeProbe");
+
+        using (msLogger.BeginScope(new Dictionary<string, object> { ["UserEmail"] = "jane.doe@example.com", ["Password"] = "hunter2" }))
+        {
+            Microsoft.Extensions.Logging.LoggerExtensions.LogInformation(msLogger, "Inside a Microsoft logging scope");
+        }
+
+        var properties = AllPropertyValues(sink.Events.Single());
+        properties.Should().NotContain("jane.doe@example.com").And.NotContain("hunter2");
+    }
+
+    [Fact]
+    public void SensitivePropertyNames_AreRedacted()
+    {
+        var (logger, sink) = CreateLogger();
+
+        logger.Information("Sign-in {UserEmail} {Password} {RefreshToken}", "jane.doe@example.com", "hunter2", "eyJhbGciOi");
+
+        var rendered = sink.Events.Single().RenderMessage();
+        rendered.Should().NotContain("jane.doe@example.com").And.NotContain("hunter2").And.NotContain("eyJhbGciOi");
+        rendered.Should().Contain("[redacted]");
+    }
+
+    [Fact]
+    public void EmailAddresses_InOtherValues_AreMasked()
+    {
+        var (logger, sink) = CreateLogger();
+
+        logger.Information("Note {Note}", "Contact jane.doe@example.com about the invoice");
+
+        sink.Events.Single().RenderMessage().Should().NotContain("jane.doe@example.com").And.Contain("***@***");
+    }
+
+    [Fact]
+    public void Identifiers_AreLeftIntact()
+    {
+        var (logger, sink) = CreateLogger();
+        var correlationId = "123e4567-e89b-12d3-a456-426614174000";
+
+        logger.Information("Order {OrderId} {CorrelationId} {StatusCode}", 4155550123L, correlationId, 200);
+
+        var rendered = sink.Events.Single().RenderMessage();
+        rendered.Should().Contain(correlationId).And.Contain("4155550123").And.Contain("200");
+    }
+
+    [Fact]
+    public void DestructuredObjects_AreRedacted()
+    {
+        var (logger, sink) = CreateLogger();
+
+        logger.Information("Created {@User}", new { Id = 7, Email = "jane.doe@example.com", Phone = "+1 415 555 0123" });
+
+        var rendered = sink.Events.Single().RenderMessage();
+        rendered.Should().NotContain("jane.doe@example.com").And.NotContain("555 0123").And.Contain("7");
+    }
+
+    [Theory]
+    [InlineData("https://partner.example.com/v1/rates?api_key=secret&email=a@b.com", "https://partner.example.com/v1/rates")]
+    [InlineData("https://partner.example.com/v1/rates", "https://partner.example.com/v1/rates")]
+    public void OutboundRequestLogs_DropTheQueryString(string uri, string expected)
+    {
+        HttpLoggingHandler.WithoutQuery(new Uri(uri)).Should().Be(expected);
+    }
+}
+{{- end }}

@@ -1,0 +1,64 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+/** The one place access tokens may be sent: an exact origin plus a path prefix. */
+export interface ApiDestination {
+  /** Scheme, host and port, for example https://api.example.com. */
+  readonly origin: string;
+  /** Path prefix without a trailing slash; empty for the whole origin. */
+  readonly pathPrefix: string;
+}
+
+export function toApiDestination(apiUrl: string): ApiDestination {
+  const url = new URL(apiUrl);
+  return { origin: url.origin, pathPrefix: url.pathname.replace(/\/+$/, '') };
+}
+
+/**
+ * HORIZONTAL: True only when a request URL targets the configured API.
+ *
+ * The URL is parsed (never compared as a string prefix), so these do NOT match
+ * https://api.example.com/api:
+ *   - https://api.example.com.evil.test/api/x   (look-alike host)
+ *   - //evil.test/api/x                          (protocol-relative URL)
+ *   - http://api.example.com/api/x               (different scheme)
+ *   - https://user:pw@evil.test/api/x            (credentials in the URL)
+ *   - https://api.example.com/apiv2/x            (prefix is matched on whole path segments)
+ *
+ * @param baseUrl Base for relative request URLs (the document's base URI).
+ */
+export function isApiRequest(requestUrl: string, destination: ApiDestination, baseUrl: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(requestUrl, baseUrl);
+  } catch {
+    return false;
+  }
+
+  if (url.username || url.password) {
+    return false;
+  }
+  if (url.origin !== destination.origin) {
+    return false;
+  }
+  if (destination.pathPrefix === '') {
+    return true;
+  }
+  // URL parsing has already resolved "." and ".." segments.
+  return url.pathname === destination.pathPrefix || url.pathname.startsWith(`${destination.pathPrefix}/`);
+}

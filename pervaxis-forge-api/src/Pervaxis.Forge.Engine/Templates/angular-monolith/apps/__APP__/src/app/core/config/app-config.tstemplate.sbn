@@ -1,0 +1,244 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+/**
+ * HORIZONTAL: Runtime configuration (assets/app-config.json), validated before anything uses it.
+ *
+ * The same build runs in every environment; each deployment provides its own app-config.json.
+ * Every value here is public (it is downloaded by the browser). Never put a client secret in it:
+ * a browser app is a public OAuth client and uses PKCE instead. See AUTHENTICATION.md.
+ *
+ * Invalid or missing configuration fails closed: sign-in is unavailable and no request receives
+ * an access token.
+ */
+
+/** Path of the authorization callback route. The configured redirectUri must point here. */
+export const AUTH_CALLBACK_PATH = '/auth/callback';
+
+/** Must match the API's Forge:Tenant:Mode. */
+export type TenancyMode = 'SingleTenant' | 'MultiTenant';
+
+export interface AuthConfig {
+  /** Origin of the Cognito hosted UI (managed or custom domain), for example https://auth.example.com. */
+  readonly cognitoDomain: string;
+  /** Token issuer: https://cognito-idp.<region>.amazonaws.com/<user pool id>. */
+  readonly issuer: string;
+  /** Public app client ID. The app client must have no client secret. */
+  readonly clientId: string;
+  /** OAuth scopes. Must include "openid". */
+  readonly scopes: readonly string[];
+  /** Absolute URL of this app's /auth/callback route. Registered as a callback URL in Cognito. */
+  readonly redirectUri: string;
+  /** Absolute URL in this app to return to after sign-out. Registered as a sign-out URL in Cognito. */
+  readonly postLogoutRedirectUri: string;
+  /** Access-token claim that lists the user's roles. Default "cognito:groups". */
+  readonly roleClaim: string;
+}
+
+export interface TenancyConfig {
+  readonly mode: TenancyMode;
+  /** Access-token claim that carries the tenant. Default "tenant_id" (the API's default). */
+  readonly claimType: string;
+}
+
+export interface AppConfig {
+  /** Base URL of the API, without a trailing slash. Access tokens are sent only below this URL. */
+  readonly apiUrl: string;
+  readonly auth: AuthConfig;
+  readonly tenancy: TenancyConfig;
+}
+
+export type AppConfigResult =
+  | { readonly ok: true; readonly config: AppConfig }
+  | { readonly ok: false; readonly errors: readonly string[] };
+
+const DEFAULT_ROLE_CLAIM = 'cognito:groups';
+const DEFAULT_TENANT_CLAIM = 'tenant_id';
+const SECRET_KEY_PATTERN = /secret/i;
+const TOKEN_PATTERN = /^[^\s]+$/;
+
+/**
+ * Validates raw configuration. Returns every problem found, so a deployment can be fixed in one pass.
+ *
+ * @param raw       Parsed app-config.json.
+ * @param appOrigin Origin the app runs on (window.location.origin). Redirect URIs must belong to it.
+ */
+export function parseAppConfig(raw: unknown, appOrigin: string): AppConfigResult {
+  const errors: string[] = [];
+
+  if (!isRecord(raw)) {
+    return { ok: false, errors: ['app-config.json must contain a JSON object.'] };
+  }
+
+  const auth = isRecord(raw['auth']) ? raw['auth'] : null;
+  if (!auth) {
+    errors.push('"auth" section is missing.');
+  } else if (Object.keys(auth).some((key) => SECRET_KEY_PATTERN.test(key))) {
+    errors.push('"auth" must not contain a client secret. Browser apps are public clients and use PKCE.');
+  }
+
+  const apiUrl = readUrl(raw['apiUrl'], 'apiUrl', errors, { base: appOrigin, allowLocalHttp: true, allowPath: true });
+
+  const cognitoDomain = readUrl(auth?.['cognitoDomain'], 'auth.cognitoDomain', errors, { allowPath: false });
+  const issuer = readUrl(auth?.['issuer'], 'auth.issuer', errors, { allowPath: true });
+  const clientId = readToken(auth?.['clientId'], 'auth.clientId', errors);
+  const scopes = readScopes(auth?.['scopes'], errors);
+  const redirectUri = readAppUrl(auth?.['redirectUri'], 'auth.redirectUri', appOrigin, errors);
+  const postLogoutRedirectUri = readAppUrl(auth?.['postLogoutRedirectUri'], 'auth.postLogoutRedirectUri', appOrigin, errors);
+  const roleClaim = readOptionalToken(auth?.['roleClaim'], 'auth.roleClaim', DEFAULT_ROLE_CLAIM, errors);
+
+  if (redirectUri && new URL(redirectUri).pathname !== AUTH_CALLBACK_PATH) {
+    errors.push(`"auth.redirectUri" must point to this app's ${AUTH_CALLBACK_PATH} route.`);
+  }
+
+  const tenancy = isRecord(raw['tenancy']) ? raw['tenancy'] : null;
+  const mode = tenancy?.['mode'];
+  if (mode !== 'SingleTenant' && mode !== 'MultiTenant') {
+    errors.push('"tenancy.mode" must be "SingleTenant" or "MultiTenant" (the API\'s Forge:Tenant:Mode).');
+  }
+  const claimType = readOptionalToken(tenancy?.['claimType'], 'tenancy.claimType', DEFAULT_TENANT_CLAIM, errors);
+
+  if (errors.length > 0 || !apiUrl || !cognitoDomain || !issuer || !clientId || !scopes || !redirectUri
+      || !postLogoutRedirectUri || !roleClaim || !claimType) {
+    return { ok: false, errors };
+  }
+
+  const config: AppConfig = {
+    apiUrl,
+    auth: { cognitoDomain, issuer, clientId, scopes, redirectUri, postLogoutRedirectUri, roleClaim },
+    tenancy: { mode: mode as TenancyMode, claimType },
+  };
+  return { ok: true, config: deepFreeze(config) };
+}
+
+interface UrlRules {
+  /** Resolve relative values against this origin (apiUrl may be "/api" on the app's own origin). */
+  readonly base?: string;
+  /** Allow http only for localhost (local development). */
+  readonly allowLocalHttp?: boolean;
+  /** Allow a path; otherwise the value must be an origin. */
+  readonly allowPath: boolean;
+}
+
+function readUrl(value: unknown, name: string, errors: string[], rules: UrlRules): string | null {
+  if (typeof value !== 'string' || value.trim() === '') {
+    errors.push(`"${name}" is missing.`);
+    return null;
+  }
+
+  let url: URL;
+  try {
+    url = rules.base ? new URL(value.trim(), rules.base) : new URL(value.trim());
+  } catch {
+    errors.push(`"${name}" is not a valid URL.`);
+    return null;
+  }
+
+  const localHttp = rules.allowLocalHttp === true && url.protocol === 'http:' && isLocalHost(url.hostname);
+  if (url.protocol !== 'https:' && !localHttp) {
+    errors.push(`"${name}" must use https${rules.allowLocalHttp ? ' (http is allowed only for localhost)' : ''}.`);
+    return null;
+  }
+  if (url.username || url.password || url.search || url.hash) {
+    errors.push(`"${name}" must not contain credentials, a query string or a fragment.`);
+    return null;
+  }
+
+  const path = url.pathname.replace(/\/+$/, '');
+  if (!rules.allowPath && path !== '') {
+    errors.push(`"${name}" must be an origin only, for example https://auth.example.com.`);
+    return null;
+  }
+  return `${url.origin}${path}`;
+}
+
+/** An absolute URL on the app's own origin (redirect targets). */
+function readAppUrl(value: unknown, name: string, appOrigin: string, errors: string[]): string | null {
+  if (typeof value !== 'string' || value.trim() === '') {
+    errors.push(`"${name}" is missing.`);
+    return null;
+  }
+
+  let url: URL;
+  try {
+    url = new URL(value.trim());
+  } catch {
+    errors.push(`"${name}" must be an absolute URL.`);
+    return null;
+  }
+
+  if (url.origin !== new URL(appOrigin).origin) {
+    errors.push(`"${name}" must be on this app's origin (${new URL(appOrigin).origin}).`);
+    return null;
+  }
+  if (url.username || url.password || url.hash) {
+    errors.push(`"${name}" must not contain credentials or a fragment.`);
+    return null;
+  }
+  return url.href;
+}
+
+function readToken(value: unknown, name: string, errors: string[]): string | null {
+  if (typeof value !== 'string' || value.trim() === '') {
+    errors.push(`"${name}" is missing.`);
+    return null;
+  }
+  if (!TOKEN_PATTERN.test(value) || value.length > 256) {
+    errors.push(`"${name}" must not contain spaces.`);
+    return null;
+  }
+  return value;
+}
+
+function readOptionalToken(value: unknown, name: string, fallback: string, errors: string[]): string | null {
+  return value === undefined ? fallback : readToken(value, name, errors);
+}
+
+function readScopes(value: unknown, errors: string[]): readonly string[] | null {
+  if (!Array.isArray(value) || value.length === 0) {
+    errors.push('"auth.scopes" must be a non-empty array.');
+    return null;
+  }
+  if (!value.every((scope) => typeof scope === 'string' && TOKEN_PATTERN.test(scope))) {
+    errors.push('"auth.scopes" must contain only scope names without spaces.');
+    return null;
+  }
+  if (!value.includes('openid')) {
+    errors.push('"auth.scopes" must include "openid".');
+    return null;
+  }
+  return [...new Set(value as string[])];
+}
+
+function isLocalHost(hostname: string): boolean {
+  return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '[::1]';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function deepFreeze<T>(value: T): T {
+  if (typeof value === 'object' && value !== null) {
+    for (const child of Object.values(value)) {
+      deepFreeze(child);
+    }
+    Object.freeze(value);
+  }
+  return value;
+}

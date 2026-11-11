@@ -30,6 +30,12 @@ public sealed class ForgeAuthorizationOptions
     public string AdminGroup { get; init; } = "Admin";
 
     /// <summary>
+    /// The group that satisfies the built-in <c>PlatformAdmin</c> policy, used by tenant management.
+    /// Unlike <see cref="AdminGroup"/>, which acts inside one tenant, this group manages all tenants. Default: PlatformAdmin.
+    /// </summary>
+    public string PlatformAdminGroup { get; init; } = "PlatformAdmin";
+
+    /// <summary>
     /// The token claim that lists the user's groups. Leave empty to use the provider default:
     /// <c>cognito:groups</c> for Cognito, <c>groups</c> for other providers.
     /// </summary>

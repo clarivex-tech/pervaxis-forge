@@ -4,7 +4,15 @@ public sealed class ForgeOutputCachingOptions
 {
     public const string SectionName = "Forge:OutputCaching";
 
+    /// <summary>
+    /// Policy name for anonymous, public responses: <c>[OutputCache(PolicyName = ForgeOutputCachingOptions.PublicPolicy)]</c>.
+    /// Nothing is cached unless an endpoint opts in.
+    /// </summary>
+    public const string PublicPolicy = "ForgePublic";
+
+    /// <summary>Turns the output cache middleware on. Off: endpoint cache attributes have no effect.</summary>
     public bool Enabled { get; init; } = false;
 
+    /// <summary>Lifetime of entries stored by the <see cref="PublicPolicy"/> policy.</summary>
     public int DefaultExpirationSeconds { get; init; } = 60;
 }

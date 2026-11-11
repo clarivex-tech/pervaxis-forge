@@ -31,7 +31,14 @@ public static class AuthorizationPolicyExtensions
     /// <summary>The built-in policy that requires the configured admin group.</summary>
     public const string AdminOnlyPolicy = "AdminOnly";
 
+    /// <summary>
+    /// The built-in policy that requires the configured platform admin group. It guards tenant management,
+    /// which works across tenants. API keys carry no groups, so they never satisfy it.
+    /// </summary>
+    public const string PlatformAdminPolicy = "PlatformAdmin";
+
     private const string DefaultAdminGroup = "Admin";
+    private const string DefaultPlatformAdminGroup = "PlatformAdmin";
     private const string CognitoGroupClaim = "cognito:groups";
     private const string DefaultGroupClaim = "groups";
 
@@ -72,6 +79,14 @@ public static class AuthorizationPolicyExtensions
             .RequireAuthenticatedUser()
             .RequireClaim(groupClaim, adminGroup));
 
+        var platformAdminGroup = string.IsNullOrWhiteSpace(authorization.PlatformAdminGroup)
+            ? DefaultPlatformAdminGroup
+            : authorization.PlatformAdminGroup.Trim();
+
+        options.AddPolicy(PlatformAdminPolicy, policy => policy
+            .RequireAuthenticatedUser()
+            .RequireClaim(groupClaim, platformAdminGroup));
+
         var seenNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var (rawName, definition) in authorization.Policies)
@@ -87,6 +102,10 @@ public static class AuthorizationPolicyExtensions
             if (string.Equals(name, AdminOnlyPolicy, StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException(
                     $"'{AdminOnlyPolicy}' is built in. Use '{ForgeAuthorizationOptions.SectionName}:AdminGroup' to change it.");
+
+            if (string.Equals(name, PlatformAdminPolicy, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException(
+                    $"'{PlatformAdminPolicy}' is built in. Use '{ForgeAuthorizationOptions.SectionName}:PlatformAdminGroup' to change it.");
 
             if (!seenNames.Add(name))
                 throw new InvalidOperationException(

@@ -110,7 +110,10 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                             ["hashing_enabled"] = utilities.HashingEnabled,
                         }
                         : null,
+                    // multi_tenancy: several tenants (tenant from the token claim).
+                    // tenant_ready: every service with a database has tenant management; one tenant unless multi_tenancy.
                     ["multi_tenancy"] = model.Manifest.MultiTenancy,
+                    ["tenant_ready"] = model.Manifest.Database is not null,
                     ["cognito"] = model.Manifest.Cognito is { } cognito
                         ? new Scriban.Runtime.ScriptObject
                         {
@@ -142,12 +145,19 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                 ["forge_build"] = model.ForgeBuild,
                 ["printed_at"] = model.PrintedAt,
                 ["genesis_version"] = model.GenesisVersion,
+                ["default_tenant_id"] = model.DefaultTenantId,
+                ["default_tenant_seeded_at"] = model.DefaultTenantSeededOn.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture) + "T00:00:00Z",
+                ["default_tenant_seeded_year"] = model.DefaultTenantSeededOn.Year,
+                ["default_tenant_seeded_month"] = model.DefaultTenantSeededOn.Month,
+                ["default_tenant_seeded_day"] = model.DefaultTenantSeededOn.Day,
                 ["selected_modules"] = model.SelectedModules.Select(m => new Scriban.Runtime.ScriptObject
                 {
                     ["name"] = m.Name,
                     ["package_name"] = m.PackageName,
                     ["di_extension_name"] = m.DiExtensionName,
                     ["version"] = m.Version,
+                    ["display_name"] = m.DisplayName,
+                    ["uses_genesis_section"] = m.UsesGenesisSection,
                 }).ToList(),
                 ["selected_canvas_modules"] = model.SelectedCanvasModules.Select(m => new Scriban.Runtime.ScriptObject
                 {

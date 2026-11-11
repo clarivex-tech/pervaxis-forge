@@ -1,0 +1,79 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Injectable, computed, signal } from '@angular/core';
+import { ApiDestination, toApiDestination } from '../auth/token-destination';
+import { AppConfig, parseAppConfig } from './app-config';
+
+/** Location of the runtime configuration, relative to the app's base href. */
+export const APP_CONFIG_PATH = 'assets/app-config.json';
+
+type AppConfigState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'ready'; readonly config: AppConfig }
+  | { readonly status: 'error'; readonly errors: readonly string[] };
+
+/**
+ * HORIZONTAL: Loads and holds the validated runtime configuration.
+ * load() runs once at startup (see app.config.ts). Until it succeeds, config() is null and
+ * everything that depends on it (sign-in, API calls, access tokens) stays disabled.
+ */
+@Injectable({ providedIn: 'root' })
+export class AppConfigService {
+  private readonly state = signal<AppConfigState>({ status: 'loading' });
+
+  readonly status = computed(() => this.state().status);
+  readonly config = computed<AppConfig | null>(() => {
+    const state = this.state();
+    return state.status === 'ready' ? state.config : null;
+  });
+  readonly errors = computed<readonly string[]>(() => {
+    const state = this.state();
+    return state.status === 'error' ? state.errors : [];
+  });
+  /** Where access tokens may be sent. Null until the configuration is valid. */
+  readonly apiDestination = computed<ApiDestination | null>(() => {
+    const config = this.config();
+    return config ? toApiDestination(config.apiUrl) : null;
+  });
+
+  async load(): Promise<void> {
+    const url = new URL(APP_CONFIG_PATH, document.baseURI).href;
+    try {
+      // fetch, not HttpClient: the interceptors depend on this configuration.
+      const response = await fetch(url, { cache: 'no-store', credentials: 'same-origin' });
+      if (!response.ok) {
+        this.fail([`${APP_CONFIG_PATH} could not be loaded (HTTP ${response.status}). Create it from app-config.example.json.`]);
+        return;
+      }
+      this.initialize(await response.json());
+    } catch {
+      this.fail([`${APP_CONFIG_PATH} could not be read. It must be valid JSON (see app-config.example.json).`]);
+    }
+  }
+
+  /** Validates and applies raw configuration. Used by load() and by tests. */
+  initialize(raw: unknown, appOrigin: string = window.location.origin): void {
+    const result = parseAppConfig(raw, appOrigin);
+    this.state.set(result.ok ? { status: 'ready', config: result.config } : { status: 'error', errors: result.errors });
+  }
+
+  private fail(errors: readonly string[]): void {
+    this.state.set({ status: 'error', errors });
+  }
+}

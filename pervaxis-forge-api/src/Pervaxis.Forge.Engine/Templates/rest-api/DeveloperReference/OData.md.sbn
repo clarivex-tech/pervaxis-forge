@@ -20,7 +20,7 @@ It does **not** turn `$filter` or `$orderby` into database queries. Your service
 
 ## Settings
 
-Limits are read from the `Genesis:OData` configuration section. All values are optional. The defaults are shown.
+Limits are read from the `Genesis:OData` section of `appsettings.json` (already there). The generated values are shown. A per-endpoint `[ODataQueryable]` setting overrides them.
 
 ```json
 {
@@ -75,16 +75,25 @@ public sealed class ProductsController(IProductService service) : ControllerBase
 ```csharp
 using Microsoft.EntityFrameworkCore;
 using Pervaxis.Genesis.OData.Results;
+{{- if model.manifest.database != null }}
+using {{ model.names.namespace }}.Data;
+{{- end }}
 
 namespace {{ model.names.namespace }}.Domains.Products.Services;
 
-public sealed class ProductService(ProductDbContext dbContext) : IProductService
+{{ if model.manifest.database != null -}}
+// Product is a tenant-owned entity (TenantEntity<Guid>); see TenancyQuickStart.md.
+public sealed class ProductService({{ model.names.dot_net_class_name }}DbContext dbContext) : IProductService
+{{- else -}}
+// Replace dbContext with your data source.
+public sealed class ProductService(YourDataContext dbContext) : IProductService
+{{- end }}
 {
     public async Task<PageResult<ProductResponse>> ListAsync(
         int skip, int top, bool includeCount, CancellationToken cancellationToken)
     {
-        // Always order before Skip/Take so pages are stable.
-        var query = dbContext.Products.AsNoTracking().OrderBy(p => p.Id);
+        // Always order before Skip/Take so pages are stable.{{ if model.manifest.database != null }} The tenant filter applies: only the current tenant's rows are counted and listed.{{ end }}
+        var query = dbContext.Set<Product>().AsNoTracking().OrderBy(p => p.Id);
 
         long? total = includeCount ? await query.LongCountAsync(cancellationToken) : null;
 
@@ -114,9 +123,30 @@ Response shape:
 }
 ```
 
+## Rules that are enforced
+
+Requests that break a rule get `400` with an RFC 7807 body:
+
+- `$top` above the endpoint's `MaxTop` (or the global `MaxTop`).
+- A query option the endpoint does not allow (in the example: `$filter`, `$orderby`, `$select`, `$expand`).
+- Negative `$top` or `$skip` (by the platform filter `Infrastructure/Validation/ODataPagingGuardFilter.cs`; Genesis 3.4 passes them through, and a database would fail with 500).
+- Filters, sorting or expansion deeper or more complex than the configured limits.
+
+A non-numeric `$top` or `$skip` (for example `$top=all`) is **ignored**, and the default page size applies.
+
+## Tenancy
+
+{{- if model.manifest.tenant_ready }}
+OData lists are tenant-safe because they query `{{ model.names.dot_net_class_name }}DbContext`: every row and the count come only from the current tenant.
+Never call `IgnoreQueryFilters()` in a list query. The package's `EnableTenantIsolation` setting does not filter rows; the DbContext does.
+{{- else }}
+This service has no database, so no tenant filter applies. If a list holds data of several customers, filter it yourself.
+{{- end }}
+
 ## Notes
 
 - `ProductResponse` must be a class or record (the envelope requires a reference type).
+- `GenesisModuleTests.cs` checks the settings binding and every rule above{{ if model.manifest.tenant_ready }}, including tenant isolation{{ end }}. Keep it.
 - Use `PageResult<T>` for OData-style endpoints. Use `Common/PagedResult<T>` (page and pageSize style) for plain REST list endpoints. Do not mix them on one endpoint.
 - Per-entity property rules can be registered through `EntityConfigurationRegistry`. See the OData package README.
 {{- end -}}

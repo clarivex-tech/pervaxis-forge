@@ -1,0 +1,16 @@
+{
+  "apiUrl": "https://api.example.com",
+  "auth": {
+    "cognitoDomain": "https://auth.example.com",
+    "issuer": "https://cognito-idp.<region>.amazonaws.com/<user-pool-id>",
+    "clientId": "<public-app-client-id>",
+    "scopes": ["openid", "email", "profile"],
+    "redirectUri": "http://localhost:4200/auth/callback",
+    "postLogoutRedirectUri": "http://localhost:4200/login",
+    "roleClaim": "cognito:groups"
+  },
+  "tenancy": {
+    "mode": "SingleTenant",
+    "claimType": "tenant_id"
+  }
+}

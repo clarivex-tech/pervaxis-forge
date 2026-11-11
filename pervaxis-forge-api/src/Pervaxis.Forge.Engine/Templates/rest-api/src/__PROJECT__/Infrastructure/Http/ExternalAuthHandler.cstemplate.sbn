@@ -16,49 +16,58 @@
  ************************************************************************
  */
 
-using System.Net.Http.Headers;
 using Microsoft.Extensions.Options;
 using {{ model.names.namespace }}.Models.Configuration;
 
 namespace {{ model.names.namespace }}.Infrastructure.Http;
 
+/// <summary>
+/// Authenticates calls to third-party services with this service's own outbound credential
+/// (<c>ExternalServices:ApiKey</c>).
+/// <para>
+/// It never forwards the caller's Bearer token or this service's inbound API key: a third party
+/// holding either could call this service, or others, as that user. To call another Pervaxis
+/// service with the caller's identity, use <c>IForgeInternalHttpClient</c> instead.
+/// </para>
+/// </summary>
 public sealed class ExternalAuthHandler : DelegatingHandler
 {
-    private readonly IOptionsMonitor<ForgeAuthenticationOptions> _authOptions;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IOptionsMonitor<ForgeExternalServicesOptions> _options;
 
-    public ExternalAuthHandler(
-        IOptionsMonitor<ForgeAuthenticationOptions> authOptions,
-        IHttpContextAccessor httpContextAccessor)
+    public ExternalAuthHandler(IOptionsMonitor<ForgeExternalServicesOptions> options)
     {
-        _authOptions = authOptions;
-        _httpContextAccessor = httpContextAccessor;
+        _options = options;
     }
 
     protected override Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var scheme = _authOptions.CurrentValue.Scheme;
+        // Strip anything a caller may have set by hand; the external client sends only its own credential.
+        request.Headers.Authorization = null;
 
-        if (scheme is "Bearer" or "Both")
+        var options = _options.CurrentValue;
+        if (!string.IsNullOrEmpty(options.ApiKey) && IsConfiguredHost(request.RequestUri, options.BaseUrl))
         {
-            // Forward the inbound Bearer token to external services
-            var token = _httpContextAccessor.HttpContext?.Items["BearerToken"] as string;
-            if (!string.IsNullOrEmpty(token))
-            {
-                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-            }
-        }
-        else if (scheme is "ApiKey")
-        {
-            // For API key auth, use the configured API key for external service calls
-            var apiKey = _authOptions.CurrentValue.ApiKey;
-            if (!string.IsNullOrEmpty(apiKey))
-            {
-                request.Headers.TryAddWithoutValidation("X-Api-Key", apiKey);
-            }
+            request.Headers.Remove(options.ApiKeyHeader);
+            request.Headers.TryAddWithoutValidation(options.ApiKeyHeader, options.ApiKey);
         }
 
         return base.SendAsync(request, cancellationToken);
+    }
+
+    /// <summary>
+    /// The credential goes only to the configured host, so an absolute URL to another host
+    /// (for example a redirect target or a URL taken from user input) never receives it.
+    /// </summary>
+    internal static bool IsConfiguredHost(Uri? requestUri, string baseUrl)
+    {
+        if (requestUri is null || !requestUri.IsAbsoluteUri
+            || !Uri.TryCreate(baseUrl, UriKind.Absolute, out var configured))
+        {
+            return false;
+        }
+
+        return Uri.Compare(requestUri, configured, UriComponents.SchemeAndServer,
+            UriFormat.Unescaped, StringComparison.OrdinalIgnoreCase) == 0;
     }
 }

@@ -123,7 +123,8 @@ public class MultiTenancyGenerationTests
         program.Should().NotContain("AddDbContextPool");
 
         files.Keys.Should().NotContain(k => k.EndsWith("/TenantMiddleware.cs", StringComparison.Ordinal));
-        files.Keys.Should().NotContain(k => k.Contains("/Infrastructure/Tenancy/", StringComparison.Ordinal));
+        files.Keys.Should().NotContain(k => k.EndsWith("/Infrastructure/Tenancy/ITenantContext.cs", StringComparison.Ordinal));
+        files.Keys.Should().NotContain(k => k.EndsWith("/Infrastructure/Tenancy/TenantContext.cs", StringComparison.Ordinal));
         files.Values.Should().NotContain(v => v.Contains("X-Tenant-ID", StringComparison.OrdinalIgnoreCase) && !v.Contains("ignored", StringComparison.OrdinalIgnoreCase)
             || v.Contains("TenantMiddleware", StringComparison.Ordinal));
     }
@@ -156,15 +157,75 @@ public class MultiTenancyGenerationTests
     }
 
     [Fact]
-    public async Task ServiceWithoutTenancy_IsUnchanged()
+    public async Task ServiceWithADatabase_IsSingleTenant_WithTenantManagement_ButNoClaims()
     {
-        var files = await GenerateAsync(Manifest(multiTenancy: false));
+        var files = await GenerateAsync(Manifest(multiTenancy: false, withCognito: false));
 
-        Single(files, "/Program.cs").Should().NotContain("PervaxisClaims");
-        Single(files, "/Data/DesignTimeDbContextFactory.cs").Should().NotContain("DesignTimeTenantContext.Instance");
-        files.Keys.Should().Contain(k => k.Contains("/Infrastructure/Tenancy/ITenantContext.cs", StringComparison.Ordinal));
+        var program = Single(files, "/Program.cs");
+        program.Should().Contain("AddPervaxisClaimsMultiTenancy").And.Contain("UsePervaxisClaimsTenancy");
+        program.Should().Contain("EfTenantDirectory").And.Contain("TenantManagementService");
+
+        var appsettings = Single(files, "/appsettings.json");
+        appsettings.Should().Contain("\"Mode\": \"SingleTenant\"").And.Contain("\"EnableDirectoryChecks\": true");
+
+        files.Keys.Should().Contain(k => k.EndsWith("/Data/Tenancy/Tenant.cs", StringComparison.Ordinal));
+        files.Keys.Should().Contain(k => k.EndsWith("/Controllers/TenantsController.cs", StringComparison.Ordinal));
+        files.Keys.Should().Contain(k => k.EndsWith("/Data/Migrations/20260101000000_AddTenants.cs", StringComparison.Ordinal));
+        files.Keys.Should().Contain(k => k.EndsWith("/Data/Migrations/BillingServiceDbContextModelSnapshot.cs", StringComparison.Ordinal));
+        files.Keys.Should().Contain(k => k.EndsWith("/TenantManagementTests.cs", StringComparison.Ordinal));
+        files.Keys.Should().Contain(k => k.EndsWith("DeveloperReference/GoingMultiTenant.md", StringComparison.Ordinal));
+
+        // Claim handling is only for multi-tenant services.
         files.Keys.Should().NotContain(k => k.EndsWith("/TenantClaimGuard.cs", StringComparison.Ordinal));
         files.Keys.Should().NotContain(k => k.EndsWith("/TenantIsolationTests.cs", StringComparison.Ordinal));
+        files.Keys.Should().NotContain(k => k.EndsWith("/Infrastructure/Tenancy/ITenantContext.cs", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task MultiTenantService_UsesMultiTenantMode()
+    {
+        var files = await GenerateAsync(Manifest(multiTenancy: true));
+
+        Single(files, "/appsettings.json").Should().Contain("\"Mode\": \"MultiTenant\"");
+        files.Keys.Should().Contain(k => k.EndsWith("/Controllers/TenantsController.cs", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TheFirstTenantId_IsTheSameEverywhereInThePrint(bool multiTenancy)
+    {
+        var files = await GenerateAsync(Manifest(multiTenancy));
+
+        var defaults = Single(files, "/Data/Tenancy/TenantDefaults.cs");
+        var id = System.Text.RegularExpressions.Regex.Match(defaults, "DefaultTenantId = \"([0-9a-f-]{36})\"").Groups[1].Value;
+
+        Guid.TryParse(id, out var parsed).Should().BeTrue();
+        parsed.Should().NotBe(Guid.Empty);
+        Single(files, "/appsettings.json").Should().Contain($"\"DefaultTenantId\": \"{id}\"");
+        Single(files, "/Data/Migrations/20260101000000_AddTenants.cs").Should().Contain($"new Guid(\"{id}\")");
+        Single(files, "/Data/Migrations/BillingServiceDbContextModelSnapshot.cs").Should().Contain($"new Guid(\"{id}\")");
+        Single(files, "DeveloperReference/GoingMultiTenant.md").Should().Contain(id);
+    }
+
+    [Fact]
+    public async Task EachPrint_GetsItsOwnFirstTenantId()
+    {
+        var first = Single(await GenerateAsync(Manifest(multiTenancy: false)), "/Data/Tenancy/TenantDefaults.cs");
+        var second = Single(await GenerateAsync(Manifest(multiTenancy: false)), "/Data/Tenancy/TenantDefaults.cs");
+
+        first.Should().NotBe(second);
+    }
+
+    [Fact]
+    public async Task ServiceWithoutADatabase_HasNoTenancy()
+    {
+        var files = await GenerateAsync(Manifest(multiTenancy: false, withCognito: false) with { Database = null });
+
+        Single(files, "/Program.cs").Should().NotContain("PervaxisClaims");
+        files.Keys.Should().Contain(k => k.Contains("/Infrastructure/Tenancy/ITenantContext.cs", StringComparison.Ordinal));
+        files.Keys.Should().NotContain(k => k.EndsWith("/Controllers/TenantsController.cs", StringComparison.Ordinal));
+        files.Keys.Should().NotContain(k => k.EndsWith("/TenantManagementTests.cs", StringComparison.Ordinal));
         Single(files, "Directory.Packages.props").Should().NotContain("Pervaxis.Core.MultiTenancy");
         files.Keys.Should().NotContain(k => k.EndsWith("DeveloperReference/Tenancy.md", StringComparison.Ordinal));
     }

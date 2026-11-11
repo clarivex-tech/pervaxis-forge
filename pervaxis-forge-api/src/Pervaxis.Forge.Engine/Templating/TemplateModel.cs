@@ -26,4 +26,16 @@ public sealed record TemplateModel
     public string PrintedAt { get; init; } = DateTime.UtcNow.ToString("o");
 
     public string GenesisVersion { get; init; } = "";
+
+    /// <summary>
+    /// The first tenant of a generated service: seeded into the tenants table and used as the only tenant in
+    /// single-tenant mode. One value per print, so every file of the print agrees.
+    /// </summary>
+    public string DefaultTenantId { get; init; } = Guid.NewGuid().ToString("D");
+
+    /// <summary>
+    /// The creation date recorded for the seeded default tenant: the print date at midnight UTC.
+    /// Date only, so the EF seed data and its migration stay simple and stable.
+    /// </summary>
+    public DateOnly DefaultTenantSeededOn { get; init; } = DateOnly.FromDateTime(DateTime.UtcNow);
 }

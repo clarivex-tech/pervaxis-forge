@@ -1,54 +1,74 @@
-import { Component, inject } from '@angular/core';
-{{ if model.manifest.ui_targets | array.contains "mobile" }}
-import { NavController } from '@ionic/angular/standalone';
-{{ else }}
-import { Router } from '@angular/router';
-{{ end }}
-import { FormsModule } from '@angular/forms';
-import { AuthService, AuthTokens } from '../../core/services/auth.service';
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component, OnInit, inject, signal } from '@angular/core';
+import { ActivatedRoute, Router } from '@angular/router';
+import { AuthService, sanitizeReturnUrl } from '../../core/auth/auth.service';
+import { LoggerService } from '../../core/services/logger.service';
+
+const MESSAGES: Readonly<Record<string, string>> = {
+  session_ended: 'Your session has ended. Please sign in again.',
+  signed_out: 'You have been signed out.',
+  provider_error: 'Sign-in was cancelled or was not allowed.',
+};
+const DEFAULT_ERROR = 'Sign-in did not complete. Please try again.';
 
 /**
- * VERTICAL: Replace this placeholder login with your identity provider integration.
- * This component demonstrates the AuthService contract — call setTokens() after
- * successful authentication from your IdP (Cognito, Auth0, Azure AD, etc.).
+ * HORIZONTAL: Public sign-in page. "Sign in" redirects to the Cognito hosted UI
+ * (authorization code + PKCE). There is no password form in the app and no mock sign-in.
+ * When the configuration is missing or invalid, sign-in is unavailable and the problems are listed.
+ *
+ * VERTICAL: You may restyle this page; keep the AuthService calls.
  */
 @Component({
   selector: '{{ model.manifest.component_prefix }}-login',
   standalone: true,
-  imports: [FormsModule],
   template: `
-    <div class="login-container">
+    <main class="login-container">
       <div class="login-card">
-        <h1>{{ model.manifest.service_name }}</h1>
-        <p class="login-subtitle">Sign in to continue</p>
+        <h1 [textContent]="appName"></h1>
 
-        <form (ngSubmit)="onLogin()">
-          <div class="form-group">
-            <label for="username">Username</label>
-            <input
-              id="username"
-              type="text"
-              [(ngModel)]="username"
-              name="username"
-              required
-              autocomplete="username"
-            />
+        @if (auth.status() === 'unavailable') {
+          <div class="login-error" role="alert">
+            <p>Sign-in is not available.</p>
+            <ul>
+              @for (reason of auth.unavailableReasons(); track reason) {
+                <li [textContent]="reason"></li>
+              }
+            </ul>
           </div>
-          <div class="form-group">
-            <label for="password">Password</label>
-            <input
-              id="password"
-              type="password"
-              [(ngModel)]="password"
-              name="password"
-              required
-              autocomplete="current-password"
-            />
-          </div>
-          <button type="submit" class="btn-primary">Sign In</button>
-        </form>
+        } @else {
+          <p class="login-subtitle">Sign in to continue</p>
+          @if (message()) {
+            <p class="login-message" role="status" [textContent]="message()"></p>
+          }
+          @if (error()) {
+            <p class="login-error" role="alert" [textContent]="error()"></p>
+          }
+          <button
+            type="button"
+            class="btn-primary"
+            (click)="signIn()"
+            [disabled]="busy() || auth.status() === 'initializing'"
+          >Sign in</button>
+        }
       </div>
-    </div>
+    </main>
   `,
   styles: [`
     .login-container {
@@ -68,16 +88,8 @@ import { AuthService, AuthTokens } from '../../core/services/auth.service';
     }
     h1 { margin-bottom: var(--spacing-xs); }
     .login-subtitle { color: var(--color-secondary); margin-bottom: var(--spacing-xl); }
-    .form-group { margin-bottom: var(--spacing-md); }
-    label { display: block; margin-bottom: var(--spacing-xs); font-weight: 500; }
-    input {
-      width: 100%;
-      padding: var(--spacing-sm) var(--spacing-md);
-      border: 1px solid #e2e8f0;
-      border-radius: var(--radius-md);
-      font-size: 1rem;
-    }
-    input:focus { outline: 2px solid var(--color-primary); border-color: transparent; }
+    .login-message { margin-bottom: var(--spacing-md); }
+    .login-error { color: #b91c1c; margin-bottom: var(--spacing-md); }
     .btn-primary {
       width: 100%;
       padding: var(--spacing-sm) var(--spacing-md);
@@ -91,33 +103,46 @@ import { AuthService, AuthTokens } from '../../core/services/auth.service';
       margin-top: var(--spacing-md);
     }
     .btn-primary:hover { background: var(--color-primary-dark); }
+    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
   `],
 })
-export class LoginComponent {
-  private readonly auth = inject(AuthService);
-{{ if model.manifest.ui_targets | array.contains "mobile" }}
-  private readonly navCtrl = inject(NavController);
-{{ else }}
+export class LoginComponent implements OnInit {
+  protected readonly auth = inject(AuthService);
   private readonly router = inject(Router);
-{{ end }}
+  private readonly route = inject(ActivatedRoute);
+  private readonly logger = inject(LoggerService);
 
-  username = '';
-  password = '';
+  protected readonly appName = '{{ model.manifest.service_name }}';
+  protected readonly busy = signal(false);
+  protected readonly message = signal<string | null>(null);
+  protected readonly error = signal<string | null>(null);
 
-  onLogin(): void {
-    // VERTICAL: Replace this mock with your actual IdP authentication call.
-    // After successful auth, call this.auth.setTokens() with real tokens.
-    const mockTokens: AuthTokens = {
-      accessToken: 'mock-access-token',
-      refreshToken: 'mock-refresh-token',
-      expiresAt: Date.now() + 3600000, // 1 hour
-    };
+  private get returnUrl(): string {
+    return sanitizeReturnUrl(this.route.snapshot.queryParamMap.get('returnUrl') ?? '/');
+  }
 
-    this.auth.setTokens(mockTokens);
-{{ if model.manifest.ui_targets | array.contains "mobile" }}
-    this.navCtrl.navigateRoot('/dashboard');
-{{ else }}
-    this.router.navigate(['/dashboard']);
-{{ end }}
+  async ngOnInit(): Promise<void> {
+    const params = this.route.snapshot.queryParamMap;
+    const reason = params.get('reason');
+    const errorCode = params.get('error');
+    this.message.set(reason ? MESSAGES[reason] ?? null : null);
+    this.error.set(errorCode ? MESSAGES[errorCode] ?? DEFAULT_ERROR : null);
+
+    await this.auth.ready;
+    if (this.auth.isAuthenticated()) {
+      await this.router.navigateByUrl(this.returnUrl, { replaceUrl: true });
+    }
+  }
+
+  async signIn(): Promise<void> {
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      await this.auth.login(this.returnUrl);
+    } catch (error) {
+      this.logger.error('Sign-in could not start', error);
+      this.error.set(DEFAULT_ERROR);
+      this.busy.set(false);
+    }
   }
 }

@@ -11,7 +11,7 @@ Domains/
 └── YourFeature/
     ├── Controllers/    ← HTTP endpoints for this feature
     ├── Services/       ← Business logic and orchestration
-    ├── Data/           ← EF Core entities, DbContext, repositories (if feature-scoped)
+    ├── Data/           ← EF Core entities and their IEntityTypeConfiguration classes
     ├── Models/         ← Request / response records for this feature
     ├── Validators/     ← FluentValidation validators for this feature's request models
     └── Exceptions/     ← Domain exceptions specific to this feature
@@ -25,6 +25,22 @@ Domains/
 - Validators live alongside the request models they validate.
 - Domain exceptions are caught at the controller boundary — not in global middleware.
 - Register all services in `Extensions/ServiceCollectionExtensions.cs`.
+{{- if model.manifest.database != null }}
+- One `DbContext` for the whole service: `Data/{{ model.names.dot_net_class_name }}DbContext.cs`. Add an `IEntityTypeConfiguration<T>` class next to each entity; it is picked up automatically. Never create a feature `DbContext`.
+{{- end }}
+{{- if model.manifest.tenant_ready }}
+
+## Tenancy (read before you store any data)
+
+This service keeps each customer's data apart. Your entities must be tenant-owned, and the rules are short:
+
+- Derive entities from `TenantEntity<Guid>` (or mark shared data `[SharedEntity]`).
+- Never put `TenantId` in a request, route or query string. The platform knows the tenant.
+- Use `IRepository<TEntity, Guid>` and `IUnitOfWork`; another tenant's row is simply not found (404).
+- Wrap background work in `ITenantScopeFactory.BeginScope(tenantId)`.
+
+Start with [`DeveloperReference/TenancyQuickStart.md`](../../../DeveloperReference/TenancyQuickStart.md): a complete feature in six steps and the checklist for every pull request.
+{{- end }}
 
 ## Example
 
@@ -38,7 +54,7 @@ Domains/
 │   │   └── BillingService.cs
 │   ├── Data/
 │   │   ├── BillingEntity.cs
-│   │   └── BillingDbContext.cs
+│   │   └── BillingEntityConfiguration.cs
 │   ├── Models/
 │   │   ├── CreateBillingRequest.cs
 │   │   └── BillingResponse.cs

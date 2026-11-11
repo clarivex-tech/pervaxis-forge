@@ -21,11 +21,18 @@ using {{ model.names.namespace }}.Infrastructure.Extensions;
 using {{ model.names.namespace }}.Infrastructure.Http;
 using {{ model.names.namespace }}.Infrastructure.Middleware;
 using {{ model.names.namespace }}.Infrastructure.Security;
-{{- if !model.manifest.multi_tenancy }}
+{{- for module in model.selected_modules }}{{ if module.display_name == "OData" }}
+using {{ model.names.namespace }}.Infrastructure.Validation;
+{{- end }}{{ end }}
+{{- if !model.manifest.tenant_ready }}
 using {{ model.names.namespace }}.Infrastructure.Tenancy;
 {{- else }}
+using Pervaxis.Core.Abstractions.MultiTenancy;
 using Pervaxis.Core.Data.EntityFrameworkCore;
 using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Data.Tenancy;
+using {{ model.names.namespace }}.Infrastructure.Tenancy;
+using {{ model.names.namespace }}.Services.Tenancy;
 {{- end }}
 {{- if model.manifest.has_messaging }}
 using {{ model.names.namespace }}.Infrastructure.Outbox;
@@ -63,9 +70,22 @@ builder.AddForgeSerilog();
 builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
 builder.Services.AddDefaultAWSOptions(builder.Configuration.GetAWSOptions());
 builder.Services.AddAWSService<IAmazonSecretsManager>();
+{{- has_sanitization = false }}
+{{- has_odata = false }}
 {{- for module in model.selected_modules }}
+{{- if module.display_name == "Sanitization" }}{{ has_sanitization = true }}{{ end }}
+{{- if module.display_name == "OData" }}{{ has_odata = true }}{{ end }}
+{{- if module.uses_genesis_section }}
+// {{ module.display_name }} reads its settings from "Genesis:{{ module.display_name }}".
+builder.Services.{{ module.di_extension_name }}(builder.Configuration);
+{{- else }}
 builder.Services.{{ module.di_extension_name }}(
-    builder.Configuration.GetSection("{{ module.name }}"));
+    builder.Configuration.GetSection("{{ module.display_name }}"));
+{{- end }}
+{{- end }}
+{{- if has_odata }}
+// Rejects negative $top/$skip on [ODataQueryable] endpoints (Genesis OData 3.4 passes them through).
+builder.Services.AddODataPagingGuard();
 {{- end }}
 
 builder.Services.AddControllers();
@@ -87,7 +107,16 @@ builder.Services.AddOptions<ForgeSecretsOptions>()
 builder.Services.AddSingleton<ForgeDataRedaction>();
 builder.Services.AddOptions<ForgeOutputCachingOptions>()
     .BindConfiguration(ForgeOutputCachingOptions.SectionName);
-builder.Services.AddOutputCache();
+var outputCaching = builder.Configuration.GetSection(ForgeOutputCachingOptions.SectionName)
+    .Get<ForgeOutputCachingOptions>() ?? new ForgeOutputCachingOptions();
+builder.Services.AddOutputCache(options =>
+{
+    // Nothing is cached unless an endpoint opts in with [OutputCache(PolicyName = ForgeOutputCachingOptions.PublicPolicy)].
+    // That policy caches anonymous responses only. Do not add a policy for authenticated callers
+    // without varying the cache key by user and tenant.
+    options.AddPolicy(ForgeOutputCachingOptions.PublicPolicy,
+        policy => policy.AddForgeDefaultOutputCache(outputCaching.DefaultExpirationSeconds));
+});
 builder.Services.AddOptions<ForgeRateLimitingOptions>()
     .BindConfiguration(ForgeRateLimitingOptions.SectionName);
 builder.Services.AddRateLimiter(limiterOptions =>
@@ -114,9 +143,11 @@ builder.Services.AddRateLimiter(limiterOptions =>
 const string ForgeUiCorsPolicy = "ForgeUi";
 builder.Services.AddCors(options =>
 {
+    // No built-in fallback: an environment without Forge:Cors:AllowedOrigins allows no browser origins.
+    // localhost is listed only in appsettings.Development.json; set real UI origins per environment.
     var allowedOrigins = builder.Configuration
         .GetSection("Forge:Cors:AllowedOrigins")
-        .Get<string[]>() ?? ["http://localhost:4200"];
+        .Get<string[]>() ?? [];
 
     options.AddPolicy(ForgeUiCorsPolicy, policy => policy
         .WithOrigins(allowedOrigins)
@@ -126,11 +157,21 @@ builder.Services.AddCors(options =>
 // -- Authentication (API Key + optional JWT/OIDC) ------------------------------------
 builder.Services.AddForgeAuthentication(builder.Configuration);
 builder.Services.Configure<ForgeOidcOptions>(builder.Configuration.GetSection(ForgeOidcOptions.SectionName));
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
 builder.Services.Configure<ForgeTenantOptions>(builder.Configuration.GetSection(ForgeTenantOptions.SectionName));
 {{- else }}
-// -- Multi-tenancy: tenant comes only from the validated access token claim (never from a header) --
-builder.Services.AddPervaxisClaimsMultiTenancy(options => builder.Configuration.GetSection("Forge:Tenant").Bind(options));
+// -- Tenancy (see DeveloperReference/Tenancy.md) ------------------------------------------
+// Forge:Tenant:Mode = SingleTenant: every request runs as DefaultTenantId (this service's one customer).
+// Forge:Tenant:Mode = MultiTenant: the tenant comes only from the validated access-token claim, never from a header.
+builder.Services.AddPervaxisClaimsMultiTenancy(options =>
+{
+    builder.Configuration.GetSection("Forge:Tenant").Bind(options);
+    if (string.IsNullOrWhiteSpace(options.DefaultTenantId))
+        options.DefaultTenantId = TenantDefaults.DefaultTenantId;
+});
+// Tenant status checks read the tenants table (Data/Tenancy). Suspended or unknown tenants get 403.
+builder.Services.AddScoped<ITenantDirectory, EfTenantDirectory>();
+builder.Services.AddScoped<ITenantManagementService, TenantManagementService>();
 {{- end }}
 {{- if model.manifest.has_messaging }}
 builder.Services.Configure<ForgeOutboxOptions>(builder.Configuration.GetSection(ForgeOutboxOptions.SectionName));
@@ -164,9 +205,9 @@ builder.Services.AddTransient<HttpLoggingHandler>();
 builder.Services.AddTransient<ExternalAuthHandler>();
 builder.Services.AddTransient<JwtPropagationHandler>();
 builder.Services.AddSingleton<IForgeHashingService, ForgeHashingService>();
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
 builder.Services.AddScoped<ITenantContext, TenantContext>();
-{{- else if model.manifest.database != null }}
+{{- else }}
 builder.Services.AddPervaxisTenantRepositories<{{ model.names.dot_net_class_name }}DbContext>();
 {{- end }}
 {{- if model.manifest.has_messaging }}
@@ -174,16 +215,29 @@ builder.Services.AddScoped<IOutboxPublisher, OutboxPublisher>();
 builder.Services.AddHostedService<OutboxRelayService>();
 {{- end }}
 
+// External (third-party) client: sends only its own ExternalServices:ApiKey, and only to ExternalServices:BaseUrl.
+// It never forwards the caller's token. Use IForgeInternalHttpClient to call Pervaxis services as the caller.
+builder.Services.AddOptions<ForgeExternalServicesOptions>()
+    .BindConfiguration(ForgeExternalServicesOptions.SectionName);
 builder.Services.AddHttpClient<IForgeExternalHttpClient, ForgeExternalHttpClient>(client =>
 {
-    var baseUrl = builder.Configuration["ExternalServices:BaseUrl"];
+    var baseUrl = builder.Configuration[$"{ForgeExternalServicesOptions.SectionName}:BaseUrl"];
     if (!string.IsNullOrEmpty(baseUrl))
         client.BaseAddress = new Uri(baseUrl);
 })
+// No automatic redirects: they are followed below ExternalAuthHandler and would carry the API key to
+// whatever host the redirect names. A 3xx is returned to the caller, who decides whether to follow it.
+.ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false })
+{{- if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}
 .AddHttpMessageHandler<CorrelationIdHandler>()
+{{- end }}
 .AddHttpMessageHandler<ExternalAuthHandler>()
+{{- if model.manifest.observability == null || model.manifest.observability.serilog_enabled }}
 .AddHttpMessageHandler<HttpLoggingHandler>()
-.AddForgeResilience(builder.Configuration.GetSection("Resilience:External"));
+{{- end }}
+{{- if model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled }}
+.AddForgeResilience(builder.Configuration.GetSection("Resilience:External"))
+{{- end }};
 
 builder.Services.AddSwaggerGen(options =>
 {
@@ -221,30 +275,58 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Forge:E
 
 app.UseHttpsRedirection();
 app.UseResponseCompression();
-app.UseOutputCache();
-app.Use(async (context, next) =>
+// Request audit log: one entry per request, including requests that throw (Forge:AuditLogging:Enabled).
+// Business actions with target IDs (who changed which record) are not covered here; see docs/BACKLOG.md.
+var auditLogging = app.Configuration.GetSection(ForgeAuditLoggingOptions.SectionName)
+    .Get<ForgeAuditLoggingOptions>() ?? new ForgeAuditLoggingOptions();
+if (auditLogging.Enabled)
 {
-    var startedAt = Stopwatch.GetTimestamp();
-    await next();
+    app.Use(async (context, next) =>
+    {
+        var startedAt = Stopwatch.GetTimestamp();
+        string? error = null;
+        try
+        {
+            await next();
+        }
+        catch (Exception ex)
+        {
+            // ExceptionHandlerMiddleware (further out) turns this into the error response; record it, then let it through.
+            error = ex.GetType().Name;
+            throw;
+        }
+        finally
+        {
+            var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+            // The actor is the stable user ID (sub claim), not the display name, which is often an email address.
+            var actor = context.User.Identity?.IsAuthenticated == true
+                ? context.User.FindFirst("sub")?.Value
+                    ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                    ?? "authenticated-user"
+                : "anonymous";
+            var statusCode = context.Response.StatusCode;
+            var outcome = error is not null || statusCode >= StatusCodes.Status500InternalServerError ? "failed"
+                : statusCode >= StatusCodes.Status400BadRequest ? "rejected"
+                : "succeeded";
 
-    var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
-    var actor = context.User.Identity?.IsAuthenticated == true
-        ? context.User.Identity?.Name ?? "authenticated-user"
-        : "anonymous";
-
-    app.Logger.LogInformation(
-        "Audit event {AuditAction} {Method} {Path} {StatusCode} {ElapsedMs}ms {Actor} {CorrelationId}",
-        "request",
-        context.Request.Method,
-        context.Request.Path.Value,
-        context.Response.StatusCode,
-        elapsedMs,
-        actor,
-        context.Items["CorrelationId"]?.ToString() ?? context.TraceIdentifier);
-});
+            app.Logger.Log(
+                outcome == "failed" ? LogLevel.Warning : LogLevel.Information,
+                "Audit event {AuditAction} {Method} {Path} {StatusCode} {Outcome} {Error} {ElapsedMs}ms {Actor} {CorrelationId}",
+                "request",
+                context.Request.Method,
+                context.Request.Path.Value,
+                error is null ? (int?)statusCode : null,
+                outcome,
+                error,
+                elapsedMs,
+                actor,
+                context.Items["CorrelationId"]?.ToString() ?? context.TraceIdentifier);
+        }
+    });
+}
 app.UseCors(ForgeUiCorsPolicy);
 app.UseAuthentication();
-{{- if model.manifest.multi_tenancy }}
+{{- if model.manifest.tenant_ready }}
 // Tenant resolution: after authentication (the claim is trusted only once the token is validated), before authorization.
 app.UsePervaxisClaimsTenancy();
 {{- end }}
@@ -252,11 +334,25 @@ app.UseAuthorization();
 // Rate limiting runs after authentication so per-user limits partition by the authenticated
 // user. Before authentication the user is unknown and every caller falls back to the IP partition.
 app.UseRateLimiter();
+// Output caching runs after authentication, tenancy, authorization and rate limiting, so a cached
+// response is never served to a caller who would be rejected. Off unless Forge:OutputCaching:Enabled is true.
+if (outputCaching.Enabled)
+{
+    app.UseOutputCache();
+}
+{{- if has_sanitization }}
+// Input sanitization (see DeveloperReference/Sanitization.md).
+// 1. JSON bodies are capped at Genesis:Sanitization:MaxInputLength (413), so no string exceeds the sanitizer's limit.
+app.UseMiddleware<JsonBodyLimitMiddleware>();
+// 2. Cleans every string in JSON POST, PUT and PATCH bodies, including nested values, but only when
+//    Genesis:Sanitization:EnableMiddleware is true. Off by default: it changes every field of every request.
+app.UseGenesisSanitization();
+{{- end }}
 // Health checks are anonymous -- load balancers must reach them without an API key.
 // /health is liveness: it never touches the database, so a short database outage does not restart healthy containers.
 // /health/ready is readiness: it runs the checks tagged "ready" (the database check when a database is configured).
-app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous(){{ if model.manifest.multi_tenancy }}.WithTenantExempt(){{ end }};
-app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous(){{ if model.manifest.multi_tenancy }}.WithTenantExempt(){{ end }};
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous(){{ if model.manifest.tenant_ready }}.WithTenantExempt(){{ end }};
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous(){{ if model.manifest.tenant_ready }}.WithTenantExempt(){{ end }};
 app.MapControllers().RequireAuthorization();
 
 app.Run();

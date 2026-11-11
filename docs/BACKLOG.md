@@ -28,6 +28,43 @@ Items tracked for future implementation. Prioritized by impact.
 - [ ] VERTICAL_HANDBOOK.md (proto versioning, backward compatibility)
 - [ ] Production readiness audit + fixes
 
+### REST Print Hardening — Deferred Review Findings
+- [ ] Rate limiting: enabled by default with sensible limits; distributed limits across instances (Redis or API gateway). Until then, document that limits are per instance and off by default.
+- [ ] Business audit trail: business action names, target record IDs and before/after values (who changed which record), as a Core `IAuditLogger` package. Prints already log one request-level audit entry per request with actor ID and outcome.
+- [ ] Application data encryption: field-level encryption with KMS-managed keys; decide searchability and key rotation. Database encryption at rest covers the baseline meanwhile.
+- [ ] Data classification enforcement: field-level PII/sensitivity tags that drive redaction, exports, AI prompts and encryption (shared Core design with encryption). Until then, document that classification is a label only.
+- [ ] CORS: Expose `WWW-Authenticate` header for cross-origin write replay when auth fails.
+- [ ] Optional nginx CSP header with strict `connect-src` for tighter security.
+
+- [ ] gRPC template: apply the same retry safety (safe methods or `Idempotency-Key` only) to its `ForgeRetryDelegatingHandler`.
+- [ ] Redaction when Serilog is disabled: the redaction enricher only runs on the Serilog pipeline.
+
+### Launchpad Infrastructure Options Not Yet Implemented
+- [ ] Background jobs (EventBridge Scheduler, SQS + Lambda): shown as Coming Soon; no template generates them yet.
+- [ ] Optional typed HTTP clients: both clients are always generated; the `InternalHttpClient`/`ExternalHttpClient` manifest flags are unused (toggles removed from the wizard).
+- [ ] Manifest `Auth` flags (`ApiKeyEnabled`, `JwtEnabled`, `MtlsEnabled`) are unused: sign-in comes from the Cognito settings. Remove them from the manifest or wire them (toggles removed from the wizard).
+- [ ] Separate retry, circuit breaker and timeout: templates generate all three when any flag is on; the wizard offers one switch.
+- [ ] CloudWatch independent of Serilog: the manifest flag is unused; the CloudWatch sink follows Serilog.
+
+### Documents Module (Genesis)
+- [ ] `Pervaxis.Genesis.Documents`: a cloud-agnostic, optional module for Excel read/write (`.xlsx` with formulas and styles; candidate ClosedXML, MIT), PDF generation (candidates QuestPDF, whose community licence has a revenue limit, or PDFsharp/MigraDoc, MIT) and document/email templates (Scriban). Files are stored through the FileStorage module; Reporting can use it for exports.
+- [ ] Move the print-local `WorkbookReader` into the module.
+- [ ] Launchpad: replace the "PDF Generation" and "Template Engine" (Coming Soon) utilities with a "Documents" entry in the Genesis modules step, then remove the empty Utilities panel.
+
+### Use Core Packages Instead of Print-Local Copies
+- [ ] Prints carry their own hashing, resilience, logging and exception-handling code and reference only `Pervaxis.Core.MultiTenancy` and `Pervaxis.Core.Data.EntityFrameworkCore`. Compare each Core package (`Security`, `Exceptions`, `Resilience`, `Observability`, `Abstractions`) with the print code and switch prints to Core where it covers the same need, so fixes reach every service through a package update. Core stays always-on (not a wizard option).
+
+### Genesis Follow-ups (from OData/Sanitization fixes, PR #212)
+- [ ] Rebuild and republish Genesis against Core 1.8.0, then remove the Core pins from `Directory.Packages.props.sbn` (NU1603 workaround).
+- [ ] `QueryValidator` rejects negative `$top`/`$skip`, then remove `ODataPagingGuardFilter` from prints.
+- [ ] Sanitization middleware fails closed on over-long input, then reconsider `JsonBodyLimitMiddleware`.
+- [ ] Sanitization `PlainText` mode must not alter passwords or free text, so middleware can be enabled by default.
+- [ ] Update fallback Genesis versions (`PrintGenerator` 3.2.0, `NuGetVersionResolver` 3.4.1) to a version that includes Sanitization (3.4.4+).
+- [ ] Multi-tenancy audit: per-module tenant source, provider lifetimes, partitioning (Search holds `ITenantContext?` in a singleton); OData `EnableTenantIsolation` does not filter rows.
+
+### Search
+- [ ] OpenSearch ingestion pattern: outbox-driven indexer, full reindex job, alias swap for zero-downtime rebuilds.
+
 ---
 
 ## Angular Template Deferred Items

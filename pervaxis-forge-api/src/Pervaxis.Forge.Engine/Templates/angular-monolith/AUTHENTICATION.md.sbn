@@ -1,0 +1,193 @@
+# Authentication and tenancy
+
+{{ model.manifest.service_name }} signs users in with **Amazon Cognito** using the OAuth 2.0
+authorization code flow with **PKCE** (public client, no client secret). The code lives in
+`apps/{{ model.manifest.service_name }}/src/app/core/auth/` and is horizontal: product-specific
+rules belong in your features, not in these files.
+
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+> **Native mobile:** sign-in is not supported in the Capacitor native shell yet. It fails closed:
+> the login page reports that sign-in is unavailable. The app works in a browser as usual.
+
+{{ end }}
+## 1. Cognito setup
+
+Create (or reuse) an app client in the user pool:
+
+| Setting | Value |
+|---|---|
+| Client type | Public client, **no client secret** |
+| OAuth grant | Authorization code grant |
+| Scopes | `openid` plus what you need (for example `email`, `profile`) |
+| Callback URL | `https://<app-host>/auth/callback` (and `http://localhost:4200/auth/callback` for development) |
+| Sign-out URL | The `postLogoutRedirectUri` below, for example `https://<app-host>/login` |
+| Token revocation | Enabled (the default), so sign-out can revoke the refresh token |
+
+The API must accept this app client: add its ID to the API's `Forge:Oidc:ClientIds`, and allow the
+app's origin in the API's `Forge:Cors:AllowedOrigins`.
+
+## 2. Runtime configuration
+
+The app reads `assets/app-config.json` at startup, so one build runs in every environment. Copy
+`src/assets/app-config.example.json` to `src/assets/app-config.json` and fill it in. The real file
+is ignored by git; deployments provide it (for example a mounted file or a config map).
+
+| Key | Meaning |
+|---|---|
+| `apiUrl` | API base URL. Access tokens are sent only to this origin and path. https (http only on localhost). |
+| `auth.cognitoDomain` | Hosted UI domain as an origin, for example `https://auth.example.com`. |
+| `auth.issuer` | `https://cognito-idp.<region>.amazonaws.com/<user-pool-id>` |
+| `auth.clientId` | Public app client ID. |
+| `auth.scopes` | Array; must contain `openid`. |
+| `auth.redirectUri` | This app's `/auth/callback` URL. Must be on the app's origin. |
+| `auth.postLogoutRedirectUri` | Where Cognito returns after sign-out. Must be on the app's origin. |
+| `auth.roleClaim` | Optional. Access-token claim with the roles. Default `cognito:groups`. |
+| `tenancy.mode` | `SingleTenant` or `MultiTenant`: must match the API's `Forge:Tenant:Mode`. |
+| `tenancy.claimType` | Optional. Access-token tenant claim. Default `tenant_id` (the API default). |
+
+All of these values are public: the browser downloads them. Cognito domain, pool and client IDs are
+identifiers, not secrets. **Never add a client secret**; the app rejects any `auth` key containing
+"secret".
+
+**Fail closed.** If the file is missing, unreadable or invalid, sign-in is unavailable, the login page
+lists the problems, and no request receives an access token.
+
+## 3. Sign-in
+
+1. "Sign in" creates a random `state`, `nonce` and PKCE `code_verifier`
+   (`crypto.getRandomValues`, via [oauth4webapi](https://github.com/panva/oauth4webapi)), stores
+   them in `sessionStorage` for this tab, and redirects to Cognito with the S256 code challenge.
+2. On `/auth/callback` the stored attempt is removed **before** anything is checked, so a callback
+   URL works once. Attempts older than 10 minutes are rejected.
+3. The callback must carry the same `state`; Cognito errors (`?error=`) are rejected.
+4. The code is exchanged at `/oauth2/token` with the `code_verifier`.
+5. The ID token is validated (rules below). Any failure leaves the user signed out.
+6. The user continues to the page they originally asked for (app paths only).
+
+### ID token validation rules
+
+Checked by oauth4webapi and `cognito-client.ts`:
+
+- The response is a JSON token response with `access_token` and `token_type` `Bearer`.
+- JWS header: `alg` is `RS256`; no `crit` header.
+- `iss` equals `auth.issuer` exactly.
+- `aud` contains `auth.clientId`; if there are several audiences, `azp` must equal it.
+- `exp` is in the future (30 seconds clock tolerance); `iat` and `sub` are present.
+- `nonce` equals the nonce sent with this sign-in.
+- `token_use` is `id` (Cognito-specific).
+- After a refresh, a new ID token must have the same `sub` as the current user.
+
+**Signature exception.** The ID token signature is not verified in the browser. The token comes
+directly from Cognito's token endpoint over TLS in response to the app's own request, which
+OpenID Connect Core 1.0 §3.1.3.7 allows in place of signature validation. The browser never accepts
+an ID token from the URL or from another party.
+
+**Access tokens are not validated by the app.** The app reads their claims (roles, tenant) for display
+and navigation only. The API validates every access token (signature, issuer, `token_use=access`,
+client ID) and decides what the user may do.
+
+## 4. Tokens, storage and refresh
+
+| Item | Where |
+|---|---|
+| Access token | Memory only |
+| Refresh token | `sessionStorage` of this tab (`pervaxis.auth.refresh_token`) |
+| ID token | Not stored; its validated claims (name, email) are kept in memory |
+
+**XSS tradeoff.** `sessionStorage` lets the session survive a page reload in the same tab, but any
+script running on the page (an XSS flaw or a compromised dependency) can read the refresh token and
+keep obtaining access tokens until it is revoked or expires. Keeping it in memory only would remove
+that exposure at the cost of a new sign-in after every reload. Mitigations in place: a strict Content
+Security Policy (`script-src 'self'`), no `innerHTML` bindings in the scaffold, sign-out revokes the
+refresh token, and the token is scoped to one tab and cleared when the tab closes. Keep the Cognito
+refresh-token lifetime as short as your users accept.
+
+**Refresh.**
+
+- One refresh at a time: the expiry timer, API 401s and the reload restore share a single request.
+- Access tokens are refreshed 60 seconds before they expire (or halfway through very short lifetimes).
+- After a reload the session is restored with that shared refresh; protected routes wait for it.
+- A failed refresh ends the session in this tab and returns to the login page.
+- Cognito calls (token, refresh, revoke) use `fetch`, not Angular's `HttpClient`, so the auth, retry
+  and error interceptors never see them.
+
+**API requests.** `authInterceptor` adds `Authorization: Bearer` only when the parsed request URL has
+the same origin as `apiUrl` and its path is at or below the `apiUrl` path. Look-alike hosts,
+protocol-relative URLs, other schemes or ports, URLs with credentials and sibling paths
+(`/apiv2` for `/api`) never receive the token.
+
+**401 handling.** The token is refreshed (shared) and the request is replayed **at most once**:
+
+- `GET`, `HEAD`, `OPTIONS`: replayed.
+- Writes (`POST`, `PUT`, `PATCH`, `DELETE`): replayed only when the 401 carries
+  `WWW-Authenticate: Bearer error="invalid_token"`. The generated API's JWT bearer handler sends this
+  when it rejects the token during authentication, before any endpoint code runs. Any other 401 is
+  returned to the caller, because the request may already have had an effect. Do not return this
+  challenge from endpoint code after making changes.
+- If the API is on another origin, the browser hides `WWW-Authenticate` unless the API exposes it
+  (CORS `Access-Control-Expose-Headers: WWW-Authenticate`). Without that, writes are not replayed;
+  the token is still refreshed, so the user's next attempt succeeds.
+
+The generic retry interceptor retries only `GET`, `HEAD` and `OPTIONS` to the API on 5xx or network
+errors.
+
+## 5. Sign-out
+
+1. Tokens, the user profile, the tenant and all registered user/tenant state are cleared **immediately**.
+2. Other tabs are told to sign out (`BroadcastChannel`, or `localStorage` events as a fallback).
+   A tab that receives the message signs out locally and never broadcasts again, so there are no loops.
+3. The refresh token is revoked at `/oauth2/revoke` (best effort, `keepalive`). The app waits at most
+   2 seconds for it.
+4. The browser goes to Cognito `/logout`, which ends the hosted UI session and returns to
+   `postLogoutRedirectUri`.
+
+After 15 minutes without activity, a signed-in user is signed out the same way.
+
+## 6. Roles and permissions
+
+Roles come from the access token's `cognito:groups` claim (configurable). Use them to show or hide UI:
+
+```typescript
+canActivate: [authGuard, permissionGuard('Admin')]
+```
+
+`AuthService.hasPermission()` maps permissions one-to-one to groups. These checks are for the UI
+only; the API enforces the same rules.
+
+## 7. Tenancy
+
+The tenant is read from the access token's `tenant_id` claim and must be exactly one GUID string,
+the same rule the API applies. V1 supports **one tenant per user**: there is no tenant switcher, and
+`TenantContextService.canSwitchTenant` is `false`.
+
+| `tenancy.mode` | Behaviour |
+|---|---|
+| `SingleTenant` | The tenant claim is ignored (the API uses its own tenant). Users without a tenant may use the app. |
+| `MultiTenant` | Routes with `tenantGuard` require a valid tenant claim; users without one see "Access denied". Leave `tenantGuard` off pages the API serves without a tenant (for example platform administration). |
+
+Memberships come from `TENANT_MEMBERSHIP_SOURCE`. The default source returns the token's tenant.
+A future membership lookup can be provided there without changing the rest of the app.
+
+**Clear tenant data.** Stores that hold user or tenant data register a reset listener; it runs on
+sign-out, when the session ends and when the token's tenant changes:
+
+```typescript
+constructor() {
+  inject(SessionStateRegistry).registerUntilDestroyed(inject(DestroyRef), () => this.items.set([]));
+}
+```
+
+The API remains responsible for validating tenant access on every request.
+
+## 8. Content Security Policy
+
+`index.html` allows `connect-src` to any https origin (plus localhost) because the Cognito domain and
+API URL are runtime settings. In production, also send a CSP header from the web server with
+`connect-src 'self' <cognitoDomain> <api origin>`; browsers enforce both policies, so the header
+tightens the meta tag.
+
+## 9. Tests
+
+`npm test` runs the auth specs: callback state and nonce checks, one-time callbacks, refresh success,
+failure and concurrency, session restore, sign-out across tabs, token destinations, write replay
+rules, permissions, single-tenant and multi-tenant claims, and state cleanup.

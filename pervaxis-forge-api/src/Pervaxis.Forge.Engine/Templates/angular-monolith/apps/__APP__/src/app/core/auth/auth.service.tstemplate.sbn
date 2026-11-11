@@ -1,0 +1,450 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+import { Router } from '@angular/router';
+import { AppConfigService } from '../config/app-config.service';
+import { LoggerService } from '../services/logger.service';
+import { PlatformService } from '../services/platform.service';
+import { AuthSyncService } from './auth-sync.service';
+import {
+  AUTH_REDIRECT, AUTH_TIMEOUTS, AuthCallbackError, AuthStatus, UserProfile,
+} from './auth.models';
+import { COGNITO_FETCH, CognitoClient, LoginTransaction, TokenSet } from './cognito-client';
+import { JwtClaims, readJwtClaims, readString, readStringList } from './jwt-claims';
+import { SessionResetReason, SessionStateRegistry } from './session-state';
+import { TenantContextService } from './tenant-context.service';
+
+/** Only the refresh token is stored (sessionStorage, this tab only). Access tokens stay in memory. */
+export const REFRESH_TOKEN_STORAGE_KEY = 'pervaxis.auth.refresh_token';
+export const LOGIN_TRANSACTION_STORAGE_KEY = 'pervaxis.auth.login_transaction';
+
+/** Used when the token response has no expires_in and the access token has no exp claim. */
+const FALLBACK_LIFETIME_SECONDS = 300;
+
+interface Session {
+  readonly accessToken: string;
+  readonly expiresAt: number;
+  /** When to refresh: refreshMarginMs before expiry, but never earlier than half the token's lifetime. */
+  readonly refreshAt: number;
+  readonly accessClaims: JwtClaims;
+  readonly profile: UserProfile | null;
+}
+
+/**
+ * HORIZONTAL: Cognito sign-in for the browser (authorization code + PKCE, public client).
+ *
+ *   - Access token: memory only. Refresh token: sessionStorage (see the XSS note in AUTHENTICATION.md).
+ *   - After a reload the session is restored with one shared refresh operation.
+ *   - All refreshes (expiry timer, API 401s, reload) share one in-flight request.
+ *   - Sign-out clears local state at once, revokes the refresh token (best effort, bounded wait),
+ *     tells other tabs, then ends the Cognito session.
+ *   - Missing or invalid configuration, or a native mobile shell, fails closed: status "unavailable".
+ *
+ * Roles and tenant are read from the access token for display only; the API enforces access.
+ */
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+  private readonly appConfig = inject(AppConfigService);
+  private readonly platform = inject(PlatformService);
+  private readonly router = inject(Router);
+  private readonly logger = inject(LoggerService);
+  private readonly sync = inject(AuthSyncService);
+  private readonly registry = inject(SessionStateRegistry);
+  private readonly tenantContext = inject(TenantContextService);
+  private readonly fetchFn = inject(COGNITO_FETCH);
+  private readonly redirect = inject(AUTH_REDIRECT);
+  private readonly timeouts = inject(AUTH_TIMEOUTS);
+
+  private readonly session = signal<Session | null>(null);
+  private readonly statusState = signal<AuthStatus>('initializing');
+  private readonly unavailableState = signal<readonly string[]>([]);
+  private client: CognitoClient | null = null;
+  private refreshInFlight: Promise<boolean> | null = null;
+  private expiryTimer: ReturnType<typeof setTimeout> | null = null;
+  private markReady: () => void = () => undefined;
+
+  /** Resolves when startup (configuration check and session restore) has finished. */
+  readonly ready: Promise<void> = new Promise<void>((resolve) => (this.markReady = resolve));
+
+  readonly status = this.statusState.asReadonly();
+  /** Why sign-in is unavailable (configuration problems or an unsupported platform). */
+  readonly unavailableReasons = this.unavailableState.asReadonly();
+  readonly isAuthenticated = computed(() => this.statusState() === 'signed-in' && this.session() !== null);
+  readonly profile = computed(() => this.session()?.profile ?? null);
+  readonly accessClaims = computed<JwtClaims>(() => this.session()?.accessClaims ?? {});
+  /** Roles from the configured access-token claim (default cognito:groups). UI decisions only. */
+  readonly roles = computed<readonly string[]>(() =>
+    readStringList(this.accessClaims()[this.appConfig.config()?.auth.roleClaim ?? 'cognito:groups']));
+
+  constructor() {
+    inject(DestroyRef).onDestroy(() => {
+      this.clearExpiryTimer();
+      this.sync.stop();
+    });
+  }
+
+  hasRole(role: string): boolean {
+    return this.roles().includes(role);
+  }
+
+  /**
+   * Permissions map one-to-one to roles (Cognito groups) by default. VERTICAL: replace this mapping
+   * if your API uses finer-grained permissions. The API remains the authority.
+   */
+  hasPermission(permission: string): boolean {
+    return this.hasRole(permission);
+  }
+
+  /** Startup: checks that sign-in can work, then restores the session if this tab has one. */
+  async initialize(): Promise<void> {
+    try {
+      const problems = this.availabilityProblems();
+      if (problems.length > 0) {
+        this.unavailableState.set(problems);
+        this.statusState.set('unavailable');
+        this.removeRefreshToken();
+        return;
+      }
+
+      const config = this.appConfig.config();
+      if (!config) {
+        return;
+      }
+      this.client = new CognitoClient(config.auth, this.fetchFn, this.timeouts.requestMs);
+      this.sync.start(() => this.handleRemoteLogout());
+
+      if (this.readRefreshToken()) {
+        await this.refreshShared();
+      } else {
+        this.statusState.set('signed-out');
+      }
+    } finally {
+      this.markReady();
+    }
+  }
+
+  /** Redirects to the Cognito hosted UI. returnUrl must be an app path; anything else becomes "/". */
+  async login(returnUrl = '/'): Promise<void> {
+    const client = this.client;
+    if (!client || this.statusState() === 'unavailable') {
+      throw new Error('Sign-in is unavailable. Check the configuration.');
+    }
+    const { url, transaction } = await client.createAuthorizationRequest(sanitizeReturnUrl(returnUrl));
+    sessionStorage.setItem(LOGIN_TRANSACTION_STORAGE_KEY, JSON.stringify(transaction));
+    this.redirect(url);
+  }
+
+  /**
+   * Completes sign-in on /auth/callback. The stored transaction is removed before validation, so a
+   * callback URL can be used once. Returns the app path to continue to.
+   */
+  async completeLogin(callbackUrl: string): Promise<string> {
+    const transaction = this.takeTransaction();
+    const client = this.client;
+    if (!client) {
+      throw new AuthCallbackError('unavailable', 'Sign-in is unavailable.');
+    }
+    if (!transaction) {
+      throw new AuthCallbackError('missing_transaction', 'No sign-in is in progress in this tab.');
+    }
+    if (Date.now() - transaction.createdAt > this.timeouts.transactionMaxAgeMs) {
+      throw new AuthCallbackError('expired_transaction', 'The sign-in took too long.');
+    }
+
+    const tokens = await client.exchangeCode(new URL(callbackUrl), transaction);
+    if (!tokens.refreshToken) {
+      this.logger.warn('Cognito returned no refresh token; the session ends when the access token expires.');
+    }
+    this.applyTokens(tokens, null);
+    return transaction.returnUrl;
+  }
+
+  /**
+   * An access token for the API, refreshed first when it expires within the refresh margin.
+   * Null when there is no session (requests then go without a token and the API answers 401).
+   */
+  async getAccessToken(): Promise<string | null> {
+    if (this.statusState() === 'unavailable') {
+      return null;
+    }
+    const session = this.session();
+    if (session && Date.now() < session.refreshAt) {
+      return session.accessToken;
+    }
+    if (!this.readRefreshToken()) {
+      return session && session.expiresAt > Date.now() ? session.accessToken : null;
+    }
+    return (await this.refreshShared()) ? this.session()?.accessToken ?? null : null;
+  }
+
+  /**
+   * Called after the API rejected a token with 401. If another request already refreshed it, no new
+   * refresh is made. Returns true when a newer token is available.
+   */
+  async refreshAfterRejection(rejectedToken: string): Promise<boolean> {
+    const current = this.session()?.accessToken;
+    if (current && current !== rejectedToken) {
+      return true;
+    }
+    if (!this.readRefreshToken()) {
+      return false;
+    }
+    return this.refreshShared();
+  }
+
+  /** True when there is a usable session (restoring or refreshing it if needed). For guards. */
+  async ensureSession(): Promise<boolean> {
+    await this.ready;
+    return (await this.getAccessToken()) !== null;
+  }
+
+  /** One refresh at a time: concurrent callers share the same request and result. */
+  refreshShared(): Promise<boolean> {
+    if (!this.refreshInFlight) {
+      this.refreshInFlight = this.runRefresh().finally(() => {
+        this.refreshInFlight = null;
+      });
+    }
+    return this.refreshInFlight;
+  }
+
+  /**
+   * Explicit sign-out. Local state (tokens, tenant, user data) is cleared before anything else.
+   * Revocation is best effort and waits at most AUTH_TIMEOUTS.revocationMs.
+   */
+  async logout(): Promise<void> {
+    const refreshToken = this.readRefreshToken();
+    const hadSession = this.session() !== null || refreshToken !== null;
+    this.endLocalSession('signed-out');
+
+    const client = this.client;
+    if (!hadSession || !client) {
+      await this.navigate('/login');
+      return;
+    }
+
+    this.sync.broadcastLogout();
+    await this.revokeBestEffort(client, refreshToken);
+    this.redirect(client.logoutUrl());
+  }
+
+  private async runRefresh(): Promise<boolean> {
+    const client = this.client;
+    const refreshToken = this.readRefreshToken();
+    if (!client || !refreshToken) {
+      this.endLocalSession('session-ended');
+      return false;
+    }
+
+    const previous = this.session();
+    try {
+      const tokens = await client.refresh(refreshToken);
+      const previousSubject = previous?.profile?.subject;
+      if (previousSubject && tokens.idTokenClaims && tokens.idTokenClaims.sub !== previousSubject) {
+        throw new Error('The refreshed ID token belongs to a different user.');
+      }
+      // A sign-out during the request wins: never re-create a session that was just ended.
+      if (this.readRefreshToken() !== refreshToken) {
+        return false;
+      }
+      this.applyTokens(tokens, previous?.profile ?? null);
+      return true;
+    } catch (error) {
+      this.logger.warn('Session refresh failed; signing out of this tab', describeError(error));
+      const hadSession = previous !== null;
+      this.endLocalSession('session-ended');
+      if (hadSession) {
+        await this.navigate('/login', { reason: 'session_ended', returnUrl: this.router.url });
+      }
+      return false;
+    }
+  }
+
+  private applyTokens(tokens: TokenSet, previousProfile: UserProfile | null): void {
+    const accessClaims = readJwtClaims(tokens.accessToken);
+    const lifetime = tokens.expiresIn ?? secondsUntil(accessClaims['exp']) ?? FALLBACK_LIFETIME_SECONDS;
+    const profile = tokens.idTokenClaims
+      ? toProfile(tokens.idTokenClaims, accessClaims)
+      : previousProfile ?? profileFromAccessToken(accessClaims);
+
+    if (tokens.refreshToken) {
+      this.writeRefreshToken(tokens.refreshToken);
+    }
+
+    const now = Date.now();
+    const lifetimeMs = lifetime * 1000;
+    const session: Session = {
+      accessToken: tokens.accessToken,
+      expiresAt: now + lifetimeMs,
+      refreshAt: now + lifetimeMs - Math.min(this.timeouts.refreshMarginMs, lifetimeMs / 2),
+      accessClaims,
+      profile,
+    };
+    this.session.set(session);
+    this.statusState.set('signed-in');
+    this.tenantContext.update(accessClaims);
+    this.scheduleExpiry(session);
+  }
+
+  /** Another tab signed out: sign out here too, without broadcasting again. */
+  private handleRemoteLogout(): void {
+    const refreshToken = this.readRefreshToken();
+    if (this.session() === null && refreshToken === null) {
+      return;
+    }
+    this.endLocalSession('signed-out');
+    // This tab's refresh token is its own; revoke it too. The originating tab ends the Cognito session.
+    if (this.client && refreshToken) {
+      void this.revokeBestEffort(this.client, refreshToken);
+    }
+    void this.navigate('/login', { reason: 'signed_out' });
+  }
+
+  private endLocalSession(reason: SessionResetReason): void {
+    this.clearExpiryTimer();
+    this.removeRefreshToken();
+    sessionStorage.removeItem(LOGIN_TRANSACTION_STORAGE_KEY);
+    this.session.set(null);
+    this.tenantContext.clear();
+    if (this.statusState() !== 'unavailable') {
+      this.statusState.set('signed-out');
+    }
+    this.registry.reset(reason);
+  }
+
+  /** Refreshes shortly before expiry; without a refresh token, ends the session at expiry. */
+  private scheduleExpiry(session: Session): void {
+    this.clearExpiryTimer();
+    const canRefresh = this.readRefreshToken() !== null;
+    const at = canRefresh ? session.refreshAt : session.expiresAt;
+    this.expiryTimer = setTimeout(() => {
+      this.expiryTimer = null;
+      if (canRefresh) {
+        void this.refreshShared();
+      } else {
+        this.endLocalSession('session-ended');
+      }
+    }, Math.max(0, at - Date.now()));
+  }
+
+  private clearExpiryTimer(): void {
+    if (this.expiryTimer) {
+      clearTimeout(this.expiryTimer);
+      this.expiryTimer = null;
+    }
+  }
+
+  private async revokeBestEffort(client: CognitoClient, refreshToken: string | null): Promise<void> {
+    if (!refreshToken) {
+      return;
+    }
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => (timer = setTimeout(resolve, this.timeouts.revocationMs)));
+    const revoke = client.revoke(refreshToken).catch((error: unknown) => {
+      this.logger.warn('Refresh token revocation failed', describeError(error));
+    });
+    await Promise.race([revoke, timeout]);
+    clearTimeout(timer);
+  }
+
+  private availabilityProblems(): readonly string[] {
+    if (this.platform.isNative) {
+      return ['Sign-in is not supported in the native mobile app yet. Use the web app.'];
+    }
+    const errors = this.appConfig.errors();
+    if (errors.length > 0) {
+      return errors;
+    }
+    return this.appConfig.config() ? [] : ['The app configuration has not been loaded.'];
+  }
+
+  private takeTransaction(): LoginTransaction | null {
+    const raw = sessionStorage.getItem(LOGIN_TRANSACTION_STORAGE_KEY);
+    sessionStorage.removeItem(LOGIN_TRANSACTION_STORAGE_KEY);
+    if (!raw) {
+      return null;
+    }
+    try {
+      const value = JSON.parse(raw) as Partial<LoginTransaction>;
+      return typeof value.state === 'string' && typeof value.nonce === 'string'
+        && typeof value.codeVerifier === 'string' && typeof value.returnUrl === 'string'
+        && typeof value.createdAt === 'number'
+        ? (value as LoginTransaction)
+        : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private readRefreshToken(): string | null {
+    return sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY);
+  }
+
+  private writeRefreshToken(token: string): void {
+    sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, token);
+  }
+
+  private removeRefreshToken(): void {
+    sessionStorage.removeItem(REFRESH_TOKEN_STORAGE_KEY);
+  }
+
+  private async navigate(path: string, queryParams?: Record<string, string>): Promise<void> {
+    try {
+      await this.router.navigate([path], { queryParams });
+    } catch (error) {
+      this.logger.warn(`Navigation to ${path} failed`, describeError(error));
+    }
+  }
+}
+
+/** Keeps redirects inside the app: only paths like "/orders?x=1" are allowed. */
+export function sanitizeReturnUrl(value: string): string {
+  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) {
+    return '/';
+  }
+  if (value.startsWith('/login') || value.startsWith('/auth/callback')) {
+    return '/';
+  }
+  return value;
+}
+
+function toProfile(idClaims: Record<string, unknown>, accessClaims: JwtClaims): UserProfile {
+  const subject = readString(idClaims['sub']) ?? readString(accessClaims['sub']) ?? 'unknown';
+  const username = readString(idClaims['cognito:username']) ?? readString(accessClaims['username']);
+  const email = readString(idClaims['email']);
+  const name = readString(idClaims['name']);
+  return { subject, username, email, name, displayName: name ?? email ?? username ?? subject };
+}
+
+function profileFromAccessToken(accessClaims: JwtClaims): UserProfile | null {
+  const subject = readString(accessClaims['sub']);
+  if (!subject) {
+    return null;
+  }
+  const username = readString(accessClaims['username']);
+  return { subject, username, email: null, name: null, displayName: username ?? subject };
+}
+
+function secondsUntil(exp: unknown): number | null {
+  return typeof exp === 'number' ? Math.max(0, exp - Math.floor(Date.now() / 1000)) : null;
+}
+
+function describeError(error: unknown): string {
+  return error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+}

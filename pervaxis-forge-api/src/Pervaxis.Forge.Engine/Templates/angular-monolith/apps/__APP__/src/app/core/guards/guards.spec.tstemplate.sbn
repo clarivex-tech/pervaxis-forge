@@ -1,0 +1,115 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { TestBed } from '@angular/core/testing';
+import { ActivatedRouteSnapshot, CanActivateFn, Router, RouterStateSnapshot, UrlTree, provideRouter } from '@angular/router';
+import { appRoutes } from '../../app.routes';
+import { TenancyMode } from '../config/app-config';
+import { AuthService } from '../auth/auth.service';
+import { TenantContextService } from '../auth/tenant-context.service';
+import { TEST_TENANT_ID, provideTestAppConfig } from '../testing/auth-testing';
+import { authGuard } from './auth.guard';
+import { permissionGuard } from './permission.guard';
+import { tenantGuard } from './tenant.guard';
+
+interface FakeAuth {
+  signedIn: boolean;
+  roles: string[];
+}
+
+describe('route guards', () => {
+  let fakeAuth: FakeAuth;
+
+  function setUp(mode: TenancyMode = 'MultiTenant'): void {
+    fakeAuth = { signedIn: true, roles: [] };
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([]),
+        provideTestAppConfig({ tenancyMode: mode }),
+        {
+          provide: AuthService,
+          useValue: {
+            ensureSession: () => Promise.resolve(fakeAuth.signedIn),
+            hasPermission: (permission: string) => fakeAuth.roles.includes(permission),
+          },
+        },
+      ],
+    });
+  }
+
+  async function run(guard: CanActivateFn, url = '/orders'): Promise<boolean | string> {
+    const result = await TestBed.runInInjectionContext(() =>
+      guard({} as ActivatedRouteSnapshot, { url } as RouterStateSnapshot)) as boolean | UrlTree;
+    return result instanceof UrlTree ? TestBed.inject(Router).serializeUrl(result) : result;
+  }
+
+  it('authGuard sends signed-out users to /login and keeps the requested URL', async () => {
+    setUp();
+    fakeAuth.signedIn = false;
+    expect(await run(authGuard)).toBe('/login?returnUrl=%2Forders');
+
+    fakeAuth.signedIn = true;
+    expect(await run(authGuard)).toBeTrue();
+  });
+
+  it('permissionGuard allows the role and sends others to /access-denied', async () => {
+    setUp();
+    fakeAuth.roles = ['Admin'];
+    expect(await run(permissionGuard('Admin'))).toBeTrue();
+    expect(await run(permissionGuard('Billing'))).toBe('/access-denied?reason=permission');
+
+    fakeAuth.signedIn = false;
+    expect(await run(permissionGuard('Admin'))).toBe('/login?returnUrl=%2Forders');
+  });
+
+  it('tenantGuard requires a valid tenant claim in multi-tenant mode', async () => {
+    setUp('MultiTenant');
+    const tenant = TestBed.inject(TenantContextService);
+
+    tenant.update({});
+    expect(await run(tenantGuard)).toBe('/access-denied?reason=no-tenant');
+
+    tenant.update({ tenant_id: ['a', 'b'] });
+    expect(await run(tenantGuard)).toBe('/access-denied?reason=no-tenant');
+
+    tenant.update({ tenant_id: TEST_TENANT_ID });
+    expect(await run(tenantGuard)).toBeTrue();
+  });
+
+  it('tenantGuard allows tenant-less users in single-tenant mode', async () => {
+    setUp('SingleTenant');
+    TestBed.inject(TenantContextService).update({});
+
+    expect(await run(tenantGuard)).toBeTrue();
+  });
+});
+
+describe('appRoutes', () => {
+  it('keeps the public routes public', () => {
+    for (const path of ['login', 'auth/callback', 'access-denied', 'not-found']) {
+      const route = appRoutes.find((candidate) => candidate.path === path);
+      expect(route).withContext(path).toBeDefined();
+      expect(route?.canActivate ?? []).withContext(path).toEqual([]);
+    }
+  });
+
+  it('protects the dashboard with authentication and tenant checks', () => {
+    const dashboard = appRoutes.find((route) => route.path === 'dashboard');
+    expect(dashboard?.canActivate).toEqual([authGuard, tenantGuard]);
+  });
+});

@@ -6,7 +6,7 @@
  */
 
 import { Injectable, inject, NgZone } from '@angular/core';
-import { AuthService } from './auth.service';
+import { AuthService } from '../auth/auth.service';
 import { LoggerService } from './logger.service';
 
 const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000; // 15 minutes
@@ -58,8 +58,13 @@ export class InactivityService {
       clearTimeout(this.timerId);
     }
     this.timerId = setTimeout(() => {
+      // Only a signed-in user is signed out; otherwise the login page would redirect to Cognito.
+      if (!this.auth.isAuthenticated()) {
+        this.resetTimer();
+        return;
+      }
       this.logger.warn('Session expired due to inactivity');
-      this.auth.logout();
+      this.zone.run(() => void this.auth.logout());
     }, INACTIVITY_TIMEOUT_MS);
   };
 }

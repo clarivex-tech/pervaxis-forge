@@ -42,21 +42,24 @@ export function mapInfraOptionsToRequest(formValue: InfraOptionsFormValue): Infr
 	}
 
 	return {
+		// Sign-in comes from the Cognito step; these flags are not read by the print.
 		auth: {
-			apiKeyEnabled: formValue.apiKeyEnabled,
-			jwtEnabled: formValue.jwtEnabled,
+			apiKeyEnabled: true,
+			jwtEnabled: false,
 			mtlsEnabled: false, // Coming Soon — always false
 		},
+		// One switch: retry, circuit breaker and timeout are generated together.
+		// Both typed HTTP clients are always included.
 		resilience: {
 			retryEnabled: formValue.retryEnabled,
-			circuitBreakerEnabled: formValue.circuitBreakerEnabled,
-			timeoutEnabled: formValue.timeoutEnabled,
-			internalHttpClient: formValue.internalHttpClient,
-			externalHttpClient: formValue.externalHttpClient,
+			circuitBreakerEnabled: formValue.retryEnabled,
+			timeoutEnabled: formValue.retryEnabled,
+			internalHttpClient: true,
+			externalHttpClient: true,
 		},
 		observability: {
 			serilogEnabled: formValue.serilogEnabled,
-			cloudWatchEnabled: formValue.cloudWatchEnabled,
+			cloudWatchEnabled: formValue.serilogEnabled, // CloudWatch is the Serilog sink
 			openTelemetryEnabled: formValue.openTelemetryEnabled,
 			correlationIdEnabled: formValue.correlationIdEnabled,
 			prometheusEnabled: false, // Coming Soon — always false
@@ -65,12 +68,12 @@ export function mapInfraOptionsToRequest(formValue: InfraOptionsFormValue): Infr
 			fluentValidationEnabled: formValue.fluentValidationEnabled,
 		},
 		backgroundJobs: {
-			provider: formValue.backgroundJobProvider,
+			provider: null, // Coming Soon — no template generates background jobs yet
 		},
 		utilities: {
 			pdfEnabled: false, // Coming Soon — always false
 			templateEngineEnabled: false, // Coming Soon — always false
-			hashingEnabled: formValue.hashingEnabled,
+			hashingEnabled: false, // Not an option: every print includes hashing; the API ignores this flag.
 		},
 		multiTenancy: formValue.multiTenancy,
 	};
@@ -109,46 +112,18 @@ export function getInfraReviewSummary(formValue: InfraOptionsFormValue): InfraRe
 	const defaults = INFRA_OPTIONS_DEFAULTS;
 	const groups: InfraReviewGroup[] = [];
 
-	// Authentication
-	const authItems: InfraReviewGroup['items'] = [];
-	if (formValue.apiKeyEnabled !== defaults.apiKeyEnabled) {
-		authItems.push({ name: 'API Key', value: formValue.apiKeyEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (formValue.jwtEnabled !== defaults.jwtEnabled) {
-		authItems.push({ name: 'JWT / OIDC Auth0', value: formValue.jwtEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (authItems.length > 0) {
-		groups.push({ label: 'Authentication', items: authItems });
-	}
-
 	// Resilience
-	const resilienceItems: InfraReviewGroup['items'] = [];
 	if (formValue.retryEnabled !== defaults.retryEnabled) {
-		resilienceItems.push({ name: 'Retry + Circuit Breaker + Timeout', value: formValue.retryEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (formValue.circuitBreakerEnabled !== defaults.circuitBreakerEnabled) {
-		resilienceItems.push({ name: 'Circuit Breaker', value: formValue.circuitBreakerEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (formValue.timeoutEnabled !== defaults.timeoutEnabled) {
-		resilienceItems.push({ name: 'Timeout', value: formValue.timeoutEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (formValue.internalHttpClient !== defaults.internalHttpClient) {
-		resilienceItems.push({ name: 'Typed HTTP Clients — Internal', value: formValue.internalHttpClient ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (formValue.externalHttpClient !== defaults.externalHttpClient) {
-		resilienceItems.push({ name: 'Typed HTTP Clients — External', value: formValue.externalHttpClient ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (resilienceItems.length > 0) {
-		groups.push({ label: 'Resilience', items: resilienceItems });
+		groups.push({
+			label: 'Resilience',
+			items: [{ name: 'Retry + Circuit Breaker + Timeout', value: formValue.retryEnabled ? 'Enabled' : 'Disabled', isNonDefault: true }],
+		});
 	}
 
 	// Observability
 	const observabilityItems: InfraReviewGroup['items'] = [];
 	if (formValue.serilogEnabled !== defaults.serilogEnabled) {
 		observabilityItems.push({ name: 'Serilog + CloudWatch', value: formValue.serilogEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (formValue.cloudWatchEnabled !== defaults.cloudWatchEnabled) {
-		observabilityItems.push({ name: 'CloudWatch', value: formValue.cloudWatchEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
 	}
 	if (formValue.openTelemetryEnabled !== defaults.openTelemetryEnabled) {
 		observabilityItems.push({ name: 'OpenTelemetry + OTLP', value: formValue.openTelemetryEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
@@ -163,8 +138,8 @@ export function getInfraReviewSummary(formValue: InfraOptionsFormValue): InfraRe
 	// Multi-Tenancy
 	if (formValue.multiTenancy !== defaults.multiTenancy) {
 		groups.push({
-			label: 'Multi-Tenancy',
-			items: [{ name: 'Multi-Tenancy', value: formValue.multiTenancy ? 'Enabled' : 'Disabled', isNonDefault: true }],
+			label: 'Tenancy',
+			items: [{ name: 'Tenancy', value: formValue.multiTenancy ? 'Multi-tenant' : 'Single tenant', isNonDefault: true }],
 		});
 	}
 
@@ -176,27 +151,7 @@ export function getInfraReviewSummary(formValue: InfraOptionsFormValue): InfraRe
 		});
 	}
 
-	// Background Jobs
-	if (formValue.backgroundJobProvider !== defaults.backgroundJobProvider) {
-		const providerLabel = formValue.backgroundJobProvider === 'EventBridge'
-			? 'EventBridge Scheduler'
-			: formValue.backgroundJobProvider === 'SqsLambda'
-				? 'SQS + Lambda'
-				: 'None';
-		groups.push({
-			label: 'Background Jobs',
-			items: [{ name: 'Provider', value: providerLabel, isNonDefault: true }],
-		});
-	}
-
-	// Utilities
-	const utilitiesItems: InfraReviewGroup['items'] = [];
-	if (formValue.hashingEnabled !== defaults.hashingEnabled) {
-		utilitiesItems.push({ name: 'Encryption / Hashing', value: formValue.hashingEnabled ? 'Enabled' : 'Disabled', isNonDefault: true });
-	}
-	if (utilitiesItems.length > 0) {
-		groups.push({ label: 'Utilities', items: utilitiesItems });
-	}
+	// Background jobs, PDF and template engine are "Coming Soon" (always off), so there is nothing to review.
 
 	return groups;
 }

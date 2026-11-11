@@ -1,0 +1,52 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component, OnInit, inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { AuthService } from '../../core/auth/auth.service';
+import { AuthCallbackError } from '../../core/auth/auth.models';
+import { LoggerService } from '../../core/services/logger.service';
+
+/**
+ * HORIZONTAL: /auth/callback — Cognito redirects here after sign-in.
+ * Checks state and nonce, exchanges the code, then continues to the page the user asked for.
+ * The callback URL (with the code) is replaced in history either way.
+ */
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-auth-callback',
+  standalone: true,
+  template: `<p class="auth-callback" role="status">Signing you in…</p>`,
+  styles: [`.auth-callback { padding: var(--spacing-xl); text-align: center; }`],
+})
+export class AuthCallbackComponent implements OnInit {
+  private readonly auth = inject(AuthService);
+  private readonly router = inject(Router);
+  private readonly logger = inject(LoggerService);
+
+  async ngOnInit(): Promise<void> {
+    await this.auth.ready;
+    try {
+      const returnUrl = await this.auth.completeLogin(window.location.href);
+      await this.router.navigateByUrl(returnUrl, { replaceUrl: true });
+    } catch (error) {
+      const code = error instanceof AuthCallbackError ? error.code : 'sign_in_failed';
+      this.logger.warn('Sign-in callback rejected', code, error instanceof Error ? error.message : error);
+      await this.router.navigate(['/login'], { queryParams: { error: code }, replaceUrl: true });
+    }
+  }
+}

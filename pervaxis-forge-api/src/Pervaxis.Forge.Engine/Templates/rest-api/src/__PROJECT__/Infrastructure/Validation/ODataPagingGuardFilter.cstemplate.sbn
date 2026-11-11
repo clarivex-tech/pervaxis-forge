@@ -1,0 +1,83 @@
+{{- has_odata = false -}}
+{{- for module in model.selected_modules -}}
+{{- if module.display_name == "OData" -}}{{- has_odata = true -}}{{- end -}}
+{{- end -}}
+{{- if has_odata -}}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Pervaxis.Genesis.OData.Services;
+
+namespace {{ model.names.namespace }}.Infrastructure.Validation;
+
+/// <summary>
+/// Rejects a negative <c>$top</c> or <c>$skip</c> with 400 on <c>[ODataQueryable]</c> endpoints.
+/// </summary>
+/// <remarks>
+/// Genesis OData 3.4 validates the upper limit of <c>$top</c> but passes negative values through; a database turns them
+/// into an error (500). This filter runs right after the Genesis filter has parsed the query. Platform code; do not edit.
+/// It can be removed once Genesis rejects negative paging values itself.
+/// </remarks>
+public sealed class ODataPagingGuardFilter : IAsyncActionFilter
+{
+    /// <summary>Where the Genesis OData filter stores the parsed query.</summary>
+    public const string QueryContextKey = "Genesis.OData.QueryContext";
+
+    /// <summary>Runs after <c>[ODataQueryable]</c>, whose filter order is 0.</summary>
+    public const int FilterOrder = 1;
+
+    public Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(next);
+
+        if (context.HttpContext.Items.TryGetValue(QueryContextKey, out var value)
+            && value is ODataQueryContext query
+            && (query.Skip < 0 || query.EffectiveTop < 0))
+        {
+            context.Result = new ObjectResult(new ProblemDetails
+            {
+                Type = "https://tools.ietf.org/html/rfc7807",
+                Title = "Invalid query",
+                Status = StatusCodes.Status400BadRequest,
+                Detail = "$top and $skip must not be negative.",
+            })
+            {
+                StatusCode = StatusCodes.Status400BadRequest,
+                ContentTypes = { "application/problem+json" },
+            };
+            return Task.CompletedTask;
+        }
+
+        return next();
+    }
+}
+
+public static class ODataPagingGuardExtensions
+{
+    /// <summary>Adds <see cref="ODataPagingGuardFilter"/> to every MVC action (it only acts on OData endpoints).</summary>
+    public static IServiceCollection AddODataPagingGuard(this IServiceCollection services)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        return services.Configure<MvcOptions>(options =>
+            options.Filters.Add<ODataPagingGuardFilter>(ODataPagingGuardFilter.FilterOrder));
+    }
+}
+{{- end -}}

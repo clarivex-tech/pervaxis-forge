@@ -16,36 +16,36 @@
  ************************************************************************
  */
 
-import { CanActivateFn } from '@angular/router';
+import { CanActivateFn, Router } from '@angular/router';
 import { inject } from '@angular/core';
-import { AuthService } from '../services/auth.service';
+import { AuthService } from '../auth/auth.service';
 import { LoggerService } from '../services/logger.service';
 
 /**
  * HORIZONTAL: Permission-based route guard factory.
  *
  * Usage in routes:
- *   { path: 'orders', canActivate: [permissionGuard('orders:read')], ... }
- *   { path: 'admin', canActivate: [permissionGuard('admin:access')], ... }
+ *   { path: 'admin', canActivate: [permissionGuard('Admin')], ... }
  *
- * VERTICAL: Implement AuthService.hasPermission() with your IdP's
- * claims/roles/scopes to make this guard functional.
+ * Permissions come from the access token's role claim (default cognito:groups) via
+ * AuthService.hasPermission(). This only hides UI the user cannot use; the API enforces the
+ * same rule on every request. Signed-out users go to /login, others without the permission
+ * to /access-denied.
  */
 export function permissionGuard(requiredPermission: string): CanActivateFn {
-  return () => {
+  return async (_route, state) => {
     const auth = inject(AuthService);
+    const router = inject(Router);
     const logger = inject(LoggerService);
 
-    if (!auth.isAuthenticated()) {
-      logger.warn('Permission guard: user not authenticated');
-      return false;
+    if (!(await auth.ensureSession())) {
+      return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
     }
 
-    const hasPermission = auth.hasPermission(requiredPermission);
-    if (!hasPermission) {
-      logger.warn(`Permission guard: missing permission '${requiredPermission}'`);
+    if (auth.hasPermission(requiredPermission)) {
+      return true;
     }
-
-    return hasPermission;
+    logger.warn(`Permission guard: missing permission '${requiredPermission}'`);
+    return router.createUrlTree(['/access-denied'], { queryParams: { reason: 'permission' } });
   };
 }

@@ -16,35 +16,22 @@
  ************************************************************************
  */
 
-import { CanActivateFn } from '@angular/router';
+import { CanActivateFn, Router } from '@angular/router';
 import { inject } from '@angular/core';
-{{ if model.manifest.ui_targets | array.contains "mobile" }}
-import { NavController } from '@ionic/angular/standalone';
-{{ else }}
-import { Router } from '@angular/router';
-{{ end }}
-import { AuthService } from '../services/auth.service';
+import { AuthService } from '../auth/auth.service';
 
 /**
- * HORIZONTAL: Route guard that prevents unauthenticated access.
- * Redirects to /login if the user has no valid token.
+ * HORIZONTAL: Requires a signed-in user. Waits for session restore after a reload, then redirects
+ * to /login (keeping the requested URL) when there is no usable session.
+ *
+ * Public routes (login, auth/callback, access-denied, not-found) must not use this guard.
  */
-export const authGuard: CanActivateFn = () => {
+export const authGuard: CanActivateFn = async (_route, state) => {
   const auth = inject(AuthService);
-{{ if model.manifest.ui_targets | array.contains "mobile" }}
-  const navCtrl = inject(NavController);
-{{ else }}
   const router = inject(Router);
-{{ end }}
 
-  if (auth.isAuthenticated()) {
+  if (await auth.ensureSession()) {
     return true;
   }
-
-{{ if model.manifest.ui_targets | array.contains "mobile" }}
-  navCtrl.navigateRoot('/login');
-{{ else }}
-  router.navigate(['/login']);
-{{ end }}
-  return false;
+  return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 };

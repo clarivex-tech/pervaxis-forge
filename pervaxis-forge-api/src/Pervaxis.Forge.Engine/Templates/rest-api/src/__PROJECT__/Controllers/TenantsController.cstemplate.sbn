@@ -1,0 +1,121 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Services.Tenancy;
+
+namespace {{ model.names.namespace }}.Controllers;
+
+/// <summary>Body of <c>POST api/v1/tenants</c> and <c>PATCH api/v1/tenants/{id}</c>.</summary>
+public sealed record TenantNameRequest(string Name);
+
+/// <summary>
+/// Tenant management: list, create, rename, suspend, reactivate and offboard tenants.
+/// Platform code; see DeveloperReference/Tenancy.md.
+/// </summary>
+/// <remarks>
+/// <list type="bullet">
+/// <item>Requires the <c>PlatformAdmin</c> policy (group <c>Forge:Authorization:PlatformAdminGroup</c>). API keys cannot call it.</item>
+/// <item>Tenant-exempt: it works across tenants, so it never runs as one tenant and can reactivate a suspended tenant.</item>
+/// </list>
+/// </remarks>
+[ApiController]
+[Route("api/v1/tenants")]
+[TenantExempt]
+[Authorize(Policy = AuthorizationPolicyExtensions.PlatformAdminPolicy)]
+public sealed class TenantsController : ControllerBase
+{
+    private readonly ITenantManagementService _tenants;
+
+    public TenantsController(ITenantManagementService tenants)
+    {
+        _tenants = tenants;
+    }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<TenantSummary>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListAsync(CancellationToken cancellationToken)
+        => Ok(await _tenants.ListAsync(cancellationToken));
+
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(TenantSummary), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var tenant = await _tenants.GetAsync(id, cancellationToken);
+        return tenant is null ? NotFoundProblem() : Ok(tenant);
+    }
+
+    [HttpPost]
+    [ProducesResponseType(typeof(TenantSummary), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateAsync([FromBody] TenantNameRequest request, CancellationToken cancellationToken)
+    {
+        var result = await _tenants.CreateAsync(request?.Name ?? string.Empty, cancellationToken);
+        if (!result.Succeeded)
+            return ToProblem(result);
+
+        return Created($"api/v1/tenants/{result.Tenant!.Id}", result.Tenant);
+    }
+
+    [HttpPatch("{id:guid}")]
+    [ProducesResponseType(typeof(TenantSummary), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RenameAsync(Guid id, [FromBody] TenantNameRequest request, CancellationToken cancellationToken)
+        => ToResponse(await _tenants.RenameAsync(id, request?.Name ?? string.Empty, cancellationToken));
+
+    [HttpPost("{id:guid}/suspend")]
+    [ProducesResponseType(typeof(TenantSummary), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> SuspendAsync(Guid id, CancellationToken cancellationToken)
+        => ToResponse(await _tenants.SuspendAsync(id, cancellationToken));
+
+    [HttpPost("{id:guid}/reactivate")]
+    [ProducesResponseType(typeof(TenantSummary), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> ReactivateAsync(Guid id, CancellationToken cancellationToken)
+        => ToResponse(await _tenants.ReactivateAsync(id, cancellationToken));
+
+    [HttpPost("{id:guid}/offboard")]
+    [ProducesResponseType(typeof(TenantSummary), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> OffboardAsync(Guid id, CancellationToken cancellationToken)
+        => ToResponse(await _tenants.OffboardAsync(id, cancellationToken));
+
+    private IActionResult ToResponse(TenantChangeResult result)
+        => result.Succeeded ? Ok(result.Tenant) : ToProblem(result);
+
+    private ObjectResult ToProblem(TenantChangeResult result) => result.Error switch
+    {
+        TenantChangeError.NotFound => NotFoundProblem(),
+        TenantChangeError.InvalidName => Problem(result.Message, statusCode: StatusCodes.Status400BadRequest, title: "Invalid tenant name"),
+        _ => Problem(result.Message, statusCode: StatusCodes.Status409Conflict, title: "Tenant status conflict"),
+    };
+
+    private ObjectResult NotFoundProblem()
+        => Problem("The tenant was not found.", statusCode: StatusCodes.Status404NotFound, title: "Not Found");
+}
+{{ end }}

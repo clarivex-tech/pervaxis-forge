@@ -1,0 +1,170 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { HttpClient, HttpErrorResponse, HttpHeaders, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { firstValueFrom } from 'rxjs';
+import { AuthService } from '../auth/auth.service';
+import { TEST_API_URL, provideTestAppConfig } from '../testing/auth-testing';
+import { authInterceptor } from './auth.interceptor';
+
+const API = `${TEST_API_URL}/api`;
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve));
+const EXPIRED = new HttpHeaders({ 'WWW-Authenticate': 'Bearer error="invalid_token", error_description="The token expired"' });
+
+describe('authInterceptor', () => {
+  let http: HttpClient;
+  let backend: HttpTestingController;
+  let currentToken: string | null;
+  let refreshResult: boolean;
+  let refreshCalls: string[];
+
+  beforeEach(() => {
+    currentToken = 'token-1';
+    refreshResult = true;
+    refreshCalls = [];
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(withInterceptors([authInterceptor])),
+        provideHttpClientTesting(),
+        provideTestAppConfig({ apiUrl: API }),
+        {
+          provide: AuthService,
+          useValue: {
+            getAccessToken: () => Promise.resolve(currentToken),
+            refreshAfterRejection: (rejected: string) => {
+              refreshCalls.push(rejected);
+              if (refreshResult) {
+                currentToken = 'token-2';
+              }
+              return Promise.resolve(refreshResult);
+            },
+          },
+        },
+      ],
+    });
+    http = TestBed.inject(HttpClient);
+    backend = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => backend.verify());
+
+  /** Sends a request and returns the first request the backend saw (after the async token lookup). */
+  async function send(method: string, url: string) {
+    const result = firstValueFrom(http.request(method, url, { body: method === 'GET' ? null : {} }))
+      .then(() => 'ok', (error: HttpErrorResponse) => error.status);
+    await settle();
+    return { result, request: backend.expectOne(url) };
+  }
+
+  describe('token destination', () => {
+    it('sends the token to the configured API', async () => {
+      const { result, request } = await send('GET', `${API}/v1/orders`);
+      expect(request.request.headers.get('Authorization')).toBe('Bearer token-1');
+      request.flush({});
+      expect(await result).toBe('ok');
+    });
+
+    for (const url of [
+      'https://api.example.test.evil.test/api/v1/orders',
+      'https://evil.test/api/v1/orders',
+      'http://api.example.test/api/v1/orders',
+      'https://api.example.test/apiv2/orders',
+      'https://api.example.test/other',
+    ]) {
+      it(`does not send the token to ${url}`, async () => {
+        const { result, request } = await send('GET', url);
+        expect(request.request.headers.has('Authorization')).toBeFalse();
+        request.flush({});
+        await result;
+      });
+    }
+
+    it('does not try to refresh after a 401 from another site', async () => {
+      const { result, request } = await send('GET', 'https://evil.test/data');
+      request.flush(null, { status: 401, statusText: 'Unauthorized' });
+      expect(await result).toBe(401);
+      expect(refreshCalls).toEqual([]);
+    });
+  });
+
+  describe('401 handling', () => {
+    it('refreshes and replays a read once', async () => {
+      const { result, request } = await send('GET', `${API}/v1/orders`);
+      request.flush(null, { status: 401, statusText: 'Unauthorized', headers: EXPIRED });
+      await settle();
+
+      const replay = backend.expectOne(`${API}/v1/orders`);
+      expect(replay.request.headers.get('Authorization')).toBe('Bearer token-2');
+      replay.flush({});
+
+      expect(await result).toBe('ok');
+      expect(refreshCalls).toEqual(['token-1']);
+    });
+
+    it('replays at most once: a second 401 goes back to the caller', async () => {
+      const { result, request } = await send('GET', `${API}/v1/orders`);
+      request.flush(null, { status: 401, statusText: 'Unauthorized' });
+      await settle();
+      backend.expectOne(`${API}/v1/orders`).flush(null, { status: 401, statusText: 'Unauthorized' });
+
+      expect(await result).toBe(401);
+      expect(refreshCalls.length).toBe(1);
+      // afterEach verify(): no third request.
+    });
+
+    it('does not replay a write when the 401 does not prove the token was rejected before processing', async () => {
+      const { result, request } = await send('POST', `${API}/v1/orders`);
+      request.flush(null, { status: 401, statusText: 'Unauthorized' });
+
+      expect(await result).toBe(401);
+      expect(refreshCalls).toEqual(['token-1']);
+    });
+
+    it('replays a write once when the bearer challenge says the token was invalid', async () => {
+      const { result, request } = await send('POST', `${API}/v1/orders`);
+      request.flush(null, { status: 401, statusText: 'Unauthorized', headers: EXPIRED });
+      await settle();
+
+      const replay = backend.expectOne(`${API}/v1/orders`);
+      expect(replay.request.method).toBe('POST');
+      expect(replay.request.headers.get('Authorization')).toBe('Bearer token-2');
+      replay.flush({});
+      expect(await result).toBe('ok');
+    });
+
+    it('does not replay when the refresh fails', async () => {
+      refreshResult = false;
+      const { result, request } = await send('GET', `${API}/v1/orders`);
+      request.flush(null, { status: 401, statusText: 'Unauthorized', headers: EXPIRED });
+
+      expect(await result).toBe(401);
+    });
+
+    it('sends no token and does not refresh when there is no session', async () => {
+      currentToken = null;
+      const { result, request } = await send('GET', `${API}/v1/orders`);
+      expect(request.request.headers.has('Authorization')).toBeFalse();
+      request.flush(null, { status: 401, statusText: 'Unauthorized' });
+
+      expect(await result).toBe(401);
+      expect(refreshCalls).toEqual([]);
+    });
+  });
+});

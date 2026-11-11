@@ -594,13 +594,18 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				@if (isBackendTypeSelected()) {
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
-						<mat-card-title>Multi-Tenancy</mat-card-title>
-						<mat-card-subtitle>Tenant isolation for shared deployments</mat-card-subtitle>
+						<mat-card-title>Tenancy</mat-card-title>
+						<mat-card-subtitle>How many customers this service serves</mat-card-subtitle>
 					</mat-card-header>
 					<mat-card-content>
+						<p class="step-hint">
+							Every service with a database includes a tenants table and a tenant management API, and keeps
+							each customer's data apart. A single-tenant service can switch to multi-tenant later without
+							moving data (see DeveloperReference/GoingMultiTenant.md in the print).
+						</p>
 						<mat-radio-group [formControl]="infraOptionsForm.controls.multiTenancy" class="multi-tenancy-options">
-							<mat-radio-button [value]="true">Enabled</mat-radio-button>
-							<mat-radio-button [value]="false">Disabled</mat-radio-button>
+							<mat-radio-button [value]="false">Single tenant (one customer)</mat-radio-button>
+							<mat-radio-button [value]="true">Multi-tenant (several customers)</mat-radio-button>
 						</mat-radio-group>
 						@if (infraOptionsForm.hasError('multiTenancyRequiresDatabase')) {
 							<div class="provider-override-hint">
@@ -1669,25 +1674,17 @@ export class GenerationWizardV2Component {
 
 	/** Nested FormGroup for infrastructure toggle options */
 	readonly infraOptionsForm = new FormGroup<InfraOptionsFormControls>({
-		apiKeyEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.apiKeyEnabled, { nonNullable: true }),
-		jwtEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.jwtEnabled, { nonNullable: true }),
 		mtlsEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.mtlsEnabled, disabled: true }, { nonNullable: true }),
 		retryEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.retryEnabled, { nonNullable: true }),
-		circuitBreakerEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.circuitBreakerEnabled, { nonNullable: true }),
-		timeoutEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.timeoutEnabled, { nonNullable: true }),
-		internalHttpClient: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.internalHttpClient, { nonNullable: true }),
-		externalHttpClient: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.externalHttpClient, { nonNullable: true }),
 		serilogEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.serilogEnabled, { nonNullable: true }),
-		cloudWatchEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.cloudWatchEnabled, { nonNullable: true }),
 		openTelemetryEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.openTelemetryEnabled, { nonNullable: true }),
 		correlationIdEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.correlationIdEnabled, { nonNullable: true }),
 		prometheusEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.prometheusEnabled, disabled: true }, { nonNullable: true }),
 		multiTenancy: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.multiTenancy, { nonNullable: true }),
 		fluentValidationEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.fluentValidationEnabled, { nonNullable: true }),
-		backgroundJobProvider: new FormControl<string | null>(INFRA_OPTIONS_DEFAULTS.backgroundJobProvider),
+		backgroundJobProvider: new FormControl<string | null>({ value: INFRA_OPTIONS_DEFAULTS.backgroundJobProvider, disabled: true }),
 		pdfEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.pdfEnabled, disabled: true }, { nonNullable: true }),
 		templateEngineEnabled: new FormControl<boolean>({ value: INFRA_OPTIONS_DEFAULTS.templateEngineEnabled, disabled: true }, { nonNullable: true }),
-		hashingEnabled: new FormControl<boolean>(INFRA_OPTIONS_DEFAULTS.hashingEnabled, { nonNullable: true }),
 	}, {
 		validators: [
 			infraOptionsValidator(

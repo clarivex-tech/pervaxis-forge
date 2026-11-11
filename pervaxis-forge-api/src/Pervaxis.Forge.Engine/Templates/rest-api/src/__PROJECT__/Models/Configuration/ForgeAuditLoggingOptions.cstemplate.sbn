@@ -1,0 +1,12 @@
+namespace {{ model.names.namespace }}.Models.Configuration;
+
+public sealed class ForgeAuditLoggingOptions
+{
+    public const string SectionName = "Forge:AuditLogging";
+
+    /// <summary>
+    /// Writes one "Audit event" log entry per request: method, path, status, outcome, actor (user ID)
+    /// and correlation ID, including requests that fail with an exception.
+    /// </summary>
+    public bool Enabled { get; init; } = true;
+}

@@ -18,17 +18,20 @@
 
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
+import { tenantGuard } from './core/guards/tenant.guard';
 
 /**
  * Application routes.
  *
  * HORIZONTAL (do not modify):
- *   - Login route, auth guard enforcement, wildcard catch-all
+ *   - Public routes: login, auth/callback (Cognito redirect target), access-denied, not-found
+ *   - Auth and tenant guard enforcement, wildcard catch-all
  *
  * VERTICAL (extend here):
  *   - Add your feature routes in the marked section below
  *   - Use lazy loading: loadComponent / loadChildren
- *   - Apply authGuard to protected routes
+ *   - Protected routes: canActivate: [authGuard]; routes showing tenant data: [authGuard, tenantGuard]
+ *   - Role-restricted routes: add permissionGuard('<group>')
  */
 export const appRoutes: Routes = [
   {
@@ -39,13 +42,27 @@ export const appRoutes: Routes = [
       ),
   },
   {
+    path: 'auth/callback',
+    loadComponent: () =>
+      import('./features/auth/auth-callback.component').then(
+        (m) => m.AuthCallbackComponent
+      ),
+  },
+  {
+    path: 'access-denied',
+    loadComponent: () =>
+      import('./features/auth/access-denied.component').then(
+        (m) => m.AccessDeniedComponent
+      ),
+  },
+  {
     path: '',
     redirectTo: 'dashboard',
     pathMatch: 'full',
   },
   {
     path: 'dashboard',
-    canActivate: [authGuard],
+    canActivate: [authGuard, tenantGuard],
     loadComponent: () =>
       import('./features/dashboard/dashboard.component').then(
         (m) => m.DashboardComponent

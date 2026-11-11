@@ -18,7 +18,7 @@
 
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
 using {{ model.names.namespace }}.Infrastructure.Tenancy;
 {{- else }}
 using Pervaxis.Core.Data.EntityFrameworkCore;
@@ -54,7 +54,7 @@ internal sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<{
             .UseNpgsql(connectionString)
             .Options;
 
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
         return new {{ model.names.dot_net_class_name }}DbContext(options, new DesignTimeTenantContext());
 {{- else }}
         // Never resolved: model construction works, tenant data stays unreachable.
@@ -62,7 +62,7 @@ internal sealed class DesignTimeDbContextFactory : IDesignTimeDbContextFactory<{
 {{- end }}
     }
 
-{{- if !model.manifest.multi_tenancy }}
+{{- if !model.manifest.tenant_ready }}
 
     private sealed class DesignTimeTenantContext : ITenantContext
     {

@@ -31,11 +31,10 @@ export interface InfraAuthState {
  * as warnings (the form remains submittable — the API performs its own validation).
  *
  * Rules:
- * 1. CloudWatch requires Serilog (CloudWatch is a Serilog sink)
  * 2. Multi-Tenancy requires a database configuration
- * 3. External HTTP Client requires at least one resilience toggle (Retry+CB+Timeout)
  * 4. Multi-Tenancy requires Cognito sign-in (the tenant comes from a validated access token)
  * 5. Multi-Tenancy does not support API keys
+ * (Rules 1 and 3 were removed: CloudWatch now follows Serilog, and both typed HTTP clients are always included.)
  */
 export function infraOptionsValidator(
 	databaseConfiguredFn: () => boolean,
@@ -45,16 +44,10 @@ export function infraOptionsValidator(
 		const value = group.value as InfraOptionsFormValue;
 		const errors: Record<string, string> = {};
 
-		// Rule 1: CloudWatch requires Serilog
-		if (!value.serilogEnabled && value.cloudWatchEnabled) {
-			errors['cloudWatchRequiresSerilog'] =
-				'CloudWatch is a Serilog sink — enable Serilog + CloudWatch together or disable both.';
-		}
-
 		// Rule 2: Multi-Tenancy requires Database
 		if (value.multiTenancy && !databaseConfiguredFn()) {
 			errors['multiTenancyRequiresDatabase'] =
-				'Multi-Tenancy requires a database. Enable one in the Database panel.';
+				'Multi-tenant needs a database. Enable one in the Database panel.';
 		}
 
 		// Rules 4 and 5: Multi-Tenancy takes the tenant only from a Cognito access token
@@ -67,12 +60,6 @@ export function infraOptionsValidator(
 				errors['multiTenancyRejectsApiKey'] =
 					'Multi-Tenancy does not support API keys. Clear "Also allow API keys" in the Cognito details.';
 			}
-		}
-
-		// Rule 3: External HTTP Client requires Resilience
-		if (value.externalHttpClient && !value.retryEnabled) {
-			errors['externalHttpRequiresResilience'] =
-				'External HTTP Client requires Retry + Circuit Breaker + Timeout enabled.';
 		}
 
 		return Object.keys(errors).length > 0 ? errors : null;

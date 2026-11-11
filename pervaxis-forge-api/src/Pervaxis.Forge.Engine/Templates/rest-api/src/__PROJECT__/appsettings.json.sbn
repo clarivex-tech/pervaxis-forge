@@ -25,21 +25,25 @@
   "Resilience": {
     "Default": {
       "MaxRetryAttempts": 3,
-      "CircuitBreakerFailureThreshold": 5,
+      "CircuitBreakerFailureRatio": 0.5,
+      "CircuitBreakerMinimumThroughput": 10,
       "CircuitBreakerSamplingWindowSeconds": 30,
       "CircuitBreakerBreakDurationSeconds": 60,
       "TimeoutSeconds": 30
     },
     "External": {
       "MaxRetryAttempts": 2,
-      "CircuitBreakerFailureThreshold": 3,
+      "CircuitBreakerFailureRatio": 0.5,
+      "CircuitBreakerMinimumThroughput": 5,
       "CircuitBreakerSamplingWindowSeconds": 60,
       "CircuitBreakerBreakDurationSeconds": 120,
       "TimeoutSeconds": 15
     }
   },
   "ExternalServices": {
-    "BaseUrl": ""
+    "BaseUrl": "",
+    "ApiKey": "",
+    "ApiKeyHeader": "X-Api-Key"
   },
 {{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
   "OpenTelemetry": {
@@ -78,12 +82,17 @@
       "AdminGroup": "Admin",
 {{- end }}
       "GroupClaimType": "",
+{{- if model.manifest.tenant_ready }}
+      "PlatformAdminGroup": "PlatformAdmin",
+{{- end }}
       "Policies": {}
     },
-{{- if model.manifest.multi_tenancy }}
+{{- if model.manifest.tenant_ready }}
     "Tenant": {
+      "Mode": "{{ if model.manifest.multi_tenancy }}MultiTenant{{ else }}SingleTenant{{ end }}",
+      "DefaultTenantId": "{{ model.default_tenant_id }}",
       "ClaimType": "tenant_id",
-      "EnableDirectoryChecks": false,
+      "EnableDirectoryChecks": true,
       "DirectoryCacheTtl": "00:01:00"
     },
 {{- else }}
@@ -125,11 +134,34 @@
       "WindowMinutes": 1
     },
     "Cors": {
-      "AllowedOrigins": ["http://localhost:4200"]
+      "AllowedOrigins": []
     }
   }{{ if model.manifest.database != null }},
   "ConnectionStrings": {
     "Default": ""
-  }{{ end }}{{ for module in model.selected_modules }},
-  "{{ module.name }}": {}{{ end }}
+  }{{ end }}{{ genesis_count = 0 }}{{ for module in model.selected_modules }}{{ if module.uses_genesis_section }}{{ genesis_count = genesis_count + 1 }}{{ else }},
+  "{{ module.display_name }}": {}{{ end }}{{ end }}{{ if genesis_count > 0 }},
+  "Genesis": {
+{{- genesis_index = 0 }}{{ for module in model.selected_modules }}{{ if module.uses_genesis_section }}{{ if genesis_index > 0 }},{{ end }}{{ genesis_index = genesis_index + 1 }}
+{{- if module.display_name == "OData" }}
+    "OData": {
+      "MaxTop": 100,
+      "DefaultPageSize": 20,
+      "MaxExpandDepth": 2,
+      "MaxFilterDepth": 3,
+      "MaxOrderByProperties": 3,
+      "EnableCount": true,
+      "MaxQueryComplexityScore": 50
+    }
+{{- else if module.display_name == "Sanitization" }}
+    "Sanitization": {
+      "DefaultProfile": "PlainText",
+      "MaxInputLength": 1000000,
+      "EnableMiddleware": false,
+      "MiddlewareExcludedRoutes": []
+    }
+{{- else }}
+    "{{ module.display_name }}": {}
+{{- end }}{{ end }}{{ end }}
+  }{{ end }}
 }

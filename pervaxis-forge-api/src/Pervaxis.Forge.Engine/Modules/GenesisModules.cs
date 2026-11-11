@@ -1,6 +1,13 @@
 namespace Pervaxis.Forge.Engine.Modules;
 
-public sealed record GenesisModule(string Id, string DisplayName, string Description, string IamPermissions, bool IsCloudAgnostic = false);
+/// <summary>A Genesis module that a REST print can reference.</summary>
+/// <param name="UsesGenesisSection">
+/// How the module's <c>AddGenesis*(IConfiguration)</c> method reads its settings. <see langword="true"/>: it reads
+/// <c>Genesis:&lt;DisplayName&gt;</c> from the configuration it is given, so the print passes the root configuration.
+/// <see langword="false"/>: it binds the section it is given, so the print passes <c>GetSection("&lt;DisplayName&gt;")</c>.
+/// Must match the Genesis package; a mismatch silently ignores every setting.
+/// </param>
+public sealed record GenesisModule(string Id, string DisplayName, string Description, string IamPermissions, bool IsCloudAgnostic = false, bool UsesGenesisSection = false);
 
 public static class GenesisModules
 {
@@ -14,11 +21,11 @@ public static class GenesisModules
         new("workflow", "Workflow", "Step-based workflow via AWS Step Functions", "stepfunctions:*"),
         new("aiassistance", "AIAssistance", "Generative AI via Bedrock", "bedrock:*"),
         new("reporting", "Reporting", "Data exports and scheduled reports", "athena:*,quicksight:*"),
-        new("idempotency", "Idempotency", "Request deduplication via DynamoDB", "dynamodb:*"),
-        new("odata", "OData", "OData query capabilities for RESTful APIs", "", IsCloudAgnostic: true),
-        new("transactionallogging", "TransactionalLogging", "Structured transactional audit logging via CloudWatch", "cloudwatch:*"),
-        new("featureflags", "FeatureFlags", "Feature flag management via AWS AppConfig", "appconfig:*"),
-        new("sanitization", "Sanitization", "Server-side input sanitization and XSS prevention", "", IsCloudAgnostic: true),
+        new("idempotency", "Idempotency", "Request deduplication via DynamoDB", "dynamodb:*", UsesGenesisSection: true),
+        new("odata", "OData", "OData query capabilities for RESTful APIs", "", IsCloudAgnostic: true, UsesGenesisSection: true),
+        new("transactionallogging", "TransactionalLogging", "Structured transactional audit logging via CloudWatch", "cloudwatch:*", UsesGenesisSection: true),
+        new("featureflags", "FeatureFlags", "Feature flag management via AWS AppConfig", "appconfig:*", UsesGenesisSection: true),
+        new("sanitization", "Sanitization", "Server-side input sanitization and XSS prevention", "", IsCloudAgnostic: true, UsesGenesisSection: true),
     ];
 
     public static IReadOnlyList<GenesisModule> GetAll() => Modules;
@@ -39,6 +46,17 @@ public static class GenesisModules
             return $"Pervaxis.Genesis.{segment}";
 
         return $"Pervaxis.Genesis.{segment}.{NormalizeCloudProvider(cloudProvider)}";
+    }
+
+    /// <summary>True when the module reads its settings from <c>Genesis:&lt;DisplayName&gt;</c> (see <see cref="GenesisModule"/>).</summary>
+    public static bool UsesGenesisSection(string moduleName) => GetById(moduleName)?.UsesGenesisSection == true;
+
+    /// <summary>The configuration key the module's settings live under, for example <c>Genesis:OData</c> or <c>Caching</c>.</summary>
+    public static string GetConfigurationKey(string moduleName)
+    {
+        var module = GetById(moduleName);
+        var name = module?.DisplayName ?? NormalizeModuleName(moduleName);
+        return module?.UsesGenesisSection == true ? $"Genesis:{name}" : name;
     }
 
     public static string GetDiExtensionName(string moduleName, string cloudProvider)

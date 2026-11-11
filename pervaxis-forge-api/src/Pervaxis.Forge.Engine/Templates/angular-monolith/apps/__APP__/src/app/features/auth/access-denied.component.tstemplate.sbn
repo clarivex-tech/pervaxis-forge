@@ -1,0 +1,59 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component, computed, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { ActivatedRoute } from '@angular/router';
+import { map } from 'rxjs';
+import { AuthService } from '../../core/auth/auth.service';
+
+const REASONS: Readonly<Record<string, string>> = {
+  permission: 'You do not have permission to open this page.',
+  'no-tenant': 'Your account is not assigned to a tenant. Contact your administrator.',
+};
+
+/** HORIZONTAL: Public page shown when a guard denies access (missing permission or tenant). */
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-access-denied',
+  standalone: true,
+  template: `
+    <main class="access-denied">
+      <h1>Access denied</h1>
+      <p [textContent]="message()"></p>
+      @if (auth.isAuthenticated()) {
+        <button type="button" class="btn" (click)="signOut()">Sign out</button>
+      }
+    </main>
+  `,
+  styles: [`
+    .access-denied { padding: var(--spacing-2xl); max-width: 480px; margin: 0 auto; text-align: center; }
+    .btn { margin-top: var(--spacing-lg); }
+  `],
+})
+export class AccessDeniedComponent {
+  protected readonly auth = inject(AuthService);
+  private readonly reason = toSignal(
+    inject(ActivatedRoute).queryParamMap.pipe(map((params) => params.get('reason') ?? '')),
+    { initialValue: '' },
+  );
+  protected readonly message = computed(() => REASONS[this.reason()] ?? 'You cannot open this page.');
+
+  signOut(): void {
+    void this.auth.logout();
+  }
+}

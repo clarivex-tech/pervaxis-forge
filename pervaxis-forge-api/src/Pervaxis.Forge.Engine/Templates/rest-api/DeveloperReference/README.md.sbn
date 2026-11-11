@@ -12,8 +12,10 @@ This folder holds **copy-and-adapt examples** for the platform features this ser
 {{- if model.manifest.database != null }}
 - [`Database.md`](Database.md): PostgreSQL settings, password rotation, health checks, tables and EF migrations
 {{- end }}
-{{- if model.manifest.multi_tenancy }}
-- [`Tenancy.md`](Tenancy.md): tenant entities, repositories, background work and what to avoid
+{{- if model.manifest.tenant_ready }}
+- [`TenancyQuickStart.md`](TenancyQuickStart.md): **start here**. Your first tenant-owned feature in six steps, and the checklist for every pull request
+- [`Tenancy.md`](Tenancy.md): the tenants table, tenant management API, tenant entities, background work and what to avoid
+- [`GoingMultiTenant.md`](GoingMultiTenant.md): step by step, from one customer to several
 {{- end }}
 {{- for module in model.selected_modules -}}
 {{- if (module.name | string.downcase) == "odata" }}

@@ -23,8 +23,12 @@ using {{ model.names.namespace }}.Common;
 using {{ model.names.namespace }}.Infrastructure.Exceptions;
 using {{ model.names.namespace }}.Models.Configuration;
 using {{ model.names.namespace }}.Services;
+{{- has_resilience = model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled }}
+{{- has_validation = model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
+{{- if has_resilience }}
 using Polly.CircuitBreaker;
-{{- if model.manifest.multi_tenancy }}
+{{- end }}
+{{- if model.manifest.tenant_ready }}
 using Microsoft.EntityFrameworkCore;
 using Pervaxis.Core.Exceptions.Exceptions;
 {{- end }}
@@ -76,11 +80,13 @@ public sealed class ExceptionHandlerMiddleware
 
             LogException(ex, errorId, correlationId, problemDetails.Status ?? 500);
 
+{{- if has_resilience }}
             if (ex is BrokenCircuitException)
             {
                 context.Response.Headers["Retry-After"] =
                     _resilienceOptions.Value.CircuitBreakerBreakDurationSeconds.ToString();
             }
+{{- end }}
 
             context.Response.Clear();
             context.Response.StatusCode = problemDetails.Status ?? 500;
@@ -105,6 +111,7 @@ public sealed class ExceptionHandlerMiddleware
     {
         return ex switch
         {
+{{- if has_validation }}
             FluentValidation.ValidationException fluentEx => new ProblemDetails
             {
                 Type = "https://tools.ietf.org/html/rfc7807",
@@ -112,6 +119,7 @@ public sealed class ExceptionHandlerMiddleware
                 Status = StatusCodes.Status400BadRequest,
                 Detail = string.Join(" ", fluentEx.Errors.Select(e => e.ErrorMessage))
             },
+{{- end }}
 
             ConfirmationRequiredException confirmEx => new ProblemDetails
             {
@@ -145,7 +153,7 @@ public sealed class ExceptionHandlerMiddleware
                 Detail = unauthorizedEx.Message
             },
 
-{{- if model.manifest.multi_tenancy }}
+{{- if model.manifest.tenant_ready }}
             // Tenant isolation. The 404 is identical for "missing" and "belongs to another tenant".
             TenantResourceNotFoundException => new ProblemDetails
             {
@@ -169,6 +177,16 @@ public sealed class ExceptionHandlerMiddleware
                 Detail = "The resource was changed by another request. Reload it and try again."
             },
 {{- end }}
+            // Thrown by the server for malformed or oversized requests (for example a body above the size limit).
+            Microsoft.AspNetCore.Http.BadHttpRequestException badRequestEx => new ProblemDetails
+            {
+                Type = "https://tools.ietf.org/html/rfc7807",
+                Title = badRequestEx.StatusCode == StatusCodes.Status413PayloadTooLarge ? "Payload Too Large" : "Bad Request",
+                Status = badRequestEx.StatusCode,
+                Detail = badRequestEx.StatusCode == StatusCodes.Status413PayloadTooLarge
+                    ? "The request body is too large."
+                    : "The request could not be read."
+            },
             OperationCanceledException => new ProblemDetails
             {
                 Type = "https://tools.ietf.org/html/rfc7807",
@@ -177,6 +195,7 @@ public sealed class ExceptionHandlerMiddleware
                 Detail = "Client disconnected"
             },
 
+{{- if has_resilience }}
             BrokenCircuitException => new ProblemDetails
             {
                 Type = "https://tools.ietf.org/html/rfc7807",
@@ -184,6 +203,7 @@ public sealed class ExceptionHandlerMiddleware
                 Status = StatusCodes.Status503ServiceUnavailable,
                 Detail = "Service temporarily unavailable"
             },
+{{- end }}
 
             _ => new ProblemDetails
             {
@@ -219,6 +239,13 @@ public sealed class ExceptionHandlerMiddleware
                 _logger.LogInformation(
                     ex,
                     "Not found {ErrorId} {CorrelationId} {StatusCode}",
+                    errorId, correlationId, statusCode);
+                break;
+
+            case 413:
+                _logger.LogWarning(
+                    ex,
+                    "Request body too large {ErrorId} {CorrelationId} {StatusCode}",
                     errorId, correlationId, statusCode);
                 break;
 

@@ -1,0 +1,118 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Injectable, InjectionToken, computed, inject, signal } from '@angular/core';
+import { AppConfigService } from '../config/app-config.service';
+import { TenancyMode } from '../config/app-config';
+import { JwtClaims } from './jwt-claims';
+import { SessionStateRegistry } from './session-state';
+
+/**
+ * not-applicable: single-tenant service; the API uses its own tenant and ignores token claims.
+ * absent: multi-tenant service, but the token has no tenant claim.
+ * invalid: the claim is not one canonical GUID string (the API rejects it too).
+ */
+export type TenantClaimStatus = 'not-applicable' | 'absent' | 'valid' | 'invalid';
+
+export interface TenantClaim {
+  readonly tenantId: string | null;
+  readonly status: TenantClaimStatus;
+}
+
+export interface TenantMembership {
+  readonly tenantId: string;
+  readonly current: boolean;
+}
+
+/**
+ * Where tenant memberships come from. V1 uses the access token: the API allows exactly one tenant
+ * per user, taken from the validated access token's tenant claim. A future membership lookup (for
+ * example an API endpoint) can be provided under TENANT_MEMBERSHIP_SOURCE without changing callers.
+ */
+export interface TenantMembershipSource {
+  memberships(currentTenantId: string | null): readonly TenantMembership[];
+}
+
+/** V1: the only membership is the tenant in the current access token. */
+export class TokenClaimMembershipSource implements TenantMembershipSource {
+  memberships(currentTenantId: string | null): readonly TenantMembership[] {
+    return currentTenantId ? [{ tenantId: currentTenantId, current: true }] : [];
+  }
+}
+
+export const TENANT_MEMBERSHIP_SOURCE = new InjectionToken<TenantMembershipSource>('TENANT_MEMBERSHIP_SOURCE', {
+  providedIn: 'root',
+  factory: () => new TokenClaimMembershipSource(),
+});
+
+const GUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const EMPTY_GUID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Mirrors the API's rule: the claim must be exactly one non-empty GUID string (not an array,
+ * number or object, not the empty GUID). Accepted values are returned in canonical lowercase.
+ */
+export function parseTenantClaim(value: unknown): TenantClaim {
+  if (value === undefined || value === null) {
+    return { tenantId: null, status: 'absent' };
+  }
+  if (typeof value !== 'string' || !GUID_PATTERN.test(value) || value.toLowerCase() === EMPTY_GUID) {
+    return { tenantId: null, status: 'invalid' };
+  }
+  return { tenantId: value.toLowerCase(), status: 'valid' };
+}
+
+/**
+ * HORIZONTAL: The signed-in user's tenant, read from the access token.
+ *
+ * Display and route decisions only: the API validates the token and enforces tenant access on every
+ * request. Tenant switching is not supported in V1 (one tenant per user); canSwitchTenant is false.
+ */
+@Injectable({ providedIn: 'root' })
+export class TenantContextService {
+  private readonly appConfig = inject(AppConfigService);
+  private readonly registry = inject(SessionStateRegistry);
+  private readonly membershipSource = inject(TENANT_MEMBERSHIP_SOURCE);
+  private readonly claim = signal<TenantClaim>({ tenantId: null, status: 'absent' });
+
+  /** Unknown (configuration missing) is treated as the strictest mode. */
+  readonly mode = computed<TenancyMode>(() => this.appConfig.config()?.tenancy.mode ?? 'MultiTenant');
+  readonly requiresTenant = computed(() => this.mode() === 'MultiTenant');
+  readonly currentTenantId = computed(() => this.claim().tenantId);
+  readonly claimStatus = computed(() => this.claim().status);
+  readonly memberships = computed(() => this.membershipSource.memberships(this.currentTenantId()));
+  readonly canSwitchTenant = false;
+
+  /** Called by AuthService whenever a new access token is applied. */
+  update(accessClaims: JwtClaims): void {
+    const previous = this.claim().tenantId;
+    const next: TenantClaim = this.mode() === 'SingleTenant'
+      ? { tenantId: null, status: 'not-applicable' }
+      : parseTenantClaim(accessClaims[this.appConfig.config()?.tenancy.claimType ?? 'tenant_id']);
+
+    this.claim.set(next);
+    if (previous !== null && previous !== next.tenantId) {
+      this.registry.reset('tenant-changed');
+    }
+  }
+
+  /** Called by AuthService when the session ends; the registry reset happens there. */
+  clear(): void {
+    this.claim.set({ tenantId: null, status: this.mode() === 'SingleTenant' ? 'not-applicable' : 'absent' });
+  }
+}

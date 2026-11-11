@@ -16,7 +16,7 @@
  ************************************************************************
  */
 
-import { ApplicationConfig, ErrorHandler } from '@angular/core';
+import { ApplicationConfig, ErrorHandler, inject, provideAppInitializer } from '@angular/core';
 import { provideRouter, withViewTransitions } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
@@ -27,6 +27,8 @@ import { provideIonicAngular } from '@ionic/angular/standalone';
 {{ end }}
 
 import { appRoutes } from './app.routes';
+import { AuthService } from './core/auth/auth.service';
+import { AppConfigService } from './core/config/app-config.service';
 import { GlobalErrorHandler } from './core/handlers/global-error-handler';
 import { authInterceptor } from './core/interceptors/auth.interceptor';
 import { correlationInterceptor } from './core/interceptors/correlation.interceptor';
@@ -46,6 +48,14 @@ import { retryInterceptor } from './core/interceptors/retry.interceptor';
 export const appConfig: ApplicationConfig = {
   providers: [
     // --- Horizontal providers (managed by platform team) ---
+    // Startup: load and validate assets/app-config.json, then restore the session (one shared
+    // refresh). Invalid configuration fails closed: the app starts with sign-in unavailable.
+    provideAppInitializer(async () => {
+      const config = inject(AppConfigService);
+      const auth = inject(AuthService);
+      await config.load();
+      await auth.initialize();
+    }),
     provideRouter(appRoutes, withViewTransitions()),
     provideHttpClient(
       withInterceptors([correlationInterceptor, authInterceptor, retryInterceptor, loadingInterceptor, errorInterceptor])
