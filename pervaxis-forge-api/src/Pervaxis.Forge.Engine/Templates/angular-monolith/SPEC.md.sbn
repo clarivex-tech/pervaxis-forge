@@ -38,7 +38,9 @@ This project uses Angular 21 standalone components — no NgModules. All compone
 ### Security
 
 - Content Security Policy via `<meta>` tag in `index.html`
-- Auth interceptor attaches Bearer tokens to outgoing requests
+- Cognito sign-in: authorization code + PKCE, state and nonce checks, no client secret (see AUTHENTICATION.md)
+- Auth interceptor attaches Bearer tokens only to the configured API (parsed origin and path)
+- Missing or invalid runtime configuration fails closed
 - Route guards prevent unauthorized navigation
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
 

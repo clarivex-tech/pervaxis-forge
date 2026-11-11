@@ -138,7 +138,7 @@ export class SampleListComponent implements OnInit {
         this.items.set(data);
         this.loading.set(false);
       },
-      error: (_err) => {
+      error: () => {
         this.error.set('Failed to load items');
         this.loading.set(false);
       },

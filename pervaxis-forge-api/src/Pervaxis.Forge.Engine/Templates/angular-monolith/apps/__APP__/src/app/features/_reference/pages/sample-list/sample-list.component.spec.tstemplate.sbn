@@ -20,6 +20,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
+import { provideTestAppConfig } from '../../../../core/testing/auth-testing';
 import { SampleListComponent } from './sample-list.component';
 
 describe('SampleListComponent', () => {
@@ -33,6 +34,8 @@ describe('SampleListComponent', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter([]),
+        // ApiService needs the runtime configuration (assets/app-config.json in the app).
+        provideTestAppConfig(),
       ],
     }).compileComponents();
 

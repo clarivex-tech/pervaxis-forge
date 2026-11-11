@@ -19,19 +19,21 @@
 import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
-import { AuthService } from '../services/auth.service';
 import { LoggerService } from '../services/logger.service';
 
+/**
+ * HORIZONTAL: Logs HTTP failures. Session handling lives in authInterceptor and AuthService:
+ * a 401 triggers one shared token refresh, and the session ends only when that refresh fails.
+ * A 401 is not a reason to sign the user out here.
+ */
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
-  const auth = inject(AuthService);
   const logger = inject(LoggerService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
       switch (error.status) {
         case 401:
-          logger.warn('Unauthorized request — logging out', error.url);
-          auth.logout();
+          logger.warn('Unauthorized request', error.url);
           break;
         case 403:
           logger.warn('Forbidden access', error.url);

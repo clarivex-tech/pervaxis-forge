@@ -1,0 +1,57 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { isApiRequest, toApiDestination } from './token-destination';
+
+describe('isApiRequest', () => {
+  const base = 'https://app.example.test/';
+  const withPrefix = toApiDestination('https://api.example.test/api');
+  const wholeOrigin = toApiDestination('https://api.example.test');
+
+  it('matches the API origin and path prefix', () => {
+    expect(isApiRequest('https://api.example.test/api', withPrefix, base)).toBeTrue();
+    expect(isApiRequest('https://api.example.test/api/v1/orders?page=2', withPrefix, base)).toBeTrue();
+    expect(isApiRequest('https://API.EXAMPLE.TEST/api/v1/orders', withPrefix, base)).toBeTrue();
+    expect(isApiRequest('https://api.example.test/anything', wholeOrigin, base)).toBeTrue();
+  });
+
+  it('rejects everything else', () => {
+    const rejected = [
+      'https://api.example.test.evil.test/api/v1',  // look-alike host
+      'https://evil.test/api/v1',                   // other host
+      '//evil.test/api/v1',                         // protocol-relative
+      'http://api.example.test/api/v1',             // other scheme
+      'https://api.example.test:8443/api/v1',       // other port
+      'https://user:pw@api.example.test/api/v1',    // credentials
+      'https://api.example.test/apiv2/orders',      // prefix is not a whole segment
+      'https://api.example.test/other',             // outside the prefix
+      'https://api.example.test/api/../other',      // dot segments resolve outside the prefix
+      '/api/v1/orders',                             // relative: resolves to the app origin
+      'not a url at all',
+    ];
+    for (const url of rejected) {
+      expect(isApiRequest(url, withPrefix, base)).withContext(url).toBeFalse();
+    }
+  });
+
+  it('treats relative URLs as the app origin when the API shares it', () => {
+    const sameOrigin = toApiDestination('https://app.example.test/api');
+    expect(isApiRequest('/api/v1/orders', sameOrigin, base)).toBeTrue();
+    expect(isApiRequest('/assets/app-config.json', sameOrigin, base)).toBeFalse();
+  });
+});

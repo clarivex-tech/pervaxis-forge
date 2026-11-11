@@ -1,0 +1,77 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { InjectionToken } from '@angular/core';
+
+/** initializing: restoring the session at startup. unavailable: sign-in cannot work (fails closed). */
+export type AuthStatus = 'initializing' | 'signed-out' | 'signed-in' | 'unavailable';
+
+export interface UserProfile {
+  readonly subject: string;
+  readonly username: string | null;
+  readonly email: string | null;
+  readonly name: string | null;
+  /** name, else email, else username, else subject. */
+  readonly displayName: string;
+}
+
+export type AuthCallbackErrorCode =
+  | 'unavailable'
+  | 'missing_transaction'
+  | 'expired_transaction'
+  | 'state_mismatch'
+  | 'provider_error'
+  | 'token_exchange_failed'
+  | 'invalid_id_token';
+
+/** A rejected sign-in callback. The code is safe to show; the message is for logs. */
+export class AuthCallbackError extends Error {
+  constructor(readonly code: AuthCallbackErrorCode, message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'AuthCallbackError';
+  }
+}
+
+export interface AuthTimeouts {
+  /** Refresh the access token when it expires within this many milliseconds. */
+  readonly refreshMarginMs: number;
+  /** Longest wait for refresh-token revocation during sign-out before redirecting anyway. */
+  readonly revocationMs: number;
+  /** Timeout for Cognito token requests. */
+  readonly requestMs: number;
+  /** A sign-in that takes longer than this is rejected at the callback. */
+  readonly transactionMaxAgeMs: number;
+}
+
+export const DEFAULT_AUTH_TIMEOUTS: AuthTimeouts = {
+  refreshMarginMs: 60_000,
+  revocationMs: 2_000,
+  requestMs: 10_000,
+  transactionMaxAgeMs: 10 * 60_000,
+};
+
+export const AUTH_TIMEOUTS = new InjectionToken<AuthTimeouts>('AUTH_TIMEOUTS', {
+  providedIn: 'root',
+  factory: () => DEFAULT_AUTH_TIMEOUTS,
+});
+
+/** Full-page navigation to Cognito (authorize and logout endpoints). Replaced in tests. */
+export const AUTH_REDIRECT = new InjectionToken<(url: string) => void>('AUTH_REDIRECT', {
+  providedIn: 'root',
+  factory: () => (url: string) => window.location.assign(url),
+});

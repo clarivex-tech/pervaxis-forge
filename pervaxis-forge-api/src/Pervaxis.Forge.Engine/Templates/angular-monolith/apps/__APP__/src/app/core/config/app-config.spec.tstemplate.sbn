@@ -1,0 +1,88 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { parseAppConfig } from './app-config';
+import { TEST_API_URL, TEST_APP_ORIGIN, testAppConfig } from '../testing/auth-testing';
+
+type Raw = Record<string, unknown>;
+
+function withAuth(changes: Raw): Raw {
+  const config = testAppConfig();
+  return { ...config, auth: { ...(config['auth'] as Raw), ...changes } };
+}
+
+function errorsOf(raw: unknown): readonly string[] {
+  const result = parseAppConfig(raw, TEST_APP_ORIGIN);
+  return result.ok ? [] : result.errors;
+}
+
+describe('parseAppConfig', () => {
+  it('accepts a complete configuration and normalises URLs', () => {
+    const result = parseAppConfig({ ...testAppConfig(), apiUrl: `${TEST_API_URL}/api/` }, TEST_APP_ORIGIN);
+
+    expect(result.ok).toBeTrue();
+    if (result.ok) {
+      expect(result.config.apiUrl).toBe(`${TEST_API_URL}/api`);
+      expect(result.config.auth.roleClaim).toBe('cognito:groups');
+      expect(result.config.tenancy.claimType).toBe('tenant_id');
+      expect(Object.isFrozen(result.config.auth)).toBeTrue();
+    }
+  });
+
+  it('fails closed when the file is empty or not an object', () => {
+    expect(errorsOf(null).length).toBeGreaterThan(0);
+    expect(errorsOf([]).length).toBeGreaterThan(0);
+    expect(errorsOf({}).length).toBeGreaterThan(0);
+  });
+
+  it('requires every Cognito setting', () => {
+    for (const key of ['cognitoDomain', 'issuer', 'clientId', 'scopes', 'redirectUri', 'postLogoutRedirectUri']) {
+      expect(errorsOf(withAuth({ [key]: undefined })).length).withContext(key).toBeGreaterThan(0);
+    }
+  });
+
+  it('rejects a client secret', () => {
+    expect(errorsOf(withAuth({ clientSecret: 'x' })).join(' ')).toContain('client secret');
+  });
+
+  it('requires https, except http on localhost for the API', () => {
+    expect(errorsOf({ ...testAppConfig(), apiUrl: 'http://api.example.test' }).length).toBeGreaterThan(0);
+    expect(errorsOf({ ...testAppConfig(), apiUrl: 'http://localhost:5000' })).toEqual([]);
+    expect(errorsOf(withAuth({ cognitoDomain: 'http://auth.example.test' })).length).toBeGreaterThan(0);
+  });
+
+  it('requires the Cognito domain to be an origin and URLs to be free of credentials', () => {
+    expect(errorsOf(withAuth({ cognitoDomain: 'https://auth.example.test/oauth2' })).length).toBeGreaterThan(0);
+    expect(errorsOf({ ...testAppConfig(), apiUrl: 'https://user:pw@api.example.test' }).length).toBeGreaterThan(0);
+  });
+
+  it('keeps redirects on the app origin and the callback route', () => {
+    expect(errorsOf(withAuth({ redirectUri: 'https://evil.test/auth/callback' })).length).toBeGreaterThan(0);
+    expect(errorsOf(withAuth({ redirectUri: `${TEST_APP_ORIGIN}/somewhere-else` })).length).toBeGreaterThan(0);
+    expect(errorsOf(withAuth({ postLogoutRedirectUri: 'https://evil.test/' })).length).toBeGreaterThan(0);
+  });
+
+  it('requires the openid scope', () => {
+    expect(errorsOf(withAuth({ scopes: ['email'] })).length).toBeGreaterThan(0);
+  });
+
+  it('requires an explicit tenancy mode that matches the API', () => {
+    expect(errorsOf({ ...testAppConfig(), tenancy: {} }).length).toBeGreaterThan(0);
+    expect(errorsOf({ ...testAppConfig(), tenancy: { mode: 'Shared' } }).length).toBeGreaterThan(0);
+  });
+});

@@ -51,7 +51,7 @@
 <!-- Confirmation dialog (horizontal — do not remove) -->
 @if (confirmDialog()) {
   <div class="confirm-overlay" (click)="onConfirmCancel()" (keydown.escape)="onConfirmCancel()" role="dialog" aria-modal="true" tabindex="-1">
-    <div class="confirm-dialog" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
+    <div class="confirm-dialog" role="presentation" (click)="$event.stopPropagation()" (keydown)="$event.stopPropagation()">
       <h3 [textContent]="confirmDialog()?.title"></h3>
       <p [textContent]="confirmDialog()?.message"></p>
       <div class="confirm-actions">
@@ -71,8 +71,14 @@
       <span class="app-header__brand" [textContent]="title"></span>
     </ng-template>
     <ng-template #end>
-      <p-button icon="pi pi-bell" [text]="true" severity="secondary" pBadge value="3" />
-      <p-avatar icon="pi pi-user" shape="circle" styleClass="ml-2" />
+      @if (auth.isAuthenticated()) {
+        @if (tenant.currentTenantId(); as tenantId) {
+          <span class="app-header__tenant" [title]="'Tenant ' + tenantId" [textContent]="'Tenant ' + tenantId.slice(0, 8)"></span>
+        }
+        <p-avatar icon="pi pi-user" shape="circle" styleClass="ml-2" />
+        <span class="app-header__user" [textContent]="auth.profile()?.displayName ?? ''"></span>
+        <p-button label="Sign out" icon="pi pi-sign-out" [text]="true" severity="secondary" (onClick)="signOut()" />
+      }
     </ng-template>
   </p-toolbar>
 

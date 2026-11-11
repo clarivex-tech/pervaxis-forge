@@ -50,13 +50,9 @@ import { Injectable } from '@angular/core';
 @Injectable({ providedIn: 'root' })
 export class PlatformService {
   /** Always false for web-only builds. */
-  get isNative(): boolean {
-    return false;
-  }
+  readonly isNative = false;
 
-  /** Always returns 'web' for web-only builds. */
-  get platform(): string {
-    return 'web';
-  }
+  /** Always 'web' for web-only builds. */
+  readonly platform = 'web';
 }
 {{ end }}

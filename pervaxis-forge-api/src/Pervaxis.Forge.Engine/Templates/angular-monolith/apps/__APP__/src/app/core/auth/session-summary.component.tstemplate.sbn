@@ -1,0 +1,83 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component, computed, inject } from '@angular/core';
+import { AuthService } from './auth.service';
+import { TenantContextService } from './tenant-context.service';
+
+const TENANT_LABELS: Readonly<Record<string, string>> = {
+  'not-applicable': 'Single-tenant service',
+  absent: 'None assigned',
+  invalid: 'Not recognised (contact your administrator)',
+};
+
+/**
+ * HORIZONTAL: Who is signed in, their roles and their tenant membership, from the access token.
+ * Tenant switching is not offered: in V1 each user belongs to exactly one tenant.
+ */
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-session-summary',
+  standalone: true,
+  template: `
+    <section class="session-summary" aria-labelledby="session-summary-title">
+      <h2 id="session-summary-title">Your session</h2>
+      <dl>
+        <dt>Signed in as</dt>
+        <dd [textContent]="auth.profile()?.displayName ?? '—'"></dd>
+
+        <dt>Roles</dt>
+        <dd>
+          @if (auth.roles().length > 0) {
+            <ul class="session-summary__list">
+              @for (role of auth.roles(); track role) {
+                <li [textContent]="role"></li>
+              }
+            </ul>
+          } @else {
+            <span>No roles assigned</span>
+          }
+        </dd>
+
+        <dt>Tenant</dt>
+        <dd>
+          @if (tenant.memberships().length > 0) {
+            <ul class="session-summary__list">
+              @for (membership of tenant.memberships(); track membership.tenantId) {
+                <li><code [textContent]="membership.tenantId"></code></li>
+              }
+            </ul>
+          } @else {
+            <span [textContent]="tenantLabel()"></span>
+          }
+        </dd>
+      </dl>
+    </section>
+  `,
+  styles: [`
+    .session-summary { margin-top: var(--spacing-lg); }
+    dl { display: grid; grid-template-columns: max-content 1fr; gap: var(--spacing-xs) var(--spacing-lg); }
+    dt { font-weight: 600; }
+    dd { margin: 0; }
+    .session-summary__list { margin: 0; padding-left: 1.25rem; }
+  `],
+})
+export class SessionSummaryComponent {
+  protected readonly auth = inject(AuthService);
+  protected readonly tenant = inject(TenantContextService);
+  protected readonly tenantLabel = computed(() => TENANT_LABELS[this.tenant.claimStatus()] ?? '—');
+}

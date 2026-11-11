@@ -1,0 +1,370 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { provideRouter } from '@angular/router';
+import * as oauth from 'oauth4webapi';
+import { AUTH_SYNC_CHANNEL, AuthSyncService } from './auth-sync.service';
+import { AUTH_REDIRECT, AUTH_TIMEOUTS, AuthCallbackError, DEFAULT_AUTH_TIMEOUTS } from './auth.models';
+import {
+  AuthService, LOGIN_TRANSACTION_STORAGE_KEY, REFRESH_TOKEN_STORAGE_KEY, sanitizeReturnUrl,
+} from './auth.service';
+import { COGNITO_FETCH, LoginTransaction } from './cognito-client';
+import { SessionResetReason, SessionStateRegistry } from './session-state';
+import { TenantContextService } from './tenant-context.service';
+import {
+  FakeCognito, TEST_APP_ORIGIN, TEST_CLIENT_ID, TEST_COGNITO_DOMAIN, TEST_TENANT_ID,
+  jsonResponse, provideTestAppConfig, testAccessToken, testIdToken,
+} from '../testing/auth-testing';
+
+@Component({ template: '' })
+class BlankComponent {}
+
+const settle = (ms = 0) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+describe('AuthService', () => {
+  let cognito: FakeCognito;
+  let redirects: string[];
+  let resets: SessionResetReason[];
+  let auth: AuthService;
+
+  async function setUp(options: { storedRefreshToken?: string } = {}): Promise<void> {
+    if (options.storedRefreshToken) {
+      sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, options.storedRefreshToken);
+    }
+    TestBed.configureTestingModule({
+      providers: [
+        provideRouter([{ path: '**', component: BlankComponent }]),
+        provideTestAppConfig(),
+        { provide: COGNITO_FETCH, useValue: cognito.fetch },
+        { provide: AUTH_REDIRECT, useValue: (url: string) => redirects.push(url) },
+        { provide: AUTH_TIMEOUTS, useValue: { ...DEFAULT_AUTH_TIMEOUTS, revocationMs: 50 } },
+      ],
+    });
+    TestBed.inject(SessionStateRegistry).register((reason) => resets.push(reason));
+    auth = TestBed.inject(AuthService);
+    await auth.initialize();
+  }
+
+  /** Starts a sign-in and returns the stored transaction. */
+  async function startLogin(returnUrl = '/orders'): Promise<LoginTransaction> {
+    await auth.login(returnUrl);
+    return JSON.parse(sessionStorage.getItem(LOGIN_TRANSACTION_STORAGE_KEY) ?? 'null') as LoginTransaction;
+  }
+
+  /** Completes a full sign-in with a token response. */
+  async function signIn(tokenBody: Record<string, unknown> = {}): Promise<void> {
+    const transaction = await startLogin();
+    cognito.tokenHandler = () => jsonResponse({
+      access_token: testAccessToken(), id_token: testIdToken({ nonce: transaction.nonce }),
+      refresh_token: 'refresh-1', token_type: 'Bearer', expires_in: 3600, ...tokenBody,
+    });
+    await auth.completeLogin(`${TEST_APP_ORIGIN}/auth/callback?code=code-1&state=${transaction.state}`);
+  }
+
+  beforeEach(() => {
+    sessionStorage.clear();
+    localStorage.clear();
+    cognito = new FakeCognito();
+    redirects = [];
+    resets = [];
+  });
+
+  afterEach(() => {
+    sessionStorage.clear();
+  });
+
+  describe('login', () => {
+    beforeEach(() => setUp());
+
+    it('redirects to the Cognito authorize endpoint with PKCE, state and nonce', async () => {
+      const transaction = await startLogin('/orders');
+      const url = new URL(redirects[0]);
+
+      expect(`${url.origin}${url.pathname}`).toBe(`${TEST_COGNITO_DOMAIN}/oauth2/authorize`);
+      expect(url.searchParams.get('client_id')).toBe(TEST_CLIENT_ID);
+      expect(url.searchParams.get('response_type')).toBe('code');
+      expect(url.searchParams.get('redirect_uri')).toBe(`${TEST_APP_ORIGIN}/auth/callback`);
+      expect(url.searchParams.get('scope')).toBe('openid email profile');
+      expect(url.searchParams.get('state')).toBe(transaction.state);
+      expect(url.searchParams.get('nonce')).toBe(transaction.nonce);
+      expect(url.searchParams.get('code_challenge_method')).toBe('S256');
+      expect(url.searchParams.get('code_challenge')).toBe(await oauth.calculatePKCECodeChallenge(transaction.codeVerifier));
+      expect(url.searchParams.has('client_secret')).toBeFalse();
+      expect(transaction.returnUrl).toBe('/orders');
+    });
+
+    it('never sends the user to another site after sign-in', () => {
+      expect(sanitizeReturnUrl('https://evil.test/')).toBe('/');
+      expect(sanitizeReturnUrl('//evil.test/')).toBe('/');
+      expect(sanitizeReturnUrl('/\\evil.test')).toBe('/');
+      expect(sanitizeReturnUrl('/auth/callback?code=x')).toBe('/');
+      expect(sanitizeReturnUrl('/orders?page=2')).toBe('/orders?page=2');
+    });
+  });
+
+  describe('callback', () => {
+    beforeEach(() => setUp());
+
+    it('signs in: access token in memory only, refresh token in sessionStorage', async () => {
+      await signIn();
+
+      expect(auth.isAuthenticated()).toBeTrue();
+      expect(auth.profile()?.email).toBe('user@example.test');
+      expect(sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBe('refresh-1');
+      const accessToken = await auth.getAccessToken();
+      const stored = [...Object.keys(sessionStorage), ...Object.keys(localStorage)]
+        .map((key) => sessionStorage.getItem(key) ?? localStorage.getItem(key) ?? '');
+      expect(stored.some((value) => accessToken !== null && value.includes(accessToken))).toBeFalse();
+      expect(cognito.callsTo('/oauth2/token', 'authorization_code')[0].body.get('code_verifier')).toBeTruthy();
+    });
+
+    it('rejects a callback whose state does not match, without calling the token endpoint', async () => {
+      await startLogin();
+
+      await expectAsync(auth.completeLogin(`${TEST_APP_ORIGIN}/auth/callback?code=code-1&state=forged`))
+        .toBeRejectedWith(jasmine.objectContaining({ code: 'state_mismatch' }));
+      expect(cognito.callsTo('/oauth2/token').length).toBe(0);
+      expect(auth.isAuthenticated()).toBeFalse();
+      expect(sessionStorage.getItem(LOGIN_TRANSACTION_STORAGE_KEY)).toBeNull();
+    });
+
+    it('rejects an ID token whose nonce does not match the sign-in', async () => {
+      const transaction = await startLogin();
+      cognito.tokenHandler = () => jsonResponse({
+        access_token: testAccessToken(), id_token: testIdToken({ nonce: 'other-nonce' }),
+        refresh_token: 'refresh-1', token_type: 'Bearer', expires_in: 3600,
+      });
+
+      await expectAsync(auth.completeLogin(`${TEST_APP_ORIGIN}/auth/callback?code=code-1&state=${transaction.state}`))
+        .toBeRejectedWith(jasmine.objectContaining({ code: 'invalid_id_token' }));
+      expect(auth.isAuthenticated()).toBeFalse();
+      expect(sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBeNull();
+    });
+
+    it('rejects an ID token from another issuer or for another client', async () => {
+      for (const claims of [{ iss: 'https://evil.test' }, { aud: 'other-client' }, { token_use: 'access' }]) {
+        const transaction = await startLogin();
+        cognito.tokenHandler = () => jsonResponse({
+          access_token: testAccessToken(), id_token: testIdToken({ nonce: transaction.nonce, ...claims }),
+          token_type: 'Bearer', expires_in: 3600,
+        });
+        await expectAsync(auth.completeLogin(`${TEST_APP_ORIGIN}/auth/callback?code=c&state=${transaction.state}`))
+          .toBeRejectedWith(jasmine.any(AuthCallbackError));
+      }
+      expect(auth.isAuthenticated()).toBeFalse();
+    });
+
+    it('accepts a callback URL only once', async () => {
+      const transaction = await startLogin();
+      cognito.tokenHandler = () => jsonResponse({
+        access_token: testAccessToken(), id_token: testIdToken({ nonce: transaction.nonce }),
+        refresh_token: 'refresh-1', token_type: 'Bearer', expires_in: 3600,
+      });
+      const callback = `${TEST_APP_ORIGIN}/auth/callback?code=code-1&state=${transaction.state}`;
+      await auth.completeLogin(callback);
+
+      await expectAsync(auth.completeLogin(callback)).toBeRejectedWith(jasmine.objectContaining({ code: 'missing_transaction' }));
+    });
+
+    it('reports a Cognito error response as provider_error', async () => {
+      const transaction = await startLogin();
+
+      await expectAsync(auth.completeLogin(`${TEST_APP_ORIGIN}/auth/callback?error=access_denied&state=${transaction.state}`))
+        .toBeRejectedWith(jasmine.objectContaining({ code: 'provider_error' }));
+    });
+  });
+
+  describe('refresh', () => {
+    beforeEach(() => setUp());
+
+    it('shares one refresh request between concurrent callers', async () => {
+      await signIn({ expires_in: 0 });
+      let release: () => void = () => undefined;
+      cognito.tokenHandler = async () => {
+        await new Promise<void>((resolve) => (release = resolve));
+        return jsonResponse({ access_token: testAccessToken(), token_type: 'Bearer', expires_in: 3600 });
+      };
+
+      const pending = Promise.all([auth.getAccessToken(), auth.getAccessToken(), auth.getAccessToken()]);
+      await settle();
+      release();
+      const tokens = await pending;
+
+      expect(cognito.callsTo('/oauth2/token', 'refresh_token').length).toBe(1);
+      expect(new Set(tokens).size).toBe(1);
+      expect(tokens[0]).toBeTruthy();
+      expect(auth.isAuthenticated()).toBeTrue();
+    });
+
+    it('refreshes after a rejected token unless another request already did', async () => {
+      await signIn();
+      const rejected = await auth.getAccessToken();
+      cognito.tokenHandler = () => jsonResponse({ access_token: testAccessToken(), token_type: 'Bearer', expires_in: 3600 });
+
+      expect(await auth.refreshAfterRejection(rejected ?? '')).toBeTrue();
+      expect(await auth.refreshAfterRejection(rejected ?? '')).toBeTrue();
+      expect(cognito.callsTo('/oauth2/token', 'refresh_token').length).toBe(1);
+      expect(await auth.getAccessToken()).not.toBe(rejected);
+    });
+
+    it('ends the session and clears state when the refresh fails', async () => {
+      await signIn({ expires_in: 0 });
+      cognito.tokenHandler = () => jsonResponse({ error: 'invalid_grant' }, 400);
+
+      expect(await auth.getAccessToken()).toBeNull();
+      expect(auth.isAuthenticated()).toBeFalse();
+      expect(auth.status()).toBe('signed-out');
+      expect(sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBeNull();
+      expect(resets).toContain('session-ended');
+    });
+
+    it('ends the session when the refreshed ID token belongs to another user', async () => {
+      await signIn();
+      cognito.tokenHandler = () => jsonResponse({
+        access_token: testAccessToken(), id_token: testIdToken({ sub: 'someone-else' }), token_type: 'Bearer', expires_in: 3600,
+      });
+
+      expect(await auth.refreshShared()).toBeFalse();
+      expect(auth.isAuthenticated()).toBeFalse();
+    });
+  });
+
+  describe('session restore after reload', () => {
+    it('restores the session with one refresh of the stored refresh token', async () => {
+      cognito.tokenHandler = () => jsonResponse({
+        access_token: testAccessToken(), id_token: testIdToken(), token_type: 'Bearer', expires_in: 3600,
+      });
+      await setUp({ storedRefreshToken: 'stored-refresh' });
+
+      expect(auth.isAuthenticated()).toBeTrue();
+      const refreshes = cognito.callsTo('/oauth2/token', 'refresh_token');
+      expect(refreshes.length).toBe(1);
+      expect(refreshes[0].body.get('refresh_token')).toBe('stored-refresh');
+      expect(sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBe('stored-refresh');
+    });
+
+    it('starts signed out when the stored refresh token is rejected', async () => {
+      cognito.tokenHandler = () => jsonResponse({ error: 'invalid_grant' }, 400);
+      await setUp({ storedRefreshToken: 'revoked-refresh' });
+
+      expect(auth.status()).toBe('signed-out');
+      expect(sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBeNull();
+    });
+  });
+
+  describe('logout', () => {
+    beforeEach(() => setUp());
+
+    it('clears local state immediately and does not wait for a hanging revocation', async () => {
+      await signIn();
+      cognito.revokeHandler = () => new Promise<Response>(() => undefined);
+      const tenant = TestBed.inject(TenantContextService);
+      expect(tenant.currentTenantId()).toBe(TEST_TENANT_ID);
+
+      const done = auth.logout();
+      // Synchronous part of logout(): nothing of the session is left.
+      expect(auth.isAuthenticated()).toBeFalse();
+      expect(sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBeNull();
+      expect(tenant.currentTenantId()).toBeNull();
+      expect(resets).toEqual(['signed-out']);
+
+      const started = Date.now();
+      await done;
+      expect(Date.now() - started).toBeLessThan(1000);
+
+      const revoke = cognito.callsTo('/oauth2/revoke')[0];
+      expect(revoke.body.get('token')).toBe('refresh-1');
+      expect(revoke.body.get('client_id')).toBe(TEST_CLIENT_ID);
+      expect(revoke.keepalive).toBeTrue();
+
+      const logoutUrl = new URL(redirects.at(-1) ?? '');
+      expect(`${logoutUrl.origin}${logoutUrl.pathname}`).toBe(`${TEST_COGNITO_DOMAIN}/logout`);
+      expect(logoutUrl.searchParams.get('client_id')).toBe(TEST_CLIENT_ID);
+      expect(logoutUrl.searchParams.get('logout_uri')).toBe(`${TEST_APP_ORIGIN}/login`);
+    });
+
+    it('tells other tabs once', async () => {
+      await signIn();
+      const broadcast = spyOn(TestBed.inject(AuthSyncService), 'broadcastLogout').and.callThrough();
+
+      await auth.logout();
+
+      expect(broadcast).toHaveBeenCalledTimes(1);
+    });
+
+    it('signs out when another tab signs out, without broadcasting again or leaving the app', async () => {
+      await signIn();
+      const broadcast = spyOn(TestBed.inject(AuthSyncService), 'broadcastLogout').and.callThrough();
+      const otherTab = new BroadcastChannel(AUTH_SYNC_CHANNEL);
+
+      otherTab.postMessage({ type: 'logout', sender: 'other-tab' });
+      await settle(50);
+      otherTab.close();
+
+      expect(auth.isAuthenticated()).toBeFalse();
+      expect(sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBeNull();
+      expect(resets).toEqual(['signed-out']);
+      expect(broadcast).not.toHaveBeenCalled();
+      expect(redirects.some((url) => url.includes('/logout'))).toBeFalse();
+      expect(cognito.callsTo('/oauth2/revoke').length).toBe(1);
+    });
+
+    it('ignores its own and malformed sync messages', async () => {
+      await signIn();
+      const sync = TestBed.inject(AuthSyncService);
+      const otherTab = new BroadcastChannel(AUTH_SYNC_CHANNEL);
+
+      otherTab.postMessage({ type: 'logout', sender: sync.tabId });
+      otherTab.postMessage('logout');
+      otherTab.postMessage({ type: 'something-else', sender: 'other-tab' });
+      await settle(50);
+      otherTab.close();
+
+      expect(auth.isAuthenticated()).toBeTrue();
+    });
+  });
+
+  describe('roles', () => {
+    beforeEach(() => setUp());
+
+    it('reads roles from cognito:groups for permission checks', async () => {
+      await signIn();
+
+      expect(auth.roles()).toEqual(['Admin']);
+      expect(auth.hasPermission('Admin')).toBeTrue();
+      expect(auth.hasPermission('Billing')).toBeFalse();
+    });
+  });
+});
+
+describe('AuthService without a valid configuration', () => {
+  it('fails closed: sign-in unavailable and no access token', async () => {
+    sessionStorage.setItem(REFRESH_TOKEN_STORAGE_KEY, 'left-over');
+    TestBed.configureTestingModule({ providers: [provideRouter([])] });
+    const auth = TestBed.inject(AuthService);
+    await auth.initialize();
+
+    expect(auth.status()).toBe('unavailable');
+    expect(auth.unavailableReasons().length).toBeGreaterThan(0);
+    expect(await auth.getAccessToken()).toBeNull();
+    await expectAsync(auth.login()).toBeRejected();
+    expect(sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBeNull();
+  });
+});

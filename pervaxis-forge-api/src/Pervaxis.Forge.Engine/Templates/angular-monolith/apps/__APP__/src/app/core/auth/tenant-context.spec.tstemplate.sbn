@@ -1,0 +1,109 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { TestBed } from '@angular/core/testing';
+import { TenancyMode } from '../config/app-config';
+import { SessionResetReason, SessionStateRegistry } from './session-state';
+import { TenantContextService, parseTenantClaim } from './tenant-context.service';
+import { TEST_TENANT_ID, provideTestAppConfig } from '../testing/auth-testing';
+
+describe('parseTenantClaim', () => {
+  it('accepts exactly one GUID string, in canonical lowercase', () => {
+    expect(parseTenantClaim(TEST_TENANT_ID)).toEqual({ tenantId: TEST_TENANT_ID, status: 'valid' });
+    expect(parseTenantClaim(TEST_TENANT_ID.toUpperCase())).toEqual({ tenantId: TEST_TENANT_ID, status: 'valid' });
+  });
+
+  it('treats a missing claim as absent', () => {
+    expect(parseTenantClaim(undefined).status).toBe('absent');
+    expect(parseTenantClaim(null).status).toBe('absent');
+  });
+
+  it('rejects anything the API would reject', () => {
+    const invalid: unknown[] = [
+      '', 'tenant-a', [TEST_TENANT_ID], 42, true, { id: TEST_TENANT_ID },
+      '00000000-0000-0000-0000-000000000000', `${TEST_TENANT_ID} `,
+    ];
+    for (const value of invalid) {
+      expect(parseTenantClaim(value)).withContext(JSON.stringify(value)).toEqual({ tenantId: null, status: 'invalid' });
+    }
+  });
+});
+
+describe('TenantContextService', () => {
+  let resets: SessionResetReason[];
+
+  function setUp(mode: TenancyMode): TenantContextService {
+    TestBed.configureTestingModule({ providers: [provideTestAppConfig({ tenancyMode: mode })] });
+    resets = [];
+    TestBed.inject(SessionStateRegistry).register((reason) => resets.push(reason));
+    return TestBed.inject(TenantContextService);
+  }
+
+  it('multi-tenant: takes the tenant from the access token and lists it as the only membership', () => {
+    const tenant = setUp('MultiTenant');
+    tenant.update({ tenant_id: TEST_TENANT_ID });
+
+    expect(tenant.currentTenantId()).toBe(TEST_TENANT_ID);
+    expect(tenant.requiresTenant()).toBeTrue();
+    expect(tenant.memberships()).toEqual([{ tenantId: TEST_TENANT_ID, current: true }]);
+    expect(tenant.canSwitchTenant).toBeFalse();
+  });
+
+  it('multi-tenant: a user without a tenant has no membership', () => {
+    const tenant = setUp('MultiTenant');
+    tenant.update({});
+
+    expect(tenant.claimStatus()).toBe('absent');
+    expect(tenant.memberships()).toEqual([]);
+  });
+
+  it('single-tenant: ignores tenant claims, as the API does', () => {
+    const tenant = setUp('SingleTenant');
+    tenant.update({ tenant_id: TEST_TENANT_ID });
+
+    expect(tenant.claimStatus()).toBe('not-applicable');
+    expect(tenant.currentTenantId()).toBeNull();
+    expect(tenant.requiresTenant()).toBeFalse();
+  });
+
+  it('clears tenant-specific state when the token carries a different tenant', () => {
+    const tenant = setUp('MultiTenant');
+    tenant.update({ tenant_id: TEST_TENANT_ID });
+    tenant.update({ tenant_id: TEST_TENANT_ID });
+    expect(resets).toEqual([]);
+
+    tenant.update({ tenant_id: '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d' });
+    expect(resets).toEqual(['tenant-changed']);
+  });
+
+  it('keeps going when one reset listener fails', () => {
+    const tenant = setUp('MultiTenant');
+    const registry = TestBed.inject(SessionStateRegistry);
+    spyOn(console, 'error');
+    registry.register(() => {
+      throw new Error('store failed');
+    });
+    let cleared = false;
+    registry.register(() => (cleared = true));
+
+    tenant.update({ tenant_id: TEST_TENANT_ID });
+    tenant.update({ tenant_id: '9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d' });
+
+    expect(cleared).toBeTrue();
+  });
+});

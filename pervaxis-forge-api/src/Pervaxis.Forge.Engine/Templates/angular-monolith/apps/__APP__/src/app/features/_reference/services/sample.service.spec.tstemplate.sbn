@@ -21,16 +21,16 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { SampleService } from './sample.service';
 import { CreateSampleDto, SampleItem, UpdateSampleDto } from '../models/sample.model';
-import { environment } from '../../../../environments/environment';
+import { provideTestAppConfig, TEST_API_URL } from '../../../core/testing/auth-testing';
 
 describe('SampleService', () => {
   let service: SampleService;
   let httpMock: HttpTestingController;
-  const baseUrl = `${environment.apiUrl}/api/samples`;
+  const baseUrl = `${TEST_API_URL}/api/samples`;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [provideHttpClient(), provideHttpClientTesting()],
+      providers: [provideHttpClient(), provideHttpClientTesting(), provideTestAppConfig()],
     });
     service = TestBed.inject(SampleService);
     httpMock = TestBed.inject(HttpTestingController);

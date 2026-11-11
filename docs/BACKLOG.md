@@ -33,6 +33,8 @@ Items tracked for future implementation. Prioritized by impact.
 - [ ] Business audit trail: business action names, target record IDs and before/after values (who changed which record), as a Core `IAuditLogger` package. Prints already log one request-level audit entry per request with actor ID and outcome.
 - [ ] Application data encryption: field-level encryption with KMS-managed keys; decide searchability and key rotation. Database encryption at rest covers the baseline meanwhile.
 - [ ] Data classification enforcement: field-level PII/sensitivity tags that drive redaction, exports, AI prompts and encryption (shared Core design with encryption). Until then, document that classification is a label only.
+- [ ] CORS: Expose `WWW-Authenticate` header for cross-origin write replay when auth fails.
+- [ ] Optional nginx CSP header with strict `connect-src` for tighter security.
 
 - [ ] gRPC template: apply the same retry safety (safe methods or `Idempotency-Key` only) to its `ForgeRetryDelegatingHandler`.
 - [ ] Redaction when Serilog is disabled: the redaction enricher only runs on the Serilog pipeline.

@@ -23,6 +23,7 @@
     "@capacitor/core": "^6.0.0",
     "@capacitor/preferences": "^6.0.0",
 {{ end }}
+    "oauth4webapi": "3.8.8",
     "primeng": "^21.0.0",
     "primeicons": "^7.0.0",
     "@primeng/themes": "^21.0.0",
