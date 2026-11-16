@@ -13,4 +13,5 @@ public enum ServiceType
     Grpc = 8,
     Monolithic = 9,
     Ionic = 10,
+    IdentityTokenEnrichment = 11,
 }

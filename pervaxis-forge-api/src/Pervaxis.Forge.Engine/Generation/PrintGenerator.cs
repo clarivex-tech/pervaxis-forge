@@ -38,7 +38,12 @@ public sealed class PrintGenerator
         if (!validationResult.IsValid)
             throw new InvalidOperationException(string.Join("; ", validationResult.Errors));
 
-        var genesisVersion = await ResolveGenesisVersionAsync(cancellationToken);
+        if (manifest.ServiceType == ServiceType.IdentityTokenEnrichment && cloudProvider != "AWS")
+            throw new InvalidOperationException("Identity Token Enrichment requires the AWS cloud provider.");
+
+        var genesisVersion = manifest.ServiceType == ServiceType.IdentityTokenEnrichment
+            ? string.Empty
+            : await ResolveGenesisVersionAsync(cancellationToken);
         var templateRoot = ResolveTemplateRoot(manifest.ServiceType);
         var model = TemplateModelBuilder.Build(manifest, cloudProvider, genesisVersion);
         var files = await fileGenerator.GenerateAsync(templateRoot, model, cancellationToken);
@@ -55,6 +60,7 @@ public sealed class PrintGenerator
 
     private static string ResolveTemplateRoot(ServiceType serviceType) => serviceType switch
     {
+        ServiceType.IdentityTokenEnrichment => "Templates/identity-token-enrichment",
         ServiceType.RestApi => "Templates/rest-api",
         ServiceType.AngularShell => "Templates/angular-shell",
         ServiceType.AngularMfe => "Templates/angular-microfrontend",

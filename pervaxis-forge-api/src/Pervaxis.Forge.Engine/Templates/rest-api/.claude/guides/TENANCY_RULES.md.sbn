@@ -47,7 +47,7 @@ Human-readable version with a complete example: `DeveloperReference/TenancyQuick
 
 - There is no tenant outside an HTTP request. Hosted services, jobs and message handlers wrap each unit of work in
   `using (scopeFactory.BeginScope(tenantId)) { ... }` (`ITenantScopeFactory`).
-- In single-tenant mode, use `TenantDefaults.DefaultTenantId`. In multi-tenant mode, take the tenant id from trusted data only.
+- Take the tenant id from trusted input only. Never use the initial tenant seed as a fallback for a request or a background job.
 - Dispose each scope in the method that opened it.
 
 ## Platform code you must not change

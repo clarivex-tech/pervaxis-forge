@@ -36,6 +36,21 @@ Roles and permissions authorize actions only within the resolved tenant. An admi
 
 ## 3. Authentication and provisioning
 
+### Identity Token Enrichment print: agreed direction (2026-11-14)
+
+The following records the agreed design. The AWS inline-Python enrichment print and wizard are implemented locally; AWS deployment and live token verification remain pending.
+
+- Forge/Press owns a separate **Identity Token Enrichment** infrastructure print. Keep its templates, deployment templates, and tests in this repository, under the proposed `pervaxis-cognito-token-generation/` folder, and reuse the existing generation engine. A separate source repository or generation engine is not required; generated infrastructure can be versioned and deployed independently.
+- Initially expose this print only for AWS in Launchpad, with AWS Lambda as its runtime. Require AWS region and Cognito user pool ID in both wizard and generation API, and validate that the pool ID matches the region. App client ID, client secret, login domain, and callback URLs are not Lambda deployment inputs.
+- Deploy once per user pool and share across its tenants and applications. Deployment provisions the Lambda and pool-scoped invocation permission. For an existing pool, explicitly attach the Pre Token Generation V2_0 trigger through Cognito after stack creation; the initial print does not mutate or replace the pool. Review any existing pre-token trigger before replacement. Verify tier support and the tenant attribute prerequisite.
+- Trusted onboarding creates the tenant in PostgreSQL and assigns the same GUID to each member user's Cognito `custom:tenant_id`. Prevent end users from writing that attribute through app-client permissions. One user belongs to one tenant in this design.
+- Cognito passes the user's attributes to the Lambda before issuing tokens during sign-in and refresh. The Lambda validates the non-empty tenant GUID and emits canonical `tenant_id` in the access token; Cognito signs the JWT. Missing or invalid assignment fails token issuance. The Lambda requires no PostgreSQL connection and is not called by Angular or REST on each API request.
+- REST validates the token and checks its tenant against the database directory for existence and active status. Tenant assignment is never accepted from client-supplied headers or metadata. For example, a user assigned tenant A must receive A in the claim even if client metadata requests tenant B.
+- Angular monolith and REST prints require MultiTenant mode even for deployments operating with one tenant. Their claim contract is fixed to `tenant_id`; supplied initial tenant GUIDs must be reused across related services and serve only as provisioning seeds, never request fallbacks.
+- Azure and GCP support are future provider-specific implementations, not interchangeable Lambda deployments. Preserve the application tenant claim contract while adapting identity hooks, token types, validation, and deployment to each provider.
+
+These Angular/REST decisions supersede earlier optional directory-check and configurable claim-name defaults for those print types. Live verification still requires deployment and tests with users from two tenants.
+
 Validate signature using trusted issuer JWKS, allowed algorithm, issuer, lifetime, `token_use=access`, and allowlisted `client_id`. When resource binding is configured, also require the configured `aud`. Do not require an app-client audience on ordinary Cognito access tokens or accept ID tokens as API access tokens.
 
 Require Essentials or Plus for new deployments and a V2_0 or V3_0 pre-token-generation trigger. Launchpad must display these prerequisites and require acknowledgment; configuration metadata is not proof that the remote pool is correctly configured. Some grandfathered Lite pools support V2_0, but generated deployments must not depend on that exception.

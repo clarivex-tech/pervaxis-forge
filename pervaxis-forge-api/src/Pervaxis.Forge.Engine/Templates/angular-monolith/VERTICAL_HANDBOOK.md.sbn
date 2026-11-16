@@ -42,7 +42,9 @@ The app runs at `http://localhost:4200` by default.
    ```typescript
    {
      path: 'your-domain',
+{{ if model.angular_cognito_enabled }}
      canActivate: [authGuard],
+{{ end }}
      loadChildren: () =>
        import('./features/your-domain/routes/your-domain.routes').then(
          (m) => m.YOUR_DOMAIN_ROUTES
@@ -102,6 +104,7 @@ The `ApiService` automatically prefixes requests with `apiUrl` from `assets/app-
 
 ---
 
+{{ if model.angular_cognito_enabled }}
 ## Authentication
 
 ### Route Guards
@@ -150,6 +153,12 @@ configured API. See `AUTHENTICATION.md`.
 
 ---
 
+{{ else }}
+## Authentication
+
+Authentication is disabled. Routes are public. Add authentication before exposing protected data.
+
+{{ end }}
 ## Testing Patterns
 
 ### What to Test
@@ -245,7 +254,9 @@ These are **horizontal** concerns managed by the platform team:
 
 | Area | Files |
 |------|-------|
+{{ if model.angular_cognito_enabled }}
 | Authentication | `core/auth/`, `core/guards/`, `core/interceptors/auth.interceptor.ts`, `features/auth/`, `features/login/` |
+{{ end }}
 | Runtime configuration | `core/config/`, `assets/app-config.example.json` |
 | API Base | `core/services/api.service.ts` |
 | App Shell | `app.component.ts`, `app.config.ts` |

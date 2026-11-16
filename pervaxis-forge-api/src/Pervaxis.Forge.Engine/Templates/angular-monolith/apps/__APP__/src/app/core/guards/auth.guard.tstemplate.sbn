@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -35,3 +36,5 @@ export const authGuard: CanActivateFn = async (_route, state) => {
   }
   return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 };
+
+{{ end }}

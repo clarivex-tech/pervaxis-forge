@@ -33,6 +33,30 @@ namespace Pervaxis.Forge.Api.Tests.Services;
 public sealed class GenerationServiceTests
 {
     [Fact]
+    public async Task TokenEnrichment_RoundTripsThroughValidationGenerationAndRegeneration()
+    {
+        await using var fixture = await TestDb.CreateAsync();
+        fixture.SeedVerticalWithGeneratedService("clarivolt", "existing-service");
+        var service = CreateService(fixture.Db);
+        var request = CreateRequest("clarivolt", "identity-token-enrichment") with
+        {
+            Type = "IdentityTokenEnrichment", Cognito = null, GenesisModules = [], Database = null,
+            TokenEnrichment = new TokenEnrichmentConfig { Region = "us-east-1", UserPoolId = "us-east-1_Example" }
+        };
+        (await service.ValidateAsync(request)).IsValid.Should().BeTrue();
+        var result = await service.GenerateAsync(request, "api-user");
+        result.ServiceName.Should().Be("identity-token-enrichment");
+        var stored = await fixture.Db.GeneratedServices.SingleAsync(s => s.ServiceName == "identity-token-enrichment");
+        var (zip, _) = await service.RegenerateAsync("clarivolt", stored.Id);
+        using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(zip));
+        using var reader = new StreamReader(archive.GetEntry("template.yaml")!.Open());
+        (await reader.ReadToEndAsync()).Should().Contain("us-east-1_Example");
+
+        var invalid = request with { TokenEnrichment = request.TokenEnrichment with { Region = "eu-west-1" } };
+        (await service.ValidateAsync(invalid)).IsValid.Should().BeFalse();
+    }
+
+    [Fact]
     public async Task GenerateAsync_RejectsDuplicateServiceNameWithinVertical()
     {
         await using var fixture = await TestDb.CreateAsync();
@@ -86,7 +110,9 @@ public sealed class GenerationServiceTests
 
         var service = CreateService(fixture.Db);
         var request = CreateRequest("clarivolt", "claims-web");
-        request = request with { Type = "Monolithic", GenesisModules = [], UiTargets = ["web", "mobile"] };
+        request = request with { Type = "Monolithic",
+            Cognito = null,
+            AngularAuth = new AngularAuthConfig { Provider = "Cognito", UserPoolId = "us-east-1_Example", ClientId = "exampleclient123", Domain = "https://example.auth.us-east-1.amazoncognito.com", Scopes = ["openid"], RedirectUri = "http://localhost:4200/auth/callback", PostLogoutRedirectUri = "http://localhost:4200/login" }, GenesisModules = [], UiTargets = ["web", "mobile"] };
 
         var result = await service.GenerateAsync(request, "api-user");
 
@@ -105,6 +131,8 @@ public sealed class GenerationServiceTests
         var request = CreateRequest("clarivolt", "claims-web") with
         {
             Type = "Monolithic",
+            Cognito = null,
+            AngularAuth = new AngularAuthConfig { Provider = "Cognito", UserPoolId = "us-east-1_Example", ClientId = "exampleclient123", Domain = "https://example.auth.us-east-1.amazoncognito.com", Scopes = ["openid"], RedirectUri = "http://localhost:4200/auth/callback", PostLogoutRedirectUri = "http://localhost:4200/login" },
             UiTargets = ["web", "mobile"]
         };
 
@@ -123,6 +151,8 @@ public sealed class GenerationServiceTests
         var request = CreateRequest("clarivolt", "claims-web") with
         {
             Type = "Monolithic",
+            Cognito = null,
+            AngularAuth = new AngularAuthConfig { Provider = "Cognito", UserPoolId = "us-east-1_Example", ClientId = "exampleclient123", Domain = "https://example.auth.us-east-1.amazoncognito.com", Scopes = ["openid"], RedirectUri = "http://localhost:4200/auth/callback", PostLogoutRedirectUri = "http://localhost:4200/login" },
             UiTargets = ["web"],
         };
 
@@ -191,6 +221,7 @@ public sealed class GenerationServiceTests
         var request = CreateRequest("clarivolt", "intake-service-shell-d") with
         {
             Type = "AngularMfe",
+            Cognito = null,
             CreateGitHubRepo = true,
             CanvasModules = ["Settings", "Profile"]
         };
@@ -211,6 +242,8 @@ public sealed class GenerationServiceTests
         var request = CreateRequest("clarivolt", "claims-web") with
         {
             Type = "Monolithic",
+            Cognito = null,
+            AngularAuth = new AngularAuthConfig { Provider = "Cognito", UserPoolId = "us-east-1_Example", ClientId = "exampleclient123", Domain = "https://example.auth.us-east-1.amazoncognito.com", Scopes = ["openid"], RedirectUri = "http://localhost:4200/auth/callback", PostLogoutRedirectUri = "http://localhost:4200/login" },
             UiTargets = null!,
             GenesisModules = null!,
             CanvasModules = null!
@@ -220,6 +253,65 @@ public sealed class GenerationServiceTests
 
         result.IsValid.Should().BeFalse();
         result.Errors.Should().Contain(error => error.Contains("Monolithic requests must include uiTargets"));
+    }
+
+    [Theory]
+    [InlineData("Cognito")]
+    public async Task AngularAuth_IsPreservedThroughGenerationAndRegeneration(string provider)
+    {
+        await using var fixture = await TestDb.CreateAsync();
+        fixture.SeedVerticalWithGeneratedService("clarivolt", "billing-service");
+        var service = CreateService(fixture.Db);
+        var request = CreateRequest("clarivolt", "claims-web") with
+        {
+            Type = "Monolithic",
+            UiTargets = ["web"],
+            Cognito = null,
+            AngularAuth = new AngularAuthConfig
+            {
+                Provider = provider, UserPoolId = "us-east-1_Example", ClientId = "exampleclient123",
+                Domain = "https://example.auth.us-east-1.amazoncognito.com", Scopes = ["openid", "phone"],
+                RedirectUri = "http://localhost:4200/auth/callback",
+                PostLogoutRedirectUri = "http://localhost:4200/login"
+            }
+        };
+        var preview = await service.ValidateAsync(request);
+        preview.IsValid.Should().BeTrue();
+        await service.GenerateAsync(request, "api-user");
+        var stored = await fixture.Db.GeneratedServices.SingleAsync(s => s.ServiceName == "claims-web");
+        var manifest = System.Text.Json.JsonSerializer.Deserialize<ForgeManifest>(stored.ManifestJson.RootElement.GetRawText());
+        manifest!.AngularAuth!.Provider.Should().Be(provider);
+        var (zip, _) = await service.RegenerateAsync("clarivolt", stored.Id);
+        using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(zip));
+        archive.GetEntry("apps/claims-web/src/assets/app-config.json").Should().NotBeNull();
+        (archive.GetEntry("apps/claims-web/src/app/core/auth/cognito-client.ts") is not null).Should().Be(provider == "Cognito");
+    }
+
+    [Fact]
+    public async Task ValidateAsync_RejectsIncompleteAngularCognitoSettings()
+    {
+        await using var fixture = await TestDb.CreateAsync();
+        var request = CreateRequest("clarivolt", "claims-web") with
+        {
+            Type = "Monolithic",
+            Cognito = null,
+            AngularAuth = new AngularAuthConfig { Provider = "Cognito" }
+        };
+        var result = await CreateService(fixture.Db).ValidateAsync(request);
+        result.IsValid.Should().BeFalse();
+        result.Errors.Should().Contain(e => e.Contains("AngularAuth.ClientId"));
+    }
+
+    [Fact]
+    public async Task RestGeneration_EnforcesMultiTenancyAndPersistsTheSuppliedTenantId()
+    {
+        await using var fixture = await TestDb.CreateAsync();
+        var request = CreateRequest("clarivolt", "billing-service") with { MultiTenancy = false };
+        await CreateService(fixture.Db).GenerateAsync(request, "api-user");
+        var stored = await fixture.Db.GeneratedServices.SingleAsync();
+        var manifest = System.Text.Json.JsonSerializer.Deserialize<ForgeManifest>(stored.ManifestJson.RootElement.GetRawText())!;
+        manifest.MultiTenancy.Should().BeTrue();
+        manifest.InitialTenantId.Should().Be(request.InitialTenantId);
     }
 
     private static GenerationService CreateService(ForgeDbContext db)
@@ -254,6 +346,8 @@ public sealed class GenerationServiceTests
         Description = "Billing scaffold",
         Version = "1.0.0",
         Type = "RestApi",
+        InitialTenantId = Guid.Parse("3f2b8c1e-6a4d-4e2f-9b1a-7c5d8e9f0a1b"),
+        Cognito = new CognitoConfig { UserPoolId = "us-east-1_Example", ClientIds = ["exampleclient123"] },
         GenesisModules = ["Messaging"],
         Database = new GenerationDatabaseConfig
         {
@@ -312,6 +406,10 @@ public sealed class GenerationServiceTests
                     VerticalSlug = slug,
                     ServiceName = serviceName,
                     ServiceType = Pervaxis.Forge.Engine.Manifest.ServiceType.RestApi,
+                    MultiTenancy = true,
+                    InitialTenantId = Guid.Parse("3f2b8c1e-6a4d-4e2f-9b1a-7c5d8e9f0a1b"),
+                    Database = new DatabaseConfig { Engine = "postgresql" },
+                    Cognito = new CognitoConfig { UserPoolId = "us-east-1_Example", ClientIds = ["exampleclient123"] },
                     ComponentPrefix = "clv",
                     CloudProvider = "AWS",
                     GenesisModules = ["Messaging"],

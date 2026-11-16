@@ -39,5 +39,11 @@ public record ServiceGenerationSpec
     public BackgroundJobConfig? BackgroundJobs { get; init; }
     public UtilitiesConfig? Utilities { get; init; }
     public bool MultiTenancy { get; init; } = false;
+    /// <summary>Initial tenant identity shared by related REST services. Never used as a request fallback.</summary>
+    public Guid? InitialTenantId { get; init; }
+
     public CognitoConfig? Cognito { get; init; }
+
+    public AngularAuthConfig? AngularAuth { get; init; }
+    public TokenEnrichmentConfig? TokenEnrichment { get; init; }
 }

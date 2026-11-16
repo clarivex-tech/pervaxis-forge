@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 # Authentication and tenancy
 
 {{ model.manifest.service_name }} signs users in with **Amazon Cognito** using the OAuth 2.0
@@ -10,6 +11,10 @@ rules belong in your features, not in these files.
 > the login page reports that sign-in is unavailable. The app works in a browser as usual.
 
 {{ end }}
+## Tenant contract
+
+This print requires MultiTenant mode and the tenant_id access-token claim. Missing or invalid tenant GUIDs block tenant routes. Cognito must issue this claim through trusted provisioning and a pre-token-generation trigger; the print does not create that infrastructure. Backend APIs remain responsible for enforcing isolation.
+
 ## 1. Cognito setup
 
 Create (or reuse) an app client in the user pool:
@@ -28,9 +33,14 @@ app's origin in the API's `Forge:Cors:AllowedOrigins`.
 
 ## 2. Runtime configuration
 
-The app reads `assets/app-config.json` at startup, so one build runs in every environment. Copy
+The app reads `assets/app-config.json` at startup, so one build runs in every environment.
+{{ if model.angular_auth_configured }}
+The wizard has already populated this file with your public Cognito settings. Set `apiUrl` for your backend and update the callback and logout URLs per deployment. No client secret belongs in this file.
+{{ else }}
+Copy
 `src/assets/app-config.example.json` to `src/assets/app-config.json` and fill it in. The real file
 is ignored by git; deployments provide it (for example a mounted file or a config map).
+{{ end }}
 
 | Key | Meaning |
 |---|---|
@@ -191,3 +201,5 @@ tightens the meta tag.
 `npm test` runs the auth specs: callback state and nonce checks, one-time callbacks, refresh success,
 failure and concurrency, session restore, sign-out across tabs, token destinations, write replay
 rules, permissions, single-tenant and multi-tenant claims, and state cleanup.
+
+{{ end }}

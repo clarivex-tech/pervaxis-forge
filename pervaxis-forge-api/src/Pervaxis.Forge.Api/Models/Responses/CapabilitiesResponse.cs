@@ -22,6 +22,7 @@ public sealed record CapabilitiesResponse
 {
     public required IReadOnlyList<UiTargetCapability> UiTargets { get; init; }
     public required IReadOnlyList<string> BackendTargets { get; init; }
+    public IReadOnlyList<string> InfrastructureTargets { get; init; } = [];
 }
 
 public sealed record UiTargetCapability

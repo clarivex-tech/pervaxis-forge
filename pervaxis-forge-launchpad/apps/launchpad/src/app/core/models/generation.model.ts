@@ -59,6 +59,17 @@ export interface GenerationCognitoConfig {
 	allowApiKey: boolean;
 }
 
+/** Public settings for the generated Angular monolith. */
+export interface AngularAuthConfig {
+ provider: 'None' | 'Cognito';
+ userPoolId?: string;
+ clientId?: string;
+ domain?: string;
+ scopes?: string[];
+ redirectUri?: string;
+ postLogoutRedirectUri?: string;
+}
+
 export interface EnterpriseScaffoldOptions {
 	authenticationEnabled?: boolean;
 	secretsManagementEnabled?: boolean;
@@ -75,7 +86,7 @@ export interface GenerationRequest {
 	displayName: string;
 	description: string;
 	version: string;
-	type: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe' | 'Monolithic' | 'Ionic';
+	type: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe' | 'Monolithic' | 'Ionic' | 'IdentityTokenEnrichment';
 	uiTargets?: ('web' | 'mobile')[];
 	genesisModules: string[];
 	canvasModules?: string[];
@@ -92,6 +103,9 @@ export interface GenerationRequest {
 	utilities?: GenerationUtilitiesConfig | null;
 	multiTenancy?: boolean;
 	cognito?: GenerationCognitoConfig | null;
+	angularAuth?: AngularAuthConfig;
+	initialTenantId?: string;
+	tokenEnrichment?: { region: string; userPoolId: string };
 }
 
 // ─── Infrastructure Config Interfaces (match API payload shapes) ─────────────

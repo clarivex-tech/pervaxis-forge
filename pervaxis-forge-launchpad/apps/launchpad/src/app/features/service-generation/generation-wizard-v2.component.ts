@@ -46,8 +46,8 @@ import { InfrastructureOptionsComponent } from './steps/infrastructure-step/infr
 
 type BuildTypeOption = {
 	label: string;
-	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe' | 'Monolithic';
-	category: 'Backend Service' | 'Frontend App';
+	value: 'RestApi' | 'GraphQL' | 'Grpc' | 'AngularShell' | 'AngularMfe' | 'Monolithic' | 'IdentityTokenEnrichment';
+	category: 'Backend Service' | 'Frontend App' | 'Identity Infrastructure';
 	live: boolean;
 	note: string;
 };
@@ -59,7 +59,25 @@ const COGNITO_POOL_ID_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d+_[A-Za-z0-9]+$/;
 const COGNITO_CLIENT_ID_PATTERN = /^[A-Za-z0-9_+]{1,128}$/;
 const COGNITO_GROUP_PATTERN = /^[A-Za-z0-9_.:/@+= -]{1,128}$/;
 
-/** Splits "id1, id2 id3" into a list of unique, non-empty app client IDs. */
+/** Validates managed-login origins and browser redirect URLs. */
+function angularBrowserUrlValidator(kind: 'domain' | 'callback' | 'logout') {
+ return (control: AbstractControl): ValidationErrors | null => {
+  try {
+   const url = new URL(String(control.value).trim());
+   const validProtocol = url.protocol === 'https:' || (kind !== 'domain' && url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname));
+   if (!validProtocol || url.username || url.password || url.search || url.hash ||
+       (kind === 'domain' && url.pathname !== '/') || (kind === 'callback' && url.pathname !== '/auth/callback')) return { url: true };
+   return null;
+  } catch { return { url: true }; }
+ };
+}
+
+function angularScopesValidator(control: AbstractControl): ValidationErrors | null {
+ const scopes = String(control.value).trim().split(/\s+/);
+ return scopes.includes('openid') && scopes.every(scope => /^[\x21\x23-\x5B\x5D-\x7E]+$/.test(scope)) ? null : { scopes: true };
+}
+
+/** Splits "id1, id2 id3" into unique app client IDs. */
 function parseCognitoClientIds(value: string | null | undefined): string[] {
 	return [...new Set((value ?? '').split(/[\s,]+/).map((id) => id.trim()).filter((id) => id.length > 0))];
 }
@@ -105,12 +123,12 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 		<div class="wizard-container">
 			<div class="wizard-header">
 				<h1>Generate Service</h1>
-				<p>8-Step Configuration Wizard</p>
+				<p>{{ wizardSteps().length }}-Step Configuration Wizard</p>
 			</div>
 
 			<div class="wizard-progress-bar">
 				<div class="progress-track">
-					@for (step of wizardSteps; track step; let index = $index) {
+					@for (step of wizardSteps(); track step; let index = $index) {
 						<div
 							class="progress-node"
 							[class.complete]="index < completedStepIndex()"
@@ -151,6 +169,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 					<mat-card-content>
 						<div class="family-switch">
 							@for (category of serviceCategories; track category) {
+							@if (category !== 'Identity Infrastructure' || selectedVertical()?.cloudProvider === 'AWS') {
 								<button
 									type="button"
 									class="family-button"
@@ -160,9 +179,16 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 									{{ category }}
 								</button>
 							}
+							}
 						</div>
 
 						<div class="build-types">
+                            @if (isTypeCategoryActive('Identity Infrastructure') && selectedVertical()?.cloudProvider === 'AWS') {
+                              <button type="button" class="type-button" [class.selected]="isTokenEnrichmentSelected()" (click)="selectBuildType('IdentityTokenEnrichment')">
+                                <span class="type-label">Identity Token Enrichment</span>
+                                <span class="type-note">AWS Lambda · inline Python · existing Cognito pool</span>
+                              </button>
+                            }
 							<div class="build-group" [class.inactive]="!isTypeCategoryActive('Backend Service')">
 								<h4>Backend Service</h4>
 								<div class="type-options">
@@ -236,6 +262,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				</mat-card>
 
 				<!-- STEP 4: Platform Modules -->
+                @if (!isTokenEnrichmentSelected()) {
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 4: {{ modulesStepTitle() }}</mat-card-title>
@@ -293,6 +320,80 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 						}
 					</mat-card-content>
 				</mat-card>
+
+                }
+                @if (isTokenEnrichmentSelected()) {
+                  <mat-card class="step-card" [class.active]="true">
+                    <mat-card-header><mat-card-title>Step 4: Token Enrichment</mat-card-title></mat-card-header>
+                    <mat-card-content>
+                      <p>AWS Lambda with inline Python. Deploy once per existing Cognito pool. No database connection or app client secret is required.</p>
+                      <mat-form-field class="full-width">
+                        <mat-label>AWS Region</mat-label>
+                        <input matInput formControlName="tokenRegion" required placeholder="us-east-1" />
+                        <mat-error>Enter a valid AWS region.</mat-error>
+                      </mat-form-field>
+                      <mat-form-field class="full-width">
+                        <mat-label>Cognito User Pool ID</mat-label>
+                        <input matInput formControlName="tokenUserPoolId" required placeholder="us-east-1_AbC123xyz" />
+                        <mat-error>Enter a valid pool ID matching the region.</mat-error>
+                      </mat-form-field>
+                      <p>The pool needs V2_0 support and a protected custom:tenant_id user attribute. The generated deployment creates Lambda and permissions; attach it explicitly in Cognito after deployment. Existing triggers must be reviewed before replacement.</p>
+                    </mat-card-content>
+                  </mat-card>
+                }
+                @if (form.controls.type.value === 'Monolithic') {
+                <mat-card class="step-card" [class.active]="true">
+                  <mat-card-header><mat-card-title>Step 5: Authentication</mat-card-title></mat-card-header>
+                  <mat-card-content>
+                    <mat-form-field appearance="outline">
+                      <mat-label>Authentication Provider</mat-label>
+                      <mat-select formControlName="angularAuthProvider">
+
+                        <mat-option value="Cognito">Amazon Cognito</mat-option>
+                      </mat-select>
+                    </mat-form-field>
+                    @if (form.controls.angularAuthProvider.value === 'Cognito') {
+                      <p>Use an existing AWS public app client with authorization code flow and PKCE. Register the callback and logout URLs and enable the selected scopes in Cognito. Region is derived from the pool ID. Multi-tenant mode is required: Cognito must issue a trusted tenant_id GUID in the access token before sign-in testing.</p>
+                      <div class="form-grid"><mat-form-field appearance="outline">
+ <mat-label>User Pool ID</mat-label>
+ <input matInput formControlName="angularUserPoolId" aria-describedby="angularUserPoolId-hint angularUserPoolId-error" />
+ <mat-hint id="angularUserPoolId-hint">us-east-1_AbC123xyz</mat-hint>
+ <mat-error id="angularUserPoolId-error">Enter a valid user pool id.</mat-error>
+</mat-form-field>
+<mat-form-field appearance="outline">
+ <mat-label>Public App Client ID</mat-label>
+ <input matInput formControlName="angularClientId" aria-describedby="angularClientId-hint angularClientId-error" />
+ <mat-hint id="angularClientId-hint">App client without a client secret</mat-hint>
+ <mat-error id="angularClientId-error">Enter a valid public app client id.</mat-error>
+</mat-form-field>
+<mat-form-field appearance="outline">
+ <mat-label>Cognito Domain</mat-label>
+ <input matInput formControlName="angularDomain" aria-describedby="angularDomain-hint angularDomain-error" />
+ <mat-hint id="angularDomain-hint">https://your-domain.auth.us-east-1.amazoncognito.com</mat-hint>
+ <mat-error id="angularDomain-error">Enter a valid cognito domain.</mat-error>
+</mat-form-field>
+<mat-form-field appearance="outline">
+ <mat-label>OAuth Scopes</mat-label>
+ <input matInput formControlName="angularScopes" aria-describedby="angularScopes-hint angularScopes-error" />
+ <mat-hint id="angularScopes-hint">openid email phone</mat-hint>
+ <mat-error id="angularScopes-error">Enter a valid oauth scopes.</mat-error>
+</mat-form-field>
+<mat-form-field appearance="outline">
+ <mat-label>Callback URL</mat-label>
+ <input matInput formControlName="angularRedirectUri" aria-describedby="angularRedirectUri-hint angularRedirectUri-error" />
+ <mat-hint id="angularRedirectUri-hint">http://localhost:4200/auth/callback</mat-hint>
+ <mat-error id="angularRedirectUri-error">Enter a valid callback url.</mat-error>
+</mat-form-field>
+<mat-form-field appearance="outline">
+ <mat-label>Logout Return URL</mat-label>
+ <input matInput formControlName="angularLogoutUri" aria-describedby="angularLogoutUri-hint angularLogoutUri-error" />
+ <mat-hint id="angularLogoutUri-hint">http://localhost:4200/login</mat-hint>
+ <mat-error id="angularLogoutUri-error">Enter a valid logout return url.</mat-error>
+</mat-form-field></div>
+                    }
+                  </mat-card-content>
+                </mat-card>
+                }
 
 				<!-- STEP 5: Cloud Services -->
 				@if (isBackendTypeSelected()) {
@@ -357,7 +458,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 										(click)="toggleCognito()"
 									>
 										<span class="module-label">Cognito</span>
-										<span class="module-desc">Sign-in and access control with Amazon Cognito user pools</span>
+										<span class="module-desc">Required: JWT authentication with tenant_id access-token claims</span>
 									</button>
 								}
 							</div>
@@ -401,9 +502,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 											}
 										</mat-form-field>
 									</div>
-									<mat-checkbox formControlName="cognitoAllowApiKey">
-										Also allow API keys (for service-to-service calls)
-									</mat-checkbox>
+									<p>API keys are disabled. Tenant identity comes from validated Cognito access tokens.</p>
 								</div>
 							}
 
@@ -462,6 +561,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				}
 
 				<!-- STEP 6: Production Readiness (Enterprise Scaffold) -->
+                @if (isBackendTypeSelected()) {
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Step 6: Production Readiness</mat-card-title>
@@ -548,6 +648,8 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 					</mat-card-content>
 				</mat-card>
 
+				}
+
 				<!-- Infrastructure Options (collapsible, between Production Readiness and Deployment Settings) -->
 				@if (isBackendTypeSelected()) {
 				<forge-infrastructure-options
@@ -565,7 +667,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 					</mat-card-header>
 					<mat-card-content>
 						<div class="checkbox-row">
-							<mat-checkbox formControlName="useDatabase">
+							<mat-checkbox formControlName="useDatabase" [disabled]="form.controls.type.value === 'RestApi'">
 								Include database
 							</mat-checkbox>
 						</div>
@@ -591,22 +693,24 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				}
 
 				<!-- Multi-Tenancy panel (between Infrastructure Options and Deployment Settings) -->
-				@if (isBackendTypeSelected()) {
+				@if (form.controls.type.value === 'RestApi') {
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
 						<mat-card-title>Tenancy</mat-card-title>
-						<mat-card-subtitle>How many customers this service serves</mat-card-subtitle>
+						<mat-card-subtitle>Multi-tenant isolation is required, including deployments with one customer</mat-card-subtitle>
 					</mat-card-header>
 					<mat-card-content>
 						<p class="step-hint">
-							Every service with a database includes a tenants table and a tenant management API, and keeps
-							each customer's data apart. A single-tenant service can switch to multi-tenant later without
-							moving data (see DeveloperReference/GoingMultiTenant.md in the print).
+                            Tenant data is resolved only from the validated tenant_id access-token claim. No single-tenant fallback is generated.
 						</p>
-						<mat-radio-group [formControl]="infraOptionsForm.controls.multiTenancy" class="multi-tenancy-options">
-							<mat-radio-button [value]="false">Single tenant (one customer)</mat-radio-button>
-							<mat-radio-button [value]="true">Multi-tenant (several customers)</mat-radio-button>
-						</mat-radio-group>
+						<p><strong>MultiTenant</strong> ? claim: <code>tenant_id</code></p>
+                        <mat-form-field appearance="outline">
+                            <mat-label>Initial Tenant GUID</mat-label>
+                            <input matInput formControlName="initialTenantId" aria-describedby="initial-tenant-hint initial-tenant-error" />
+                            <mat-hint id="initial-tenant-hint">Use the same GUID for this customer across related REST services and Cognito users.</mat-hint>
+                            <mat-error id="initial-tenant-error">Enter a non-empty tenant GUID.</mat-error>
+                        </mat-form-field>
+                        <button type="button" mat-button (click)="form.controls.initialTenantId.setValue(newTenantId())">Create tenant GUID</button>
 						@if (infraOptionsForm.hasError('multiTenancyRequiresDatabase')) {
 							<div class="provider-override-hint">
 								<mat-icon>warning</mat-icon>
@@ -653,7 +757,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				<!-- STEP 7: Deployment Settings -->
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
-						<mat-card-title>Step 7: Deployment Settings</mat-card-title>
+						<mat-card-title>Step {{ stepNumber('Deployment Settings') }}: Deployment Settings</mat-card-title>
 					</mat-card-header>
 					<mat-card-content>
 						<!-- GitHub & Infrastructure -->
@@ -666,9 +770,13 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 								<mat-checkbox formControlName="createGitHubRepo" [disabled]="!form.controls.pushToGitHub.value">
 									Create GitHub repository
 								</mat-checkbox>
+                                @if (!isTokenEnrichmentSelected()) {
 								<mat-checkbox formControlName="deployInfrastructure">
 									Deploy infrastructure
 								</mat-checkbox>
+                                } @else {
+                                  <p>Generates deployment files only. Deploy through CloudFormation console or SAM CLI.</p>
+                                }
 							</div>
 						</div>
 					</mat-card-content>
@@ -677,13 +785,17 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 				<!-- STEP 8: Review & Generate -->
 				<mat-card class="step-card" [class.active]="true">
 					<mat-card-header>
-						<mat-card-title>Step 8: Review &amp; Generate</mat-card-title>
+						<mat-card-title>Step {{ stepNumber('Review & Generate') }}: Review &amp; Generate</mat-card-title>
 					</mat-card-header>
 					<mat-card-content>
 						<div class="review-sections">
 							<div class="review-section">
 								<h4>Configuration Summary</h4>
 								<div class="review-grid">
+									@if (isTokenEnrichmentSelected()) {
+                                      <div class="review-item"><span class="label">AWS Region</span><span class="value">{{ form.controls.tokenRegion.value }}</span></div>
+                                      <div class="review-item"><span class="label">Cognito User Pool</span><span class="value">{{ form.controls.tokenUserPoolId.value }}</span></div>
+                                    }
 									<div class="review-item">
 										<span class="label">Vertical</span>
 										<span class="value">{{ form.controls.verticalSlug.value || 'N/A' }}</span>
@@ -696,7 +808,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 										<span class="label">Cloud Provider</span>
 										<span class="value">{{ form.controls.cloudProvider.value || 'AWS' }}</span>
 									</div>
-									@if (isBackendTypeSelected()) {
+									@if (isBackendTypeSelected() || form.controls.type.value === 'Monolithic') {
 										<div class="review-item">
 											<span class="label">Authentication</span>
 											<span class="value">{{ reviewAuthSummary() }}</span>
@@ -736,6 +848,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 							</div>
 
 							<!-- Infrastructure Options Summary -->
+                            @if (isBackendTypeSelected()) {
 							<div class="review-section">
 								<h4>Infrastructure Options</h4>
 								@if (infraReviewSummary().length === 0) {
@@ -758,6 +871,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 									}
 								}
 							</div>
+                            }
 						</div>
 
 						@if (validationPreview()) {
@@ -1626,9 +1740,10 @@ export class GenerationWizardV2Component {
 	private readonly generationApiService = inject(GENERATION_API_SERVICE) as IGenerationApiService;
 	private readonly verticalApiService = inject(VERTICAL_API_SERVICE) as IVerticalApiService;
 	private readonly modulesApiService = inject(MODULES_API_SERVICE) as IModulesApiService;
-	
-	readonly serviceCategories: ServiceCategory[] = ['Backend Service', 'Frontend App'];
+
+	readonly serviceCategories: ServiceCategory[] = ['Backend Service', 'Frontend App', 'Identity Infrastructure'];
 	readonly buildTypeOptions: BuildTypeOption[] = [
+        { label: 'Identity Token Enrichment', value: 'IdentityTokenEnrichment', category: 'Identity Infrastructure', live: true, note: 'AWS Lambda' },
 		{ label: 'REST API', value: 'RestApi', category: 'Backend Service', live: true, note: 'Live now' },
 		{ label: 'GraphQL', value: 'GraphQL', category: 'Backend Service', live: true, note: 'Live now' },
 		{ label: 'gRPC', value: 'Grpc', category: 'Backend Service', live: true, note: 'Live now' },
@@ -1650,6 +1765,7 @@ export class GenerationWizardV2Component {
 		type: ['RestApi' as BuildTypeOption['value']],
 		publishQueueInput: [''],
 		subscribeQueueInput: [''],
+        initialTenantId: new FormControl({ value: '', disabled: true }, { nonNullable: true, validators: [trimmedPattern(/^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i)] }),
 		useDatabase: [false],
 		databaseEngine: [''],
 		databaseSchema: [''],
@@ -1664,7 +1780,16 @@ export class GenerationWizardV2Component {
 		piiClassificationEnabled: [false],
 		outputCachingEnabled: [false],
 		cloudProvider: ['AWS'],
+        tokenRegion: new FormControl({ value: 'us-east-1', disabled: true }, { nonNullable: true, validators: [trimmedPattern(/^[a-z]{2}(?:-[a-z]+)+-\d+$/)] }),
+        tokenUserPoolId: new FormControl({ value: '', disabled: true }, { nonNullable: true, validators: [trimmedPattern(COGNITO_POOL_ID_PATTERN)] }),
 		// Cognito (Step 5). The detail fields stay disabled, so they are ignored by form validation, until the tile is selected.
+        angularAuthProvider: new FormControl<'Cognito'>('Cognito', { nonNullable: true }),
+        angularUserPoolId: new FormControl({ value: '', disabled: true }, { nonNullable: true, validators: [trimmedPattern(COGNITO_POOL_ID_PATTERN)] }),
+        angularClientId: new FormControl({ value: '', disabled: true }, { nonNullable: true, validators: [trimmedPattern(/^[A-Za-z0-9_+]{1,128}$/)] }),
+        angularDomain: new FormControl({ value: '', disabled: true }, { nonNullable: true, validators: [Validators.required, angularBrowserUrlValidator('domain')] }),
+        angularScopes: new FormControl({ value: 'openid email profile', disabled: true }, { nonNullable: true, validators: [Validators.required, angularScopesValidator] }),
+        angularRedirectUri: new FormControl({ value: 'http://localhost:4200/auth/callback', disabled: true }, { nonNullable: true, validators: [Validators.required, angularBrowserUrlValidator('callback')] }),
+        angularLogoutUri: new FormControl({ value: 'http://localhost:4200/login', disabled: true }, { nonNullable: true, validators: [Validators.required, angularBrowserUrlValidator('logout')] }),
 		cognitoEnabled: [false],
 		cognitoUserPoolId: new FormControl({ value: '', disabled: true }, { nonNullable: true, validators: [trimmedPattern(COGNITO_POOL_ID_PATTERN)] }),
 		cognitoClientIds: new FormControl({ value: '', disabled: true }, { nonNullable: true, validators: [cognitoClientIdsValidator] }),
@@ -1721,7 +1846,16 @@ export class GenerationWizardV2Component {
 	/** Cloud-agnostic platform modules */
 	readonly platformModules = computed(() => this.availableModules().filter(m => m.isCloudAgnostic));
 
-	readonly wizardSteps = ['Select Vertical', 'Choose Build Type', 'Service Details', 'Platform Modules', 'Cloud Services', 'Production Readiness', 'Deployment Settings', 'Review & Generate'] as const;
+    wizardSteps(): readonly string[] {
+        const steps = ['Select Vertical', 'Choose Build Type', 'Service Details', this.isTokenEnrichmentSelected() ? 'Token Enrichment' : 'Platform Modules'];
+        if (this.isBackendTypeSelected()) steps.push('Cloud Services', 'Production Readiness');
+        else if (this.form.controls.type.value === 'Monolithic') steps.push('Authentication');
+        return [...steps, 'Deployment Settings', 'Review & Generate'];
+    }
+
+    stepNumber(label: string): number {
+        return this.wizardSteps().indexOf(label) + 1;
+    }
 	readonly activeStep = signal(0);
 
 	/** The user confirmed the Cognito prerequisites for Multi-Tenancy (they live outside the generated service). */
@@ -1742,6 +1876,7 @@ export class GenerationWizardV2Component {
 			this.form.controls.verticalSlug.setValue(routeSlug, { emitEvent: false });
 		}
 
+		this.syncRequiredTenancy();
 		this.loadVerticals(routeSlug);
 		this.loadModules();
 		this.loadCanvasModules();
@@ -1782,6 +1917,15 @@ export class GenerationWizardV2Component {
 			}
 		});
 
+        this.form.controls.angularAuthProvider.valueChanges.subscribe(() => this.syncAngularAuthControls());
+        this.form.controls.type.valueChanges.subscribe(() => {
+            this.syncAngularAuthControls(); this.syncRequiredTenancy();
+            for (const control of [this.form.controls.tokenRegion, this.form.controls.tokenUserPoolId]) {
+                if (this.isTokenEnrichmentSelected()) control.enable({ emitEvent: false });
+                else control.disable({ emitEvent: false });
+            }
+        });
+
 		this.form.valueChanges.subscribe(() => {
 			this.validationPreview.set(null);
 			this.validationError.set(null);
@@ -1790,6 +1934,11 @@ export class GenerationWizardV2Component {
 	}
 
 	selectBuildType(type: BuildTypeOption['value']): void {
+        if (type === 'IdentityTokenEnrichment' && this.selectedVertical()?.cloudProvider !== 'AWS') return;
+        if (type === 'IdentityTokenEnrichment') {
+            this.form.controls.cloudProvider.setValue('AWS', { emitEvent: false });
+            this.form.controls.deployInfrastructure.setValue(false, { emitEvent: false });
+        }
 		const option = this.buildTypeOptions.find((item) => item.value === type);
 		if (!option || !option.live) return;
 
@@ -1835,13 +1984,17 @@ export class GenerationWizardV2Component {
 		if (!this.form.controls.type.value) return 1;
 		if (!this.form.controls.name.valid || !this.form.controls.displayName.valid || !this.form.controls.description.valid) return 2;
 		if (this.isBackendTypeSelected() && this.form.controls.useDatabase.value && (!this.form.controls.databaseEngine.value.trim() || !this.form.controls.databaseSchema.value.trim())) return 6;
-		if (!this.canGenerate()) return 7;
-		return 8;
+		if (!this.canGenerate()) return this.stepNumber('Review & Generate') - 1;
+		return this.wizardSteps().length;
 	}
 
 	isBackendTypeSelected(): boolean {
 		return ['RestApi', 'GraphQL', 'Grpc'].includes(this.form.controls.type.value);
 	}
+
+    isTokenEnrichmentSelected(): boolean {
+        return this.form.controls.type.value === 'IdentityTokenEnrichment';
+    }
 
 	isCanvasTypeSelected(): boolean {
 		return ['AngularShell', 'AngularMfe', 'Monolithic'].includes(this.form.controls.type.value);
@@ -1849,7 +2002,7 @@ export class GenerationWizardV2Component {
 
 	canGenerate(): boolean {
 		// Cognito setup cannot be checked from here, so Multi-Tenancy needs an explicit acknowledgment.
-		if (this.infraOptionsForm.controls.multiTenancy.value && !this.tenancyPrerequisitesAcknowledged()) {
+		if (this.isBackendTypeSelected() && this.infraOptionsForm.controls.multiTenancy.value && !this.tenancyPrerequisitesAcknowledged()) {
 			return false;
 		}
 
@@ -1960,6 +2113,34 @@ export class GenerationWizardV2Component {
 		this.disableCognito();
 	}
 
+    private syncAngularAuthControls(): void {
+      const enabled = this.form.controls.type.value === 'Monolithic' && this.form.controls.angularAuthProvider.value === 'Cognito';
+      for (const control of [this.form.controls.angularUserPoolId, this.form.controls.angularClientId,
+        this.form.controls.angularDomain, this.form.controls.angularScopes, this.form.controls.angularRedirectUri,
+        this.form.controls.angularLogoutUri]) {
+        if (enabled) control.enable({ emitEvent: false });
+        else control.disable({ emitEvent: false });
+      }
+    }
+
+    newTenantId(): string { return crypto.randomUUID(); }
+
+    private syncRequiredTenancy(): void {
+        const rest = this.form.controls.type.value === 'RestApi';
+        this.infraOptionsForm.controls.multiTenancy.setValue(rest, { emitEvent: false });
+        if (rest) {
+            this.form.controls.initialTenantId.enable({ emitEvent: false });
+            this.form.controls.useDatabase.setValue(true, { emitEvent: false });
+            this.form.controls.useDatabase.disable({ emitEvent: false });
+            this.form.controls.databaseEngine.setValue('postgresql', { emitEvent: false });
+            this.setCognitoEnabled(true);
+        } else {
+            this.form.controls.initialTenantId.disable({ emitEvent: false });
+            this.form.controls.useDatabase.enable({ emitEvent: false });
+        }
+        this.infraOptionsForm.updateValueAndValidity();
+    }
+
 	toggleCognito(): void {
 		this.setCognitoEnabled(!this.form.controls.cognitoEnabled.value);
 	}
@@ -1970,6 +2151,7 @@ export class GenerationWizardV2Component {
 	}
 
 	private setCognitoEnabled(enabled: boolean): void {
+        if (this.form.controls.type.value === 'RestApi') enabled = true;
 		this.form.controls.cognitoEnabled.setValue(enabled);
 
 		for (const control of [
@@ -1985,11 +2167,14 @@ export class GenerationWizardV2Component {
 			}
 		}
 
+        this.form.controls.cognitoAllowApiKey.setValue(false, { emitEvent: false });
+        this.form.controls.cognitoAllowApiKey.disable({ emitEvent: false });
 		// Multi-Tenancy depends on the authentication choice, so re-check it.
 		this.infraOptionsForm.updateValueAndValidity();
 	}
 
 	reviewAuthSummary(): string {
+        if (this.form.controls.type.value === 'Monolithic') return this.form.controls.angularAuthProvider.value;
 		if (!this.form.controls.cognitoEnabled.value) return 'API key';
 
 		const ids = parseCognitoClientIds(this.form.controls.cognitoClientIds.value);
@@ -2144,7 +2329,17 @@ export class GenerationWizardV2Component {
 			return null;
 		}
 
-		const value = this.form.getRawValue();
+        const value = this.form.getRawValue();
+        if (value.type === 'IdentityTokenEnrichment' &&
+            (this.selectedVertical()?.cloudProvider !== 'AWS' || !value.tokenUserPoolId.trim().startsWith(value.tokenRegion.trim() + '_'))) {
+            this.validationError.set('Token enrichment requires an AWS vertical and a user pool matching the AWS region.');
+            return null;
+        }
+        if (value.type === 'Monolithic' && value.angularAuthProvider === 'Cognito' &&
+            new URL(value.angularRedirectUri.trim()).origin !== new URL(value.angularLogoutUri.trim()).origin) {
+          this.validationError.set('Callback and logout URLs must use the same app origin.');
+          return null;
+        }
 		const verticalSlug = value.verticalSlug.trim();
 		const serviceName = value.name.trim();
 
@@ -2184,15 +2379,29 @@ export class GenerationWizardV2Component {
 			description: value.description.trim(),
 			version: value.version.trim(),
 			type: value.type,
-			...(value.type === 'Monolithic' ? { uiTargets: ['web'] } : {}),
+            ...(value.type === 'IdentityTokenEnrichment' ? {
+                tokenEnrichment: { region: value.tokenRegion.trim(), userPoolId: value.tokenUserPoolId.trim() },
+            } : {}),
+            ...(value.type === 'Monolithic' ? {
+              uiTargets: ['web'],
+              angularAuth: value.angularAuthProvider === 'Cognito' ? {
+                provider: 'Cognito' as const,
+                userPoolId: value.angularUserPoolId.trim(),
+                clientId: value.angularClientId.trim(),
+                domain: value.angularDomain.trim().replace(/\/$/, ''),
+                scopes: [...new Set(value.angularScopes.trim().split(/\s+/))],
+                redirectUri: value.angularRedirectUri.trim(),
+                postLogoutRedirectUri: value.angularLogoutUri.trim(),
+              } : { provider: 'None' as const },
+            } : {}),
 			genesisModules: this.isBackendTypeSelected() ? this.selectedModules() : [],
 			canvasModules: this.isCanvasTypeSelected() ? this.selectedCanvasModules() : undefined,
-			database: value.useDatabase ? {
+			database: this.isBackendTypeSelected() && value.useDatabase ? {
 				engine: databaseEngineMap[value.databaseEngine.trim()] ?? value.databaseEngine.trim(),
 				schema: value.databaseSchema.trim(),
 			} : null,
 			createGitHubRepo: value.createGitHubRepo,
-			enterprise,
+			...(this.isBackendTypeSelected() ? { enterprise } : {}),
 			...(value.cognitoEnabled && value.type === 'RestApi'
 				? {
 						cognito: {
@@ -2203,7 +2412,8 @@ export class GenerationWizardV2Component {
 						},
 					}
 				: {}),
-			...mapInfraOptionsToRequest(this.infraOptionsForm.getRawValue()),
+			...(this.isBackendTypeSelected() ? mapInfraOptionsToRequest(this.infraOptionsForm.getRawValue()) : {}),
+            ...(value.type === 'RestApi' ? { multiTenancy: true, initialTenantId: value.initialTenantId.trim() } : {}),
 		};
 	}
 

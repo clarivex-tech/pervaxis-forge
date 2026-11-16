@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -31,7 +32,7 @@
 export const AUTH_CALLBACK_PATH = '/auth/callback';
 
 /** Must match the API's Forge:Tenant:Mode. */
-export type TenancyMode = 'SingleTenant' | 'MultiTenant';
+export type TenancyMode = 'MultiTenant';
 
 export interface AuthConfig {
   /** Origin of the Cognito hosted UI (managed or custom domain), for example https://auth.example.com. */
@@ -108,10 +109,11 @@ export function parseAppConfig(raw: unknown, appOrigin: string): AppConfigResult
 
   const tenancy = isRecord(raw['tenancy']) ? raw['tenancy'] : null;
   const mode = tenancy?.['mode'];
-  if (mode !== 'SingleTenant' && mode !== 'MultiTenant') {
-    errors.push('"tenancy.mode" must be "SingleTenant" or "MultiTenant" (the API\'s Forge:Tenant:Mode).');
+  if (mode !== 'MultiTenant') {
+    errors.push('"tenancy.mode" must be "MultiTenant".');
   }
   const claimType = readOptionalToken(tenancy?.['claimType'], 'tenancy.claimType', DEFAULT_TENANT_CLAIM, errors);
+  if (claimType !== 'tenant_id') errors.push('tenancy.claimType must be tenant_id.');
 
   if (errors.length > 0 || !apiUrl || !cognitoDomain || !issuer || !clientId || !scopes || !redirectUri
       || !postLogoutRedirectUri || !roleClaim || !claimType) {
@@ -242,3 +244,33 @@ function deepFreeze<T>(value: T): T {
   }
   return value;
 }
+
+{{ else }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+export interface AppConfig { readonly apiUrl: string; }
+export type AppConfigResult = { readonly ok: true; readonly config: AppConfig } | { readonly ok: false; readonly errors: readonly string[] };
+export function parseAppConfig(raw: unknown, appOrigin: string): AppConfigResult {
+  try {
+    if (typeof raw !== 'object' || raw === null || !('apiUrl' in raw) || typeof raw.apiUrl !== 'string') throw new Error('Missing API URL');
+    const url = new URL(raw.apiUrl, appOrigin);
+    if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname))) || url.username || url.password || url.search || url.hash) throw new Error('Invalid API URL');
+    return { ok: true, config: Object.freeze({ apiUrl: url.href.replace(/\/+$/, '') }) };
+  } catch { return { ok: false, errors: ['apiUrl must be HTTPS, a relative path, or localhost HTTP.'] }; }
+}
+{{ end }}

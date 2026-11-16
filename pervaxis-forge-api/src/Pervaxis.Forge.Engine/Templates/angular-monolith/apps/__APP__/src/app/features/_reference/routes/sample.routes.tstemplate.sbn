@@ -17,12 +17,16 @@
  */
 
 import { Routes } from '@angular/router';
+{{ if model.angular_cognito_enabled }}
 import { authGuard } from '../../../core/guards/auth.guard';
+{{ end }}
 
 export const SAMPLE_ROUTES: Routes = [
   {
     path: '',
+{{ if model.angular_cognito_enabled }}
     canActivate: [authGuard],
+{{ end }}
     children: [
       {
         path: '',

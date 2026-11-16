@@ -24,7 +24,9 @@ Thumbs.db
 .env.*.local
 
 # Runtime configuration is per deployment (see AUTHENTICATION.md). Commit only app-config.example.json.
+{{ if !model.angular_auth_configured }}
 apps/*/src/assets/app-config.json
+{{ end }}
 
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
 # Capacitor native platforms

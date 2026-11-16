@@ -161,14 +161,20 @@ builder.Services.Configure<ForgeOidcOptions>(builder.Configuration.GetSection(Fo
 builder.Services.Configure<ForgeTenantOptions>(builder.Configuration.GetSection(ForgeTenantOptions.SectionName));
 {{- else }}
 // -- Tenancy (see DeveloperReference/Tenancy.md) ------------------------------------------
-// Forge:Tenant:Mode = SingleTenant: every request runs as DefaultTenantId (this service's one customer).
+// Multi-tenant only. The initial tenant seed is never used as a request fallback.
 // Forge:Tenant:Mode = MultiTenant: the tenant comes only from the validated access-token claim, never from a header.
 builder.Services.AddPervaxisClaimsMultiTenancy(options =>
 {
     builder.Configuration.GetSection("Forge:Tenant").Bind(options);
+    if (options.Mode != TenancyMode.MultiTenant || options.ClaimType != "tenant_id" || !options.EnableDirectoryChecks)
+        throw new InvalidOperationException("This print requires MultiTenant mode, tenant_id claims, and tenant directory checks.");
     if (string.IsNullOrWhiteSpace(options.DefaultTenantId))
         options.DefaultTenantId = TenantDefaults.DefaultTenantId;
 });
+builder.Services.AddOptions<ClaimsTenantOptions>()
+    .Validate(options => options.Mode == TenancyMode.MultiTenant && options.ClaimType == "tenant_id" && options.EnableDirectoryChecks,
+        "This print requires MultiTenant mode, tenant_id claims, and tenant directory checks.")
+    .ValidateOnStart();
 // Tenant status checks read the tenants table (Data/Tenancy). Suspended or unknown tenants get 403.
 builder.Services.AddScoped<ITenantDirectory, EfTenantDirectory>();
 builder.Services.AddScoped<ITenantManagementService, TenantManagementService>();

@@ -30,9 +30,15 @@ import { LoadingService } from './core/services/loading.service';
 import { NotificationService } from './core/services/notification.service';
 import { ConfirmDialogService } from '@shared/services/confirm-dialog.service';
 import { RouteLoadingService } from './core/services/route-loading.service';
+{{ if model.angular_cognito_enabled }}
 import { InactivityService } from './core/services/inactivity.service';
+{{ end }}
+{{ if model.angular_cognito_enabled }}
 import { AuthService } from './core/auth/auth.service';
+{{ end }}
+{{ if model.angular_cognito_enabled }}
 import { TenantContextService } from './core/auth/tenant-context.service';
+{{ end }}
 
 /**
  * Root application component.
@@ -67,9 +73,15 @@ export class AppComponent {
   protected readonly confirmDialog = inject(ConfirmDialogService).activeDialog;
   private readonly confirmService = inject(ConfirmDialogService);
   private readonly routeLoading = inject(RouteLoadingService);
+{{ if model.angular_cognito_enabled }}
   private readonly inactivity = inject(InactivityService);
+{{ end }}
+{{ if model.angular_cognito_enabled }}
   protected readonly auth = inject(AuthService);
+{{ end }}
+{{ if model.angular_cognito_enabled }}
   protected readonly tenant = inject(TenantContextService);
+{{ end }}
 
   sidebarCollapsed = false;
 
@@ -83,12 +95,16 @@ export class AppComponent {
 
   constructor() {
     this.routeLoading.init();
+{{ if model.angular_cognito_enabled }}
     this.inactivity.start();
+{{ end }}
   }
 
+{{ if model.angular_cognito_enabled }}
   signOut(): void {
     void this.auth.logout();
   }
+{{ end }}
 
   dismissNotification(id: number): void {
     inject(NotificationService).dismiss(id);

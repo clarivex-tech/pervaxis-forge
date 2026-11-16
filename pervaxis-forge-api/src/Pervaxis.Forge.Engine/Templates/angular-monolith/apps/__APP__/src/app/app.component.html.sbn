@@ -71,6 +71,7 @@
       <span class="app-header__brand" [textContent]="title"></span>
     </ng-template>
     <ng-template #end>
+{{ if model.angular_cognito_enabled }}
       @if (auth.isAuthenticated()) {
         @if (tenant.currentTenantId(); as tenantId) {
           <span class="app-header__tenant" [title]="'Tenant ' + tenantId" [textContent]="'Tenant ' + tenantId.slice(0, 8)"></span>
@@ -79,6 +80,8 @@
         <span class="app-header__user" [textContent]="auth.profile()?.displayName ?? ''"></span>
         <p-button label="Sign out" icon="pi pi-sign-out" [text]="true" severity="secondary" (onClick)="signOut()" />
       }
+
+{{ end }}
     </ng-template>
   </p-toolbar>
 

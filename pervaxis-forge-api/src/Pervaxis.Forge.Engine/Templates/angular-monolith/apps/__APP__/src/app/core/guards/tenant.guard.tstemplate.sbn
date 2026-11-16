@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -26,7 +27,6 @@ import { TenantContextService } from '../auth/tenant-context.service';
  *   canActivate: [authGuard, tenantGuard]
  *
  * Follows the API contract (Forge:Tenant:Mode):
- *   - SingleTenant: every signed-in user may continue; the API uses its own tenant.
  *   - MultiTenant: the access token must carry one valid tenant claim, otherwise the API answers
  *     403 on tenant data, so the user goes to /access-denied?reason=no-tenant.
  * Leave it off routes that work without a tenant (for example platform administration, which
@@ -40,8 +40,10 @@ export const tenantGuard: CanActivateFn = async (_route, state) => {
   if (!(await auth.ensureSession())) {
     return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
   }
-  if (!tenant.requiresTenant() || tenant.claimStatus() === 'valid') {
+  if (tenant.claimStatus() === 'valid') {
     return true;
   }
   return router.createUrlTree(['/access-denied'], { queryParams: { reason: 'no-tenant' } });
 };
+
+{{ end }}

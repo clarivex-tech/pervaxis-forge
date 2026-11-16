@@ -27,6 +27,26 @@ public sealed record TemplateModel
 
     public string GenesisVersion { get; init; } = "";
 
+    /// <summary>Angular monolith prints always include Cognito tenant authentication.</summary>
+    public bool AngularCognitoEnabled => true;
+
+    /// <summary>JSON-escaped public runtime settings for an explicit Cognito selection.</summary>
+    public string AngularAppConfigJson => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        apiUrl = "/api",
+        auth = Manifest.AngularAuth is { Provider: "Cognito" } auth ? new
+        {
+            cognitoDomain = auth.Domain,
+            issuer = $"https://cognito-idp.{auth.UserPoolId!.Split('_')[0]}.amazonaws.com/{auth.UserPoolId}",
+            clientId = auth.ClientId,
+            scopes = auth.Scopes,
+            redirectUri = auth.RedirectUri,
+            postLogoutRedirectUri = auth.PostLogoutRedirectUri,
+            roleClaim = "cognito:groups"
+        } : null,
+        tenancy = new { mode = "MultiTenant", claimType = "tenant_id" }
+    }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
+
     /// <summary>
     /// The first tenant of a generated service: seeded into the tenants table and used as the only tenant in
     /// single-tenant mode. One value per print, so every file of the print agrees.

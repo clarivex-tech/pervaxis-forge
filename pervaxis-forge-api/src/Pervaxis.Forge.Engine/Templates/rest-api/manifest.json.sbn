@@ -3,6 +3,8 @@
   "verticalSlug": "{{ model.manifest.vertical_slug }}",
   "serviceName": "{{ model.manifest.service_name }}",
   "serviceType": "RestApi",
+  "multiTenancy": true,
+  "initialTenantId": "{{ model.default_tenant_id }}",
   "componentPrefix": "{{ model.manifest.component_prefix }}",
   "cloudProvider": "{{ model.cloud_provider }}"{{ if model.selected_modules.size > 0 }},
   "genesisModules": [{{ for module in model.selected_modules }}

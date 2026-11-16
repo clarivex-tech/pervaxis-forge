@@ -1,88 +1,34 @@
 {{- if model.manifest.tenant_ready -}}
-# Going multi-tenant
+# Cognito tenant provisioning and onboarding
 
-Use this when a service that serves one customer (single-tenant mode) must start serving more customers.
-Read [`Tenancy.md`](Tenancy.md) first for how tenancy works.
+This print always uses MultiTenant mode, including deployments with one customer. See [Tenancy.md](Tenancy.md) and [TenancyQuickStart.md](TenancyQuickStart.md).
 
-This service is currently in **{{ if model.manifest.multi_tenancy }}multi-tenant{{ else }}single-tenant{{ end }}** mode
-(`Forge:Tenant:Mode` in `appsettings.json`).
+## Initial tenant
 
-## What does not change
+The initial tenant is `{{ model.default_tenant_id }}`. Its GUID is supplied in Press and seeded in the tenants table. Reuse it across related REST services and trusted user provisioning. The seed is never a request fallback.
 
-- **Data.** Every row already carries the first customer's `TenantId`. No data migration, no copying.
-- **Code.** Queries, repositories and endpoints stay the same. They always used the current tenant.
-- **The tenants table.** The first customer is already a row in it.
+## Cognito setup (once per user pool)
 
-The first customer's id is `{{ model.default_tenant_id }}`. It is in `Data/Tenancy/TenantDefaults.cs` and in
-`Forge:Tenant:DefaultTenantId`.
+- Use an Essentials or Plus pool with a pre-token-generation Lambda (V2_0 for user access tokens).
+- Trusted onboarding assigns `custom:tenant_id`. Remove the app client's write permission for that attribute; self-registration cannot assign its own tenant.
+- The trigger validates the assignment and emits `tenant_id` in the **access token**, not only the ID token. Reject missing/invalid assignments.
+- This contract currently assigns one tenant per user. The value is exactly one non-empty GUID string.
+- The Lambda is provisioned separately; this print does not deploy or verify it.
 
-## Steps
+## Onboard customers
 
-Do them in this order. Each step is safe on its own until step 5.
+1. Apply the generated migrations to seed the initial tenant.
+2. A trusted administrator assigns that GUID to the initial customer's users.
+3. For another customer, a PlatformAdmin calls `POST api/v1/tenants` with a name. Provision that same returned GUID in related services and assign it to that customer's users through trusted onboarding.
+4. Sign in again to obtain fresh tokens after assignments change.
 
-### 1. Add the new customer
+## Verify isolation
 
-Call the tenant management API as a user in the `PlatformAdmin` group:
+- Tenant A can access its own data; tenant B cannot read, update or delete it.
+- Missing, malformed, unknown, suspended or offboarded tenant identities are rejected on tenant-owned operations.
+- API keys cannot access tenant-owned operations.
+- Platform administration endpoints require PlatformAdmin; they are deliberately tenant-exempt.
+- A claim or provisioning failure must be corrected at its source. Never switch to SingleTenant or disable tenant directory checks.
 
-```http
-POST api/v1/tenants
-{ "name": "Contoso" }
-```
-
-Note the `id` in the response. That is the new customer's tenant id.
-
-### 2. Set up Cognito to put the tenant in tokens (once)
-
-- The user pool must be on the **Essentials** or **Plus** feature plan.
-- Add a custom user attribute, for example `custom:tenant_id`, that only your provisioning process can write
-  (not writable by the app client).
-- Add a **pre-token-generation** Lambda trigger, event version **V2_0** or **V3_0**, that copies that attribute into the
-  **access token** as the claim `tenant_id`.
-- The claim must be one GUID string. Never a list.
-
-### 3. Give every user a tenant
-
-- **Existing users:** set their tenant attribute to the first customer's id, `{{ model.default_tenant_id }}`.
-  Their data already belongs to that tenant, so nothing else changes for them.
-- **New customer's users:** set it to the id from step 1.
-- Each user belongs to exactly one tenant.
-
-Check a few users: sign in and decode their access token. It must contain `"tenant_id": "<their tenant id>"`.
-
-### 4. Check the callers
-
-- In multi-tenant mode, API keys cannot reach tenant data (they have no token). Move any API-key callers to Cognito
-  sign-in first. Machine-to-machine tenancy is not supported yet.
-- Background jobs that used `TenantDefaults.DefaultTenantId` must now take the tenant from their trusted input.
-
-### 5. Switch the mode
-
-In `appsettings.json` (or the environment's configuration):
-
-```json
-"Forge": {
-  "Tenant": {
-    "Mode": "MultiTenant"
-  }
-}
-```
-
-Restart the service. From now on each request's tenant comes from the caller's token.
-
-### 6. Verify
-
-- A user of the first customer sees their existing data.
-- A user of the new customer sees none of it.
-- A user without a `tenant_id` claim gets 403.
-- `GET api/v1/tenants` (as `PlatformAdmin`) lists both tenants.
-
-## If something goes wrong
-
-Switch `Forge:Tenant:Mode` back to `SingleTenant` and restart. The service again runs as the first customer only.
-Rows written by the new customer while multi-tenant stay theirs and are not visible in single-tenant mode.
-
-## Out of scope
-
-Data outside the database (caches, files in storage, search indexes, queued messages) is not covered by this guide.
-Check each AWS resource before serving a second customer.
+Database isolation is only part of the contract. Verify tenant isolation for each enabled cache, file-storage, search and messaging provider as well.
 {{- end -}}

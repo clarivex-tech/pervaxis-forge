@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -368,3 +369,5 @@ describe('AuthService without a valid configuration', () => {
     expect(sessionStorage.getItem(REFRESH_TOKEN_STORAGE_KEY)).toBeNull();
   });
 });
+
+{{ end }}

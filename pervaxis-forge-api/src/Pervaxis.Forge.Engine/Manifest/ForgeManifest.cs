@@ -44,5 +44,14 @@ public sealed record ForgeManifest
 
     public bool MultiTenancy { get; init; } = false;
 
+    /// <summary>Initial tenant identity shared by related REST services. Never used as a request fallback.</summary>
+    public Guid? InitialTenantId { get; init; }
+
     public CognitoConfig? Cognito { get; init; }
+
+    /// <summary>Authentication choice and public settings for Angular monoliths.</summary>
+    public AngularAuthConfig? AngularAuth { get; init; }
+
+    /// <summary>Existing Cognito pool targeted by an AWS identity enrichment print.</summary>
+    public TokenEnrichmentConfig? TokenEnrichment { get; init; }
 }

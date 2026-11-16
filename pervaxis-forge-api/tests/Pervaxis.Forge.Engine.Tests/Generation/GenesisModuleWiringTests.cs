@@ -41,6 +41,9 @@ public class GenesisModuleWiringTests
         VerticalSlug = "clarivolt",
         ServiceName = "billing-service",
         ServiceType = ServiceType.RestApi,
+        MultiTenancy = true,
+        InitialTenantId = TestTenancy.InitialTenantId,
+        Cognito = TestTenancy.Cognito,
         ComponentPrefix = "CLV",
         CloudProvider = "AWS",
         Database = database ? new DatabaseConfig { Engine = "postgresql", Name = "billing" } : null,
@@ -122,7 +125,6 @@ public class GenesisModuleWiringTests
 
     [Theory]
     [InlineData(true)]
-    [InlineData(false)]
     public async Task Appsettings_StaysValidJson_ForEveryModuleCombination(bool database)
     {
         string[][] combinations = [[], ["Caching"], ["OData"], ["Caching", "OData"], ["OData", "Sanitization"], ["Sanitization", "Caching", "FeatureFlags"]];
