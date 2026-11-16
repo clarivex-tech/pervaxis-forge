@@ -46,6 +46,11 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
             ["AngularMfeRoutePath"] = model.DerivedNames.AngularMfeRoutePath,
             ["model"] = new Scriban.Runtime.ScriptObject
             {
+                ["token_region"] = model.Manifest.TokenEnrichment?.Region,
+                ["token_user_pool_id"] = model.Manifest.TokenEnrichment?.UserPoolId,
+                ["angular_cognito_enabled"] = model.AngularCognitoEnabled,
+                ["angular_auth_configured"] = model.Manifest.AngularAuth is not null,
+                ["angular_app_config_json"] = model.Manifest.AngularAuth is not null ? model.AngularAppConfigJson : string.Empty,
                 ["manifest"] = new Scriban.Runtime.ScriptObject
                 {
                     ["product"] = model.Manifest.Product,

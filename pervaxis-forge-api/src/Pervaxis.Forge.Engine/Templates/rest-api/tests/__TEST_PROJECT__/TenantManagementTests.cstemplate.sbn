@@ -63,7 +63,7 @@ public sealed class TenantTestDatabase : IDisposable
     public DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> Options { get; }
 
     /// <summary>Services as Program.cs registers them for tenancy, backed by this database.</summary>
-    public ServiceProvider BuildServices(TenancyMode mode = TenancyMode.SingleTenant)
+    public ServiceProvider BuildServices(TenancyMode mode = TenancyMode.MultiTenant)
     {
         var services = new ServiceCollection();
         services.AddLogging();
@@ -173,9 +173,9 @@ public sealed class TenantManagementTests : IDisposable
     }
 
     [Fact]
-    public async Task SingleTenant_TheOnlyTenantCannotBeOffboarded()
+    public async Task MultiTenant_TheInitialTenantCanBeOffboarded()
     {
-        (await UseAsync(t => t.OffboardAsync(DefaultTenant))).Error.Should().Be(TenantChangeError.ProtectedTenant);
+        (await UseAsync(t => t.OffboardAsync(DefaultTenant))).Succeeded.Should().BeTrue();
     }
 
     [Fact]
@@ -344,8 +344,8 @@ public sealed class TenantIsolationInDbContextTests : IDisposable
     }
 }
 
-/// <summary>A small host with the real Core tenancy middleware in single-tenant mode and the tenants table.</summary>
-public sealed class SingleTenantHostTests : IAsyncLifetime
+/// <summary>A small host with the real Core tenancy middleware in multi-tenant mode and the tenants table.</summary>
+public sealed class MultiTenantHostTests : IAsyncLifetime
 {
     private readonly TenantTestDatabase _database = new();
     private WebApplication? _app;
@@ -358,7 +358,7 @@ public sealed class SingleTenantHostTests : IAsyncLifetime
         builder.WebHost.UseTestServer();
         builder.Services.AddPervaxisClaimsMultiTenancy(options =>
         {
-            options.Mode = TenancyMode.SingleTenant;
+            options.Mode = TenancyMode.MultiTenant;
             options.DefaultTenantId = TenantDefaults.DefaultTenantId;
             options.EnableDirectoryChecks = true;
         });
@@ -368,7 +368,14 @@ public sealed class SingleTenantHostTests : IAsyncLifetime
 
         _app = builder.Build();
         _app.UseRouting();
+        _app.Use(async (context, next) =>
+        {
+            var claims = context.Request.Path == "/no-tenant" ? Array.Empty<Claim>() : new[] { new Claim("tenant_id", TenantDefaults.DefaultTenantId) };
+            context.User = new ClaimsPrincipal(new ClaimsIdentity(claims, "test"));
+            await next();
+        });
         _app.UsePervaxisClaimsTenancy();
+        _app.MapGet("/no-tenant", () => "must not be reached");
         _app.MapGet("/whoami", (ITenantContext tenant) => tenant.IsResolved ? tenant.TenantId.Value : "unresolved");
         _app.MapGet("/health", () => "ok").WithTenantExempt();
         await _app.StartAsync();
@@ -390,12 +397,10 @@ public sealed class SingleTenantHostTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task EveryRequest_RunsAsTheServicesTenant_WithoutATenantClaim()
+    public async Task MissingTenantClaim_IsRejectedWithoutFallback()
     {
-        var response = await _client.GetAsync("/whoami");
-
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await response.Content.ReadAsStringAsync()).Should().Be(TenantDefaults.DefaultTenantId);
+        var response = await _client.GetAsync("/no-tenant");
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]

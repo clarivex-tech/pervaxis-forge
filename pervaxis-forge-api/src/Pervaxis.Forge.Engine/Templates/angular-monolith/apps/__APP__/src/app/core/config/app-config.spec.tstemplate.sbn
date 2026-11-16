@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -84,5 +85,9 @@ describe('parseAppConfig', () => {
   it('requires an explicit tenancy mode that matches the API', () => {
     expect(errorsOf({ ...testAppConfig(), tenancy: {} }).length).toBeGreaterThan(0);
     expect(errorsOf({ ...testAppConfig(), tenancy: { mode: 'Shared' } }).length).toBeGreaterThan(0);
+    expect(errorsOf({ ...testAppConfig(), tenancy: { mode: 'SingleTenant' } }).length).toBeGreaterThan(0);
+    expect(errorsOf({ ...testAppConfig(), tenancy: { mode: 'MultiTenant', claimType: 'other' } }).length).toBeGreaterThan(0);
   });
 });
+
+{{ end }}

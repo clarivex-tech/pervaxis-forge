@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -77,3 +78,5 @@ export function isReplayAllowed(req: HttpRequest<unknown>, error: HttpErrorRespo
   const challenge = error.headers?.get('WWW-Authenticate') ?? '';
   return /^\s*Bearer\b/i.test(challenge) && /error\s*=\s*"?invalid_token"?/i.test(challenge);
 }
+
+{{ end }}

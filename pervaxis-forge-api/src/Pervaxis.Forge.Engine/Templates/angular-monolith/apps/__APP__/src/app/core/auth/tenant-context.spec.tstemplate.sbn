@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -72,13 +73,14 @@ describe('TenantContextService', () => {
     expect(tenant.memberships()).toEqual([]);
   });
 
-  it('single-tenant: ignores tenant claims, as the API does', () => {
-    const tenant = setUp('SingleTenant');
+  it('clearing a session removes its tenant and keeps tenancy required', () => {
+    const tenant = setUp('MultiTenant');
     tenant.update({ tenant_id: TEST_TENANT_ID });
 
-    expect(tenant.claimStatus()).toBe('not-applicable');
+    tenant.clear();
+    expect(tenant.claimStatus()).toBe('absent');
     expect(tenant.currentTenantId()).toBeNull();
-    expect(tenant.requiresTenant()).toBeFalse();
+    expect(tenant.requiresTenant()).toBeTrue();
   });
 
   it('clears tenant-specific state when the token carries a different tenant', () => {
@@ -107,3 +109,5 @@ describe('TenantContextService', () => {
     expect(cleared).toBeTrue();
   });
 });
+
+{{ end }}

@@ -14,6 +14,7 @@ public class MonolithAuthGenerationTests
         VerticalSlug = "clarivolt",
         ServiceName = "claims-web",
         ServiceType = ServiceType.Monolithic,
+        AngularAuth = TestTenancy.AngularAuth,
         ComponentPrefix = "clv",
         CloudProvider = "AWS",
         UiTargets = targets.ToList(),
@@ -47,8 +48,8 @@ public class MonolithAuthGenerationTests
         Assert.Contains("apps/claims-web/src/app/core/config/app-config.service.ts", entries);
         Assert.Contains("apps/claims-web/src/assets/app-config.example.json", entries);
 
-        // app-config.json must NOT be in the print
-        Assert.DoesNotContain("apps/claims-web/src/assets/app-config.json", entries);
+        // Cognito configuration is populated at generation.
+        Assert.Contains("apps/claims-web/src/assets/app-config.json", entries);
 
         // Guards and interceptors
         Assert.Contains("apps/claims-web/src/app/core/guards/auth.guard.ts", entries);
@@ -78,7 +79,7 @@ public class MonolithAuthGenerationTests
         using var gitignoreStream = gitignoreEntry!.Open();
         using var gitignoreReader = new StreamReader(gitignoreStream, Encoding.UTF8);
         var gitignore = await gitignoreReader.ReadToEndAsync();
-        Assert.Contains("app-config.json", gitignore);
+        Assert.DoesNotContain("apps/*/src/assets/app-config.json", gitignore);
     }
 
     [Fact]
@@ -109,5 +110,69 @@ public class MonolithAuthGenerationTests
         using var loginReader = new StreamReader(loginStream, Encoding.UTF8);
         var loginContent = await loginReader.ReadToEndAsync();
         Assert.Contains("AuthService", loginContent);
+    }
+
+    private static AngularAuthConfig Cognito() => new()
+    {
+        Provider = "Cognito", UserPoolId = "us-east-1_Example", ClientId = "exampleclient123",
+        Domain = "https://example.auth.us-east-1.amazoncognito.com",
+        Scopes = ["openid", "email", "phone"],
+        RedirectUri = "http://localhost:4200/auth/callback",
+        PostLogoutRedirectUri = "http://localhost:4200/login"
+    };
+
+    [Fact]
+    public async Task SelectedCognito_EmitsConfiguredRuntimeJson()
+    {
+        var manifest = Manifest(["web"]) with { AngularAuth = Cognito() };
+        using var archive = new ZipArchive(new MemoryStream(await new PrintGenerator().GenerateAsync(manifest, "AWS")));
+        var content = await Read(archive, "apps/claims-web/src/assets/app-config.json");
+        using var config = System.Text.Json.JsonDocument.Parse(content);
+        Assert.Equal("MultiTenant", config.RootElement.GetProperty("tenancy").GetProperty("mode").GetString());
+        Assert.Equal("tenant_id", config.RootElement.GetProperty("tenancy").GetProperty("claimType").GetString());
+        var auth = config.RootElement.GetProperty("auth");
+        Assert.Equal(Cognito().Domain, auth.GetProperty("cognitoDomain").GetString());
+        Assert.Equal("https://cognito-idp.us-east-1.amazonaws.com/us-east-1_Example", auth.GetProperty("issuer").GetString());
+        Assert.Equal(Cognito().ClientId, auth.GetProperty("clientId").GetString());
+        Assert.Equal(Cognito().RedirectUri, auth.GetProperty("redirectUri").GetString());
+        Assert.Equal(Cognito().PostLogoutRedirectUri, auth.GetProperty("postLogoutRedirectUri").GetString());
+        Assert.Contains("phone", auth.GetProperty("scopes").EnumerateArray().Select(v => v.GetString()));
+        Assert.DoesNotContain("apps/*/src/assets/app-config.json", await Read(archive, ".gitignore"));
+        Assert.Contains("cognito-client.ts", string.Join(" ", archive.Entries.Select(e => e.FullName)));
+    }
+
+    [Fact]
+    public async Task None_IsRejectedForTenantProtectedMonolith()
+    {
+        var manifest = Manifest(["web"]) with { AngularAuth = new() { Provider = "None" } };
+        await Assert.ThrowsAsync<InvalidOperationException>(() => new PrintGenerator().GenerateAsync(manifest, "AWS"));
+    }
+
+    [Theory]
+    [InlineData("UserPoolId")]
+    [InlineData("ClientId")]
+    [InlineData("Domain")]
+    [InlineData("Scopes")]
+    [InlineData("RedirectUri")]
+    [InlineData("PostLogoutRedirectUri")]
+    public void Cognito_RequiresEveryBrowserSetting(string field)
+    {
+        var auth = field switch
+        {
+            "UserPoolId" => Cognito() with { UserPoolId = null },
+            "ClientId" => Cognito() with { ClientId = null },
+            "Domain" => Cognito() with { Domain = "http://insecure.example.com" },
+            "Scopes" => Cognito() with { Scopes = ["email"] },
+            "RedirectUri" => Cognito() with { RedirectUri = "https://app.example.com/wrong" },
+            _ => Cognito() with { PostLogoutRedirectUri = "https://other.example.com/login" }
+        };
+        var result = new Pervaxis.Forge.Engine.Validation.ManifestValidator().Validate(Manifest(["web"]) with { AngularAuth = auth });
+        Assert.Contains(result.Errors, e => e.Contains("AngularAuth." + field));
+    }
+
+    private static async Task<string> Read(ZipArchive archive, string path)
+    {
+        using var reader = new StreamReader(archive.GetEntry(path)!.Open());
+        return await reader.ReadToEndAsync();
     }
 }

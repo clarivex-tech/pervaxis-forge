@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -50,3 +51,5 @@ export class AuthCallbackComponent implements OnInit {
     }
   }
 }
+
+{{ end }}

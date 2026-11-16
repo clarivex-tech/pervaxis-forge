@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -91,11 +92,11 @@ describe('route guards', () => {
     expect(await run(tenantGuard)).toBeTrue();
   });
 
-  it('tenantGuard allows tenant-less users in single-tenant mode', async () => {
-    setUp('SingleTenant');
+  it('tenantGuard rejects tenant-less users', async () => {
+    setUp('MultiTenant');
     TestBed.inject(TenantContextService).update({});
 
-    expect(await run(tenantGuard)).toBeTrue();
+    expect(await run(tenantGuard)).toBe('/access-denied?reason=no-tenant');
   });
 });
 
@@ -113,3 +114,5 @@ describe('appRoutes', () => {
     expect(dashboard?.canActivate).toEqual([authGuard, tenantGuard]);
   });
 });
+
+{{ end }}

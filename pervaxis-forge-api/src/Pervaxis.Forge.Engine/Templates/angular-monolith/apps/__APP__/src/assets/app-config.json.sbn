@@ -1,0 +1,3 @@
+{{ if model.angular_auth_configured }}
+{{ model.angular_app_config_json }}
+{{ end }}

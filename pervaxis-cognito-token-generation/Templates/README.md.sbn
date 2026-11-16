@@ -1,0 +1,80 @@
+# {{ model.manifest.service_name }}: Identity Token Enrichment
+
+AWS region: `{{ model.token_region }}`. Existing Cognito pool: `{{ model.token_user_pool_id }}`.
+Deploy once per pool, shared across its tenants and applications. This project
+does not create tenants, users or a pool and has no database connection.
+
+## Prerequisites
+
+- Verify the AWS account and select region `{{ model.token_region }}`.
+- Pool must be in that region and support V2_0 access-token customization
+  (Essentials or Plus for new deployments).
+- Add a String custom attribute named `tenant_id` (Cognito exposes it as
+  `custom:tenant_id`). Trusted provisioning assigns each user's non-empty GUID,
+  matching the tenant in PostgreSQL. Remove this attribute from every public
+  app client's writable attributes. Do not let sign-up metadata assign tenancy.
+- Existing pre-token trigger? Integrate its required behavior before replacing it.
+  Cognito has one such trigger per pool. This handler expects V2_0 user events,
+  not V1_0 or V3_0 machine identities.
+- Deployment credentials need CloudFormation, Lambda, IAM role creation/pass-role,
+  CloudWatch alarm and log-group permissions. Runtime only writes logs.
+
+## Deploy with AWS console
+
+1. CloudFormation: Create stack, With new resources, Upload a template file.
+2. Upload `template.yaml`; choose a stack name and verify `UserPoolId`.
+3. Review resources, acknowledge IAM creation, and create the stack.
+4. Wait for CREATE_COMPLETE. Copy the FunctionArn output.
+5. In Cognito, open the existing pool, Extensions, Lambda triggers.
+6. Add Pre token generation, select that Lambda, and select Basic features +
+   access token customization for user identities (V2_0). Save.
+
+**Creating the stack alone does not activate enrichment.** Attachment is explicit
+to avoid modifying or replacing the existing pool or unrelated trigger settings.
+Pool IDs/regions are public configuration, not AWS credentials. Do not paste secrets
+into this template. Never add a public function URL.
+
+## Deploy with CLI
+
+With authenticated AWS CLI and SAM CLI installed:
+
+```powershell
+aws sts get-caller-identity
+sam validate --template-file template.yaml
+sam deploy --guided --template-file template.yaml --region {{ model.token_region }}
+```
+
+Complete the same Cognito attachment step above. Subsequent updates:
+`sam deploy --template-file template.yaml`. Inline Python needs no local Python,
+Docker, dependency install or build for deployment. Python is needed for tests.
+
+## Test the exact inline handler
+
+Use Python 3.13 (the pinned Lambda runtime). No external packages required:
+
+```powershell
+python -m unittest discover -s tests -v
+```
+
+Tests extract the InlineCode block directly from the template, rather than testing
+a second copy of the handler. `events/sign-in.json` is a synthetic Lambda console
+test event, not a real user. Real sign-in testing must use provisioned users.
+
+## Live verification and operation
+
+- Create two tenants and users with distinct trusted tenant assignments.
+- Sign in and refresh sessions; validate access tokens contain canonical `tenant_id`.
+- Missing, malformed or all-zero assignments must fail token issuance.
+- Verify REST rejects cross-tenant access and suspended tenants. This Lambda only
+  validates assignment format; REST checks tenant existence and active status.
+- Configure notification actions on the generated error alarm; inspect CloudWatch
+  error and duration metrics. No alarm notification destination is configured by default.
+- Do not log full events, personal attributes or tokens. No fallback tenant exists.
+- Runtime version upgrades require testing and redeployment before AWS support ends.
+- Before deletion, detach the trigger (or restore a previously working trigger).
+  Deleting an attached Lambda breaks token issuance. Roll back a bad update by
+  redeploying the previous reviewed template. Do not bypass tenancy to restore access.
+
+References: [Cognito trigger](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-lambda-pre-token-generation.html),
+[SAM InlineCode](https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html),
+[Lambda runtime lifecycle](https://docs.aws.amazon.com/lambda/latest/dg/lambda-runtimes.html).

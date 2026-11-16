@@ -74,14 +74,44 @@ public sealed class ManifestValidator
         if (manifest.Observability is { CloudWatchEnabled: true, SerilogEnabled: false })
             errors.Add("Observability.CloudWatchEnabled requires Observability.SerilogEnabled — CloudWatch is a Serilog sink.");
 
+        if (manifest.ServiceType == ServiceType.RestApi && !manifest.MultiTenancy)
+            errors.Add("REST API prints require MultiTenancy. Single-tenant mode is not supported.");
+        if (manifest.ServiceType == ServiceType.RestApi && (manifest.InitialTenantId is null || manifest.InitialTenantId == Guid.Empty))
+            errors.Add("REST API prints require a non-empty InitialTenantId GUID shared by related services.");
         if (manifest.MultiTenancy)
             ValidateMultiTenancy(manifest, errors);
+        if (manifest.ServiceType == ServiceType.Monolithic && manifest.AngularAuth is null)
+            errors.Add("Angular monolith prints require AngularAuth with Cognito settings.");
 
         if (manifest.BackgroundJobs?.Provider is { } provider && provider is not ("EventBridge" or "SqsLambda"))
             errors.Add($"BackgroundJobs.Provider '{provider}' is not recognized. Accepted values: EventBridge, SqsLambda.");
 
         if (manifest.Cognito is { } cognito)
             ValidateCognito(manifest, cognito, errors);
+
+        if (manifest.AngularAuth is { } angularAuth)
+            ValidateAngularAuth(manifest, angularAuth, errors);
+
+        if (manifest.ServiceType == ServiceType.IdentityTokenEnrichment)
+        {
+            if (manifest.CloudProvider != "AWS")
+                errors.Add("Identity Token Enrichment requires the AWS cloud provider.");
+            if (manifest.TokenEnrichment is not { } enrichment)
+                errors.Add("TokenEnrichment settings are required.");
+            else
+            {
+                if (string.IsNullOrWhiteSpace(enrichment.Region) || !Regex.IsMatch(enrichment.Region, @"^[a-z]{2}(?:-[a-z]+)+-\d+$", RegexOptions.None, RegexTimeout))
+                    errors.Add("TokenEnrichment.Region must be an AWS region.");
+                if (string.IsNullOrWhiteSpace(enrichment.UserPoolId) || !UserPoolIdRegex.IsMatch(enrichment.UserPoolId))
+                    errors.Add("TokenEnrichment.UserPoolId must be a Cognito user pool ID.");
+                else if (!enrichment.UserPoolId.StartsWith(enrichment.Region + "_", StringComparison.Ordinal))
+                    errors.Add("TokenEnrichment user pool must belong to the selected region.");
+            }
+            if (manifest.Database is not null || manifest.GenesisModules.Count > 0 || manifest.CanvasModules.Count > 0 || manifest.UiTargets.Count > 0)
+                errors.Add("Identity Token Enrichment does not support database, Genesis, Canvas or UI settings.");
+        }
+        else if (manifest.TokenEnrichment is not null)
+            errors.Add("TokenEnrichment settings are only supported for Identity Token Enrichment prints.");
 
         return new ValidationResult { Errors = errors };
     }
@@ -134,6 +164,38 @@ public sealed class ManifestValidator
         if (string.IsNullOrWhiteSpace(cognito.AdminGroup) || !GroupNameRegex.IsMatch(cognito.AdminGroup))
             errors.Add("Cognito.AdminGroup must be 1-128 characters: letters, digits and . _ : / @ + = - or space.");
     }
+
+    private static void ValidateAngularAuth(ForgeManifest manifest, AngularAuthConfig auth, List<string> errors)
+    {
+        if (manifest.ServiceType != ServiceType.Monolithic)
+            errors.Add("AngularAuth is only supported for Angular monoliths.");
+        if (auth.Provider != "Cognito")
+            errors.Add("Angular monolith prints require AngularAuth.Provider Cognito.");
+        if (auth.Provider != "Cognito")
+            return;
+        if (!string.Equals(manifest.CloudProvider, "AWS", StringComparison.OrdinalIgnoreCase))
+            errors.Add("Angular Cognito requires the AWS cloud provider.");
+        if (string.IsNullOrWhiteSpace(auth.UserPoolId) || !UserPoolIdRegex.IsMatch(auth.UserPoolId))
+            errors.Add("AngularAuth.UserPoolId must look like 'us-east-1_AbC123xyz'.");
+        if (string.IsNullOrWhiteSpace(auth.ClientId) || !ClientIdRegex.IsMatch(auth.ClientId))
+            errors.Add("AngularAuth.ClientId must be a public app client ID.");
+        if (!IsBrowserUrl(auth.Domain, out var domain) || domain!.Scheme != "https" || domain.AbsolutePath != "/")
+            errors.Add("AngularAuth.Domain must be an HTTPS origin without a path.");
+        if (auth.Scopes is null || !auth.Scopes.Contains("openid") || auth.Scopes.Any(s =>
+            string.IsNullOrWhiteSpace(s) || s.Any(c => c < 0x21 || c > 0x7e || c is '"' or '\\')))
+            errors.Add("AngularAuth.Scopes must contain openid and valid OAuth scope names.");
+        var validRedirect = IsBrowserUrl(auth.RedirectUri, out var redirect);
+        if (!validRedirect || redirect!.AbsolutePath != "/auth/callback")
+            errors.Add("AngularAuth.RedirectUri must be an absolute HTTPS (or localhost HTTP) URL ending in /auth/callback.");
+        if (!IsBrowserUrl(auth.PostLogoutRedirectUri, out var logout) ||
+            (validRedirect && redirect!.GetLeftPart(UriPartial.Authority) != logout!.GetLeftPart(UriPartial.Authority)))
+            errors.Add("AngularAuth.PostLogoutRedirectUri must be an HTTPS (or localhost HTTP) URL on the callback origin.");
+    }
+
+    private static bool IsBrowserUrl(string? value, out Uri? uri) =>
+        Uri.TryCreate(value, UriKind.Absolute, out uri) &&
+        (uri.Scheme == "https" || (uri.Scheme == "http" && uri.Host is "localhost" or "127.0.0.1" or "[::1]")) &&
+        string.IsNullOrEmpty(uri.UserInfo) && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
 
     private static bool IsKebabCase(string? value)
     {

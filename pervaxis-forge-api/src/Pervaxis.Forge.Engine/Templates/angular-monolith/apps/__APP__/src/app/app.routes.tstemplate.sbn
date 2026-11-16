@@ -17,8 +17,12 @@
  */
 
 import { Routes } from '@angular/router';
+{{ if model.angular_cognito_enabled }}
 import { authGuard } from './core/guards/auth.guard';
+{{ end }}
+{{ if model.angular_cognito_enabled }}
 import { tenantGuard } from './core/guards/tenant.guard';
+{{ end }}
 
 /**
  * Application routes.
@@ -30,10 +34,13 @@ import { tenantGuard } from './core/guards/tenant.guard';
  * VERTICAL (extend here):
  *   - Add your feature routes in the marked section below
  *   - Use lazy loading: loadComponent / loadChildren
+{{ if model.angular_cognito_enabled }}
  *   - Protected routes: canActivate: [authGuard]; routes showing tenant data: [authGuard, tenantGuard]
  *   - Role-restricted routes: add permissionGuard('<group>')
+{{ end }}
  */
 export const appRoutes: Routes = [
+{{ if model.angular_cognito_enabled }}
   {
     path: 'login',
     loadComponent: () =>
@@ -55,6 +62,8 @@ export const appRoutes: Routes = [
         (m) => m.AccessDeniedComponent
       ),
   },
+
+{{ end }}
   {
     path: '',
     redirectTo: 'dashboard',
@@ -62,7 +71,9 @@ export const appRoutes: Routes = [
   },
   {
     path: 'dashboard',
+{{ if model.angular_cognito_enabled }}
     canActivate: [authGuard, tenantGuard],
+{{ end }}
     loadComponent: () =>
       import('./features/dashboard/dashboard.component').then(
         (m) => m.DashboardComponent

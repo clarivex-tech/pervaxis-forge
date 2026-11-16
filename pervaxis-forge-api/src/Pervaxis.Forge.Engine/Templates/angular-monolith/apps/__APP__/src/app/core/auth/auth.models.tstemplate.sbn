@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -75,3 +76,5 @@ export const AUTH_REDIRECT = new InjectionToken<(url: string) => void>('AUTH_RED
   providedIn: 'root',
   factory: () => (url: string) => window.location.assign(url),
 });
+
+{{ end }}

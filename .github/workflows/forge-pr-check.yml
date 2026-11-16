@@ -5,6 +5,7 @@ on:
     branches: [main, develop]
     paths:
       - 'pervaxis-forge-api/**'
+      - 'pervaxis-cognito-token-generation/**'
       - '.github/workflows/forge-*.yml'
 
 defaults:
@@ -49,6 +50,13 @@ jobs:
         run: dotnet tool install --global dotnet-sonarscanner
 
       - run: dotnet restore Pervaxis.Forge.slnx
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Test token enrichment inline handler
+        run: python ../pervaxis-cognito-token-generation/validate-print.py
 
       - name: SonarQube begin
         if: github.base_ref == 'main' && env.SONAR_TOKEN != ''

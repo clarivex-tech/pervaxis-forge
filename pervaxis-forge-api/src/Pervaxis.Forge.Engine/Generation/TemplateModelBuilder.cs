@@ -38,6 +38,7 @@ public static class TemplateModelBuilder
         return new TemplateModel
         {
             Manifest = manifest,
+            DefaultTenantId = manifest.InitialTenantId?.ToString("D") ?? Guid.NewGuid().ToString("D"),
             DerivedNames = BuildDerivedNames(manifest),
             CloudProvider = cloudProvider,
             SelectedModules = selectedModules,

@@ -27,10 +27,14 @@ import { provideIonicAngular } from '@ionic/angular/standalone';
 {{ end }}
 
 import { appRoutes } from './app.routes';
+{{ if model.angular_cognito_enabled }}
 import { AuthService } from './core/auth/auth.service';
+{{ end }}
 import { AppConfigService } from './core/config/app-config.service';
 import { GlobalErrorHandler } from './core/handlers/global-error-handler';
+{{ if model.angular_cognito_enabled }}
 import { authInterceptor } from './core/interceptors/auth.interceptor';
+{{ end }}
 import { correlationInterceptor } from './core/interceptors/correlation.interceptor';
 import { errorInterceptor } from './core/interceptors/error.interceptor';
 import { loadingInterceptor } from './core/interceptors/loading.interceptor';
@@ -52,13 +56,17 @@ export const appConfig: ApplicationConfig = {
     // refresh). Invalid configuration fails closed: the app starts with sign-in unavailable.
     provideAppInitializer(async () => {
       const config = inject(AppConfigService);
+{{ if model.angular_cognito_enabled }}
       const auth = inject(AuthService);
+{{ end }}
       await config.load();
+{{ if model.angular_cognito_enabled }}
       await auth.initialize();
+{{ end }}
     }),
     provideRouter(appRoutes, withViewTransitions()),
     provideHttpClient(
-      withInterceptors([correlationInterceptor, authInterceptor, retryInterceptor, loadingInterceptor, errorInterceptor])
+      withInterceptors([correlationInterceptor, {{ if model.angular_cognito_enabled }}authInterceptor, {{ end }}retryInterceptor, loadingInterceptor, errorInterceptor])
     ),
     provideAnimationsAsync(),
     providePrimeNG({

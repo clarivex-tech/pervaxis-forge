@@ -17,7 +17,9 @@
  */
 
 import { Component } from '@angular/core';
+{{ if model.angular_cognito_enabled }}
 import { SessionSummaryComponent } from '../../core/auth/session-summary.component';
+{{ end }}
 
 /**
  * VERTICAL: This is your starting point.
@@ -27,12 +29,14 @@ import { SessionSummaryComponent } from '../../core/auth/session-summary.compone
 @Component({
   selector: '{{ model.manifest.component_prefix }}-dashboard',
   standalone: true,
-  imports: [SessionSummaryComponent],
+  imports: [{{ if model.angular_cognito_enabled }}SessionSummaryComponent{{ end }}],
   template: `
     <div class="dashboard">
       <h1>Welcome to {{ model.manifest.service_name }}</h1>
       <p>This scaffold is ready for your business logic. Start building here.</p>
+{{ if model.angular_cognito_enabled }}
       <{{ model.manifest.component_prefix }}-session-summary />
+{{ end }}
     </div>
   `,
   styles: [`

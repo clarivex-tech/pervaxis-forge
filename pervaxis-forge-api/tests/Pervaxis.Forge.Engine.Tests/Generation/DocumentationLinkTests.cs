@@ -38,7 +38,8 @@ public class DocumentationLinkTests
         ComponentPrefix = "CLV",
         CloudProvider = "AWS",
         Database = database ? new DatabaseConfig { Engine = "postgresql", Name = "billing" } : null,
-        MultiTenancy = multiTenancy,
+        MultiTenancy = true,
+        InitialTenantId = TestTenancy.InitialTenantId,
         Cognito = new CognitoConfig { UserPoolId = "us-east-1_AbC123xyz", ClientIds = ["1h57kf5cpq17m0eml12EXAMPLE"] },
     };
 
@@ -83,9 +84,7 @@ public class DocumentationLinkTests
     }
 
     [Theory]
-    [InlineData(true, false)]
     [InlineData(true, true)]
-    [InlineData(false, false)]
     public async Task EveryRelativeLink_InTheEntryDocuments_PointsToAFileInThePrint(bool database, bool multiTenancy)
     {
         var files = await GenerateAsync(Manifest(database, multiTenancy));
@@ -130,13 +129,8 @@ public class DocumentationLinkTests
     }
 
     [Fact]
-    public async Task APrintWithoutADatabase_HasNoTenancyDocs()
+    public async Task APrintWithoutDatabase_IsRejected()
     {
-        var files = await GenerateAsync(Manifest(database: false));
-
-        files["README.md"].Should().NotContain("TenancyQuickStart");
-        files.Keys.Should().NotContain("DeveloperReference/TenancyQuickStart.md");
-        files.Keys.Should().NotContain(".claude/guides/TENANCY_RULES.md");
-        files[".claude/CLAUDE.md"].Should().NotContain("TENANCY_RULES");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => GenerateAsync(Manifest(database: false)));
     }
 }

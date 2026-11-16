@@ -8,9 +8,7 @@ Read this before you write any code that stores data. It takes about 10 minutes.
 This service keeps each customer's (tenant's) data apart inside one database. You never filter by tenant yourself.
 You mark an entity as tenant-owned, and the platform does the rest: every read sees only the current tenant's rows,
 every insert is stamped with the current tenant, and an update or delete can never touch another tenant's row.
-The current tenant comes from configuration (single-tenant mode) or from the caller's access token (multi-tenant mode),
-never from the request body, query string, route or a header. This service is in
-**{{ if model.manifest.multi_tenancy }}multi-tenant{{ else }}single-tenant{{ end }}** mode. Your code is the same in both.
+The current tenant comes only from the caller's validated access token as tenant_id, never from the request body, query string, route or a header. This service always runs in **multi-tenant** mode.
 
 ## Six steps
 

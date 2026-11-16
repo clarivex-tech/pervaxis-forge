@@ -1,0 +1,108 @@
+# Copyright (C) 2026 Clarivex Technologies Private Limited. All Rights Reserved.
+import copy
+import json
+import os
+from pathlib import Path
+import unittest
+from unittest.mock import patch
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def load_handler():
+    lines = (ROOT / "template.yaml").read_text(encoding="utf-8").splitlines()
+    start = lines.index("      InlineCode: |") + 1
+    code = []
+    for line in lines[start:]:
+        if line and not line.startswith("        "):
+            break
+        code.append(line[8:])
+    namespace = {}
+    exec(compile("\n".join(code), "template.yaml:InlineCode", "exec"), namespace)
+    return namespace["handler"]
+
+
+class TokenEnrichmentTests(unittest.TestCase):
+    def setUp(self):
+        self.event = json.loads((ROOT / "events/sign-in.json").read_text(encoding="utf-8"))
+        self.environment = patch.dict(os.environ, {
+            "USER_POOL_ID": self.event["userPoolId"], "POOL_REGION": self.event["region"]
+        })
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+        self.handler = load_handler()
+
+    def claim(self, event):
+        return self.handler(event, None)["response"]["claimsAndScopeOverrideDetails"]["accessTokenGeneration"]["claimsToAddOrOverride"]["tenant_id"]
+
+    def test_sign_in_and_refresh_canonicalize_trusted_assignment(self):
+        for source in ("TokenGeneration_Authentication", "TokenGeneration_HostedAuth",
+                       "TokenGeneration_NewPasswordChallenge", "TokenGeneration_AuthenticateDevice",
+                       "TokenGeneration_RefreshTokens"):
+            with self.subTest(source=source):
+                event = copy.deepcopy(self.event)
+                event["triggerSource"] = source
+                event["request"]["userAttributes"]["custom:tenant_id"] = "A1111111-1111-4111-8111-111111111111"
+                self.assertEqual("a1111111-1111-4111-8111-111111111111", self.claim(event))
+
+    def test_reject_invalid_or_missing_tenants(self):
+        for value in (None, "", " ", "bad", 42, [], {}, "00000000-0000-0000-0000-000000000000",
+                      "a1111111111141118111111111111111", "{a1111111-1111-4111-8111-111111111111}"):
+            with self.subTest(value=value):
+                event = copy.deepcopy(self.event)
+                event["request"]["userAttributes"]["custom:tenant_id"] = value
+                with self.assertRaises(ValueError):
+                    self.claim(event)
+        del self.event["request"]["userAttributes"]["custom:tenant_id"]
+        with self.assertRaises(ValueError):
+            self.claim(self.event)
+
+    def test_ignores_untrusted_metadata(self):
+        self.event["request"]["clientMetadata"] = {"tenant_id": "b2222222-2222-4222-8222-222222222222"}
+        self.assertEqual("a1111111-1111-4111-8111-111111111111", self.claim(self.event))
+
+    def test_handles_null_response_fields_on_first_login_and_refresh(self):
+        for source in ("TokenGeneration_NewPasswordChallenge", "TokenGeneration_RefreshTokens"):
+            for response in (None, {}, {"claimsAndScopeOverrideDetails": None},
+                             {"claimsAndScopeOverrideDetails": {"accessTokenGeneration": None}},
+                             {"claimsAndScopeOverrideDetails": {"accessTokenGeneration": {
+                                 "claimsToAddOrOverride": None, "claimsToSuppress": None}}}):
+                with self.subTest(source=source, response=response):
+                    event = copy.deepcopy(self.event)
+                    event["triggerSource"] = source
+                    event["response"] = copy.deepcopy(response)
+                    self.assertEqual("a1111111-1111-4111-8111-111111111111", self.claim(event))
+
+    def test_rejects_non_object_response_fields(self):
+        for response in ([], "invalid", {"claimsAndScopeOverrideDetails": []},
+                         {"claimsAndScopeOverrideDetails": {"accessTokenGeneration": "invalid"}}):
+            with self.subTest(response=response):
+                event = copy.deepcopy(self.event)
+                event["response"] = response
+                with self.assertRaises(ValueError):
+                    self.claim(event)
+
+    def test_preserves_other_claims_scopes_and_id_token_overrides(self):
+        self.event["response"] = {"claimsAndScopeOverrideDetails": {
+            "idTokenGeneration": {"claimsToAddOrOverride": {"example": "kept"}},
+            "accessTokenGeneration": {"claimsToAddOrOverride": {"example": "kept", "tenant_id": "untrusted"},
+                                      "scopesToAdd": ["example"], "claimsToSuppress": ["tenant_id", "other"]}}}
+        self.claim(self.event)
+        overrides = self.event["response"]["claimsAndScopeOverrideDetails"]
+        self.assertEqual("kept", overrides["idTokenGeneration"]["claimsToAddOrOverride"]["example"])
+        self.assertEqual("kept", overrides["accessTokenGeneration"]["claimsToAddOrOverride"]["example"])
+        self.assertEqual(["example"], overrides["accessTokenGeneration"]["scopesToAdd"])
+        self.assertEqual(["other"], overrides["accessTokenGeneration"]["claimsToSuppress"])
+
+    def test_rejects_wrong_pool_region_version_and_machine_identity(self):
+        for field, value in (("version", "1"), ("version", "3"), ("userPoolId", "another-pool"),
+                             ("region", "another-region"), ("triggerSource", "TokenGeneration_ClientCredentials")):
+            with self.subTest(field=field, value=value):
+                event = copy.deepcopy(self.event)
+                event[field] = value
+                with self.assertRaises(ValueError):
+                    self.claim(event)
+
+
+if __name__ == "__main__":
+    unittest.main()

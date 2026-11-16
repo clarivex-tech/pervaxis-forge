@@ -15,5 +15,8 @@
          so TemplateLoader can reconstruct exact output paths (including nested
          .claude/ and .github/ directories) without dot-ambiguity. -->
     <EmbeddedResource Include="Templates\**\*.sbn" LogicalName="%(Identity)" />
+    <EmbeddedResource Include="..\..\..\pervaxis-cognito-token-generation\Templates\**\*.sbn">
+      <LogicalName>Templates/identity-token-enrichment/%(RecursiveDir)%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 </Project>

@@ -89,7 +89,7 @@
     },
 {{- if model.manifest.tenant_ready }}
     "Tenant": {
-      "Mode": "{{ if model.manifest.multi_tenancy }}MultiTenant{{ else }}SingleTenant{{ end }}",
+      "Mode": "MultiTenant",
       "DefaultTenantId": "{{ model.default_tenant_id }}",
       "ClaimType": "tenant_id",
       "EnableDirectoryChecks": true,

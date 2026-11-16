@@ -1,3 +1,4 @@
+{{ if model.angular_cognito_enabled }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -23,7 +24,6 @@ import { JwtClaims } from './jwt-claims';
 import { SessionStateRegistry } from './session-state';
 
 /**
- * not-applicable: single-tenant service; the API uses its own tenant and ignores token claims.
  * absent: multi-tenant service, but the token has no tenant claim.
  * invalid: the claim is not one canonical GUID string (the API rejects it too).
  */
@@ -92,7 +92,7 @@ export class TenantContextService {
 
   /** Unknown (configuration missing) is treated as the strictest mode. */
   readonly mode = computed<TenancyMode>(() => this.appConfig.config()?.tenancy.mode ?? 'MultiTenant');
-  readonly requiresTenant = computed(() => this.mode() === 'MultiTenant');
+  readonly requiresTenant = computed(() => true);
   readonly currentTenantId = computed(() => this.claim().tenantId);
   readonly claimStatus = computed(() => this.claim().status);
   readonly memberships = computed(() => this.membershipSource.memberships(this.currentTenantId()));
@@ -101,9 +101,7 @@ export class TenantContextService {
   /** Called by AuthService whenever a new access token is applied. */
   update(accessClaims: JwtClaims): void {
     const previous = this.claim().tenantId;
-    const next: TenantClaim = this.mode() === 'SingleTenant'
-      ? { tenantId: null, status: 'not-applicable' }
-      : parseTenantClaim(accessClaims[this.appConfig.config()?.tenancy.claimType ?? 'tenant_id']);
+    const next: TenantClaim = parseTenantClaim(accessClaims[this.appConfig.config()?.tenancy.claimType ?? 'tenant_id']);
 
     this.claim.set(next);
     if (previous !== null && previous !== next.tenantId) {
@@ -113,6 +111,8 @@ export class TenantContextService {
 
   /** Called by AuthService when the session ends; the registry reset happens there. */
   clear(): void {
-    this.claim.set({ tenantId: null, status: this.mode() === 'SingleTenant' ? 'not-applicable' : 'absent' });
+    this.claim.set({ tenantId: null, status: 'absent' });
   }
 }
+
+{{ end }}

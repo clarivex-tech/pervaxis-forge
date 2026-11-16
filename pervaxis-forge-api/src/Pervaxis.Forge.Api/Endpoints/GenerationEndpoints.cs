@@ -172,7 +172,8 @@ internal static class GenerationEndpoints
                     ServiceTypes = ["AngularShell", "AngularMfe"]
                 }
             ],
-            BackendTargets = ["RestApi", "GraphQL", "Grpc"]
+            BackendTargets = ["RestApi", "GraphQL", "Grpc"],
+            InfrastructureTargets = ["IdentityTokenEnrichment"]
         });
     }
 

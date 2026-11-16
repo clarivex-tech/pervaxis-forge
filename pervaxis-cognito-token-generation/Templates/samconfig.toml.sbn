@@ -1,0 +1,7 @@
+version = 0.1
+[default.deploy.parameters]
+stack_name = "{{ model.manifest.service_name }}"
+region = "{{ model.token_region }}"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+parameter_overrides = "UserPoolId={{ model.token_user_pool_id }}"

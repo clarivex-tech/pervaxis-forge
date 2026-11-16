@@ -153,7 +153,10 @@ public sealed class GenerationService : IGenerationService
                     BackgroundJobs = serviceSpec.BackgroundJobs,
                     Utilities = serviceSpec.Utilities,
                     MultiTenancy = serviceSpec.MultiTenancy,
-                    Cognito = serviceSpec.Cognito
+                    InitialTenantId = serviceSpec.InitialTenantId,
+                    Cognito = serviceSpec.Cognito,
+                    AngularAuth = serviceSpec.AngularAuth,
+                    TokenEnrichment = serviceSpec.TokenEnrichment
                 };
 
                 var manifest = BuildManifest(fullRequest, vertical);
@@ -316,6 +319,7 @@ public sealed class GenerationService : IGenerationService
 
     private static ServiceType ParseServiceType(string type) => type.ToLowerInvariant() switch
     {
+        "identitytokenenrichment" => ServiceType.IdentityTokenEnrichment,
         "restapi" => ServiceType.RestApi,
         "angularshell" => ServiceType.AngularShell,
         "angularmfe" => ServiceType.AngularMfe,
@@ -325,7 +329,7 @@ public sealed class GenerationService : IGenerationService
         "grpc" => ServiceType.Grpc,
         "monolithic" => ServiceType.Monolithic,
         "ionic" => ServiceType.Ionic,
-        _ => throw new InvalidOperationException($"Unsupported service type: '{type}'. Valid values: RestApi, AngularShell, AngularMfe, AngularMfeRemote, Monolithic, Ionic, GraphQL, Grpc.")
+        _ => throw new InvalidOperationException($"Unsupported service type: '{type}'. Valid values: RestApi, AngularShell, AngularMfe, AngularMfeRemote, Monolithic, Ionic, GraphQL, Grpc, IdentityTokenEnrichment.")
     };
 
     private static ForgeManifest BuildManifest(GenerationRequest request, VerticalResponse vertical)
@@ -365,8 +369,11 @@ public sealed class GenerationService : IGenerationService
             Validation = request.Validation,
             BackgroundJobs = request.BackgroundJobs,
             Utilities = request.Utilities,
-            MultiTenancy = request.MultiTenancy,
-            Cognito = request.Cognito
+            MultiTenancy = serviceType == ServiceType.RestApi || request.MultiTenancy,
+            InitialTenantId = request.InitialTenantId,
+            Cognito = request.Cognito,
+            AngularAuth = request.AngularAuth,
+            TokenEnrichment = request.TokenEnrichment
         };
 
         if (isBackend && request.Database != null)

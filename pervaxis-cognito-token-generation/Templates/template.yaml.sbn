@@ -1,0 +1,137 @@
+# Copyright (C) 2026 Clarivex Technologies Private Limited. All Rights Reserved.
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Cognito tenant access-token enrichment. Attach V2_0 separately to the existing pool.
+Parameters:
+  UserPoolId:
+    Type: String
+    Default: '{{ model.token_user_pool_id }}'
+    AllowedPattern: '{{ model.token_region }}_[A-Za-z0-9]+'
+    Description: Existing Cognito pool in this stack's region; must have custom:tenant_id.
+Rules:
+  MatchingRegion:
+    Assertions:
+      - Assert: !Equals [!Ref 'AWS::Region', '{{ model.token_region }}']
+        AssertDescription: Deploy this print in the region selected in Forge.
+Resources:
+  TokenFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub
+        - 'pvt-${StackGuid}'
+        - StackGuid: !Select [2, !Split ['/', !Ref 'AWS::StackId']]
+      Runtime: python3.13
+      Handler: index.handler
+      Architectures: [arm64]
+      MemorySize: 128
+      Timeout: 3
+      Role: !GetAtt ExecutionRole.Arn
+      Environment:
+        Variables:
+          USER_POOL_ID: !Ref UserPoolId
+          POOL_REGION: '{{ model.token_region }}'
+      InlineCode: |
+        # Copyright (C) 2026 Clarivex Technologies Private Limited. All Rights Reserved.
+        import os
+        import re
+        import uuid
+
+        GUID = re.compile(r"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}")
+        SOURCES = {"TokenGeneration_Authentication", "TokenGeneration_HostedAuth",
+                   "TokenGeneration_NewPasswordChallenge", "TokenGeneration_AuthenticateDevice",
+                   "TokenGeneration_RefreshTokens"}
+
+        def response_object(parent, key):
+            value = parent.get(key)
+            if value is None:
+                value = {}
+                parent[key] = value
+            if not isinstance(value, dict):
+                raise ValueError("Unsupported token response structure")
+            return value
+
+        def handler(event, context):
+            # Never log the event: it contains personal attributes and session data.
+            if (event.get("version") != "2" or
+                event.get("triggerSource") not in SOURCES or
+                event.get("userPoolId") != os.environ["USER_POOL_ID"] or
+                event.get("region") != os.environ["POOL_REGION"]):
+                raise ValueError("Unsupported token enrichment event")
+            request = event.get("request")
+            if not isinstance(request, dict):
+                raise ValueError("Tenant assignment is required")
+            attributes = request.get("userAttributes")
+            value = attributes.get("custom:tenant_id") if isinstance(attributes, dict) else None
+            if not isinstance(value, str) or not GUID.fullmatch(value):
+                raise ValueError("Valid tenant assignment is required")
+            tenant = uuid.UUID(value)
+            if tenant.int == 0:
+                raise ValueError("Valid tenant assignment is required")
+            # Ignore clientMetadata. Only the protected Cognito attribute is authoritative.
+            # Cognito can include explicit nulls; setdefault only handles absent keys.
+            response = response_object(event, "response")
+            overrides = response_object(response, "claimsAndScopeOverrideDetails")
+            access = response_object(overrides, "accessTokenGeneration")
+            response_object(access, "claimsToAddOrOverride")["tenant_id"] = str(tenant)
+            # Preserve other overrides but never allow tenant_id to be suppressed.
+            if access.get("claimsToSuppress") is None:
+                access.pop("claimsToSuppress", None)
+            else:
+                access["claimsToSuppress"] = [key for key in access["claimsToSuppress"] if key != "tenant_id"]
+            return event
+  LogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/${TokenFunction}'
+      RetentionInDays: 30
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: WriteFunctionLogs
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: [logs:CreateLogStream, logs:PutLogEvents]
+                Resource: !Sub
+                  - 'arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/pvt-${StackGuid}:log-stream:*'
+                  - StackGuid: !Select [2, !Split ['/', !Ref 'AWS::StackId']]
+  CognitoInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt TokenFunction.Arn
+      Principal: cognito-idp.amazonaws.com
+      SourceAccount: !Ref AWS::AccountId
+      SourceArn: !Sub 'arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/${UserPoolId}'
+  FunctionErrors:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Token enrichment errors can block sign-in and refresh. Configure notification actions.
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref TokenFunction
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+Outputs:
+  FunctionArn:
+    Value: !GetAtt TokenFunction.Arn
+    Description: Attach to the existing Cognito pool as Pre Token Generation V2_0.
+  UserPoolId:
+    Value: !Ref UserPoolId
+  DeploymentRegion:
+    Value: !Ref AWS::Region

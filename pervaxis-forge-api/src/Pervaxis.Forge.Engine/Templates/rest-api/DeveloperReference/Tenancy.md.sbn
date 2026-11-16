@@ -8,22 +8,15 @@ you must not work around them.
 Writing your first feature? Start with [`TenancyQuickStart.md`](TenancyQuickStart.md) instead: six steps and a checklist.
 
 This service runs in **{{ if model.manifest.multi_tenancy }}multi-tenant{{ else }}single-tenant{{ end }}** mode.
-To move from single-tenant to multi-tenant later, follow [`GoingMultiTenant.md`](GoingMultiTenant.md).
+For Cognito tenant provisioning and onboarding, follow [`GoingMultiTenant.md`](GoingMultiTenant.md).
 
-## The two modes
+## Multi-tenant contract
 
-| | Single-tenant (`SingleTenant`) | Multi-tenant (`MultiTenant`) |
-|---|---|---|
-| Customers | One | Several |
-| Where the tenant comes from | `Forge:Tenant:DefaultTenantId` in configuration | The `tenant_id` claim of the caller's validated Cognito access token |
-| Cognito trigger needed | No | Yes (adds `tenant_id` to access tokens) |
-| API keys | Work | Cannot reach tenant data |
-| Data | Every row carries `TenantId` | Every row carries `TenantId` |
+Every request to tenant-owned data requires a validated Cognito access token with one non-empty GUID `tenant_id` claim. Request headers such as `X-Tenant-ID` are ignored.
 
-The mode is the setting `Forge:Tenant:Mode` in `appsettings.json`. Because rows are tenant-tagged in both modes,
-switching from single to multi needs no data migration.
+`Forge:Tenant:Mode` must be `MultiTenant`, `ClaimType` must be `tenant_id`, and directory checks must remain enabled. Unsupported settings fail startup.
 
-Request headers such as `X-Tenant-ID` are ignored in both modes.
+The initial tenant GUID is supplied during generation and shared across related services. It seeds the tenants table; it is never a fallback identity for a request.
 
 ## The tenants table
 
