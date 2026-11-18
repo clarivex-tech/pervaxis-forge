@@ -15,6 +15,18 @@ rules belong in your features, not in these files.
 
 This print requires MultiTenant mode and the tenant_id access-token claim. Missing or invalid tenant GUIDs block tenant routes. Cognito must issue this claim through trusted provisioning and a pre-token-generation trigger; the print does not create that infrastructure. Backend APIs remain responsible for enforcing isolation.
 
+## Tenant and user administration
+
+PlatformAdmin users can open /admin/tenants (also linked from the dashboard) to create,
+rename, suspend, reactivate and offboard tenants, list users and invite/resend users.
+Connect apiUrl to the matching generated REST API and configure its exact CORS origin.
+The REST print's DeveloperReference/TrustedProvisioning.md covers IAM, enabling the
+backend, the first administrator, email delivery prerequisites and retry behavior.
+The UI never calls AWS administration APIs or holds AWS credentials.
+The screen uses the default PlatformAdmin group; if you customize the API's
+PlatformAdminGroup, update the route permission and dashboard link check accordingly.
+User pages are filtered server-side; use Load next page even when a page has no users.
+
 ## 1. Cognito setup
 
 Create (or reuse) an app client in the user pool:

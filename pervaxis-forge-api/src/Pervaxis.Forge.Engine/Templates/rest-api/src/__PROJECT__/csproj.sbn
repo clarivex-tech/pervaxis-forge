@@ -14,6 +14,7 @@
     <PackageReference Include="Swashbuckle.AspNetCore" />
     <PackageReference Include="AWSSDK.SecretsManager" />
     <PackageReference Include="AWSSDK.Extensions.NETCore.Setup" />
+    <PackageReference Include="AWSSDK.SecurityToken" />
     <PackageReference Include="Microsoft.EntityFrameworkCore" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <!-- Cross-cutting concerns -->
@@ -46,6 +47,7 @@
     <PackageReference Include="OpenTelemetry.Exporter.Console" />
 {{ end }}
 {{- if model.manifest.tenant_ready }}
+    <PackageReference Include="AWSSDK.CognitoIdentityProvider" />
     <PackageReference Include="Pervaxis.Core.MultiTenancy" />
     <PackageReference Include="Pervaxis.Core.Data.EntityFrameworkCore" />
 {{- end }}

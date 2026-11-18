@@ -1,0 +1,77 @@
+{{ if model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { TestBed } from '@angular/core/testing';
+import { Subject, of } from 'rxjs';
+import { AdministrationComponent } from './administration.component';
+import { AdministrationService, TenantSummary, UserPage } from './administration.service';
+import { SessionStateRegistry } from '../../core/auth/session-state';
+
+describe('AdministrationComponent', () => {
+  const tenant: TenantSummary = { id: 'tenant-a', name: 'Customer', status: 0, createdAt: '', updatedAt: '' };
+  let api: jasmine.SpyObj<AdministrationService>;
+  beforeEach(() => {
+    api = jasmine.createSpyObj<AdministrationService>('AdministrationService',
+      ['listTenants', 'createTenant', 'renameTenant', 'changeStatus', 'listUsers', 'invite', 'resend']);
+    api.listTenants.and.returnValue(of([tenant]));
+    TestBed.configureTestingModule({
+      imports: [AdministrationComponent],
+      providers: [{ provide: AdministrationService, useValue: api }],
+    });
+  });
+
+  it('discards an in-flight user page after session reset', async () => {
+    const fixture = TestBed.createComponent(AdministrationComponent);
+    const component = fixture.componentInstance;
+    await Promise.resolve();
+    component.select(tenant.id);
+    const response = new Subject<UserPage>();
+    api.listUsers.and.returnValue(response);
+    const pending = component.loadUsers();
+    TestBed.inject(SessionStateRegistry).reset('signed-out');
+    response.next({ users: [{ username: 'private', subject: 'sub', email: 'private@example.com',
+      status: 'CONFIRMED', enabled: true, alreadyExists: false }], nextToken: 'secret' });
+    response.complete();
+    await pending;
+    expect(component.users()).toEqual([]);
+    expect(component.selected()).toBeNull();
+    expect(component.nextToken()).toBeNull();
+    fixture.destroy();
+  });
+
+  it('keeps pagination available after an empty filtered page', async () => {
+    const fixture = TestBed.createComponent(AdministrationComponent);
+    const component = fixture.componentInstance;
+    await Promise.resolve();
+    component.select(tenant.id);
+    api.listUsers.and.returnValue(of({ users: [], nextToken: 'next' }));
+    await component.loadUsers();
+    expect(component.nextToken()).toBe('next');
+    await component.loadUsers(true);
+    expect(api.listUsers).toHaveBeenCalledWith(tenant.id, 'next');
+    fixture.destroy();
+  });
+
+  it('maps every lifecycle state correctly', () => {
+    const fixture = TestBed.createComponent(AdministrationComponent);
+    expect(fixture.componentInstance.status({ ...tenant, status: 2 })).toBe('Offboarding');
+    expect(fixture.componentInstance.status({ ...tenant, status: 3 })).toBe('Offboarded');
+    fixture.destroy();
+  });
+});
+{{ end }}

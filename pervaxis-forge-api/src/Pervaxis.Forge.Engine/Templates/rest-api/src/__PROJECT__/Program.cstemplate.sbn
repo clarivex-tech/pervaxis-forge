@@ -178,6 +178,27 @@ builder.Services.AddOptions<ClaimsTenantOptions>()
 // Tenant status checks read the tenants table (Data/Tenancy). Suspended or unknown tenants get 403.
 builder.Services.AddScoped<ITenantDirectory, EfTenantDirectory>();
 builder.Services.AddScoped<ITenantManagementService, TenantManagementService>();
+builder.Services.AddOptions<ForgeProvisioningOptions>()
+    .BindConfiguration("Forge:Provisioning")
+    .Validate(options => !options.Enabled ||
+        (!string.IsNullOrWhiteSpace(options.UserPoolId) && !string.IsNullOrWhiteSpace(options.Region) &&
+         options.UserPoolId.StartsWith(options.Region + "_", StringComparison.Ordinal) &&
+         builder.Configuration["Forge:Oidc:Authority"]?.TrimEnd('/') ==
+             $"https://cognito-idp.{options.Region}.amazonaws.com/{options.UserPoolId}"),
+        "Provisioning must use the same Cognito user pool as token validation.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<Amazon.CognitoIdentityProvider.IAmazonCognitoIdentityProvider>(services =>
+{
+    var options = services.GetRequiredService<Microsoft.Extensions.Options.IOptions<ForgeProvisioningOptions>>().Value;
+    return new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderClient(
+        new Amazon.CognitoIdentityProvider.AmazonCognitoIdentityProviderConfig
+        {
+            RegionEndpoint = Amazon.RegionEndpoint.GetBySystemName(options.Region),
+            MaxErrorRetry = 2,
+            Timeout = TimeSpan.FromSeconds(15),
+        });
+});
+builder.Services.AddScoped<CognitoUserProvisioningService>();
 {{- end }}
 {{- if model.manifest.has_messaging }}
 builder.Services.Configure<ForgeOutboxOptions>(builder.Configuration.GetSection(ForgeOutboxOptions.SectionName));

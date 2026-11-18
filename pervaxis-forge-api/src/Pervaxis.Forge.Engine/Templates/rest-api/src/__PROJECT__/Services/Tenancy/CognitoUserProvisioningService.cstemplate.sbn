@@ -1,0 +1,151 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net.Mail;
+using Amazon.CognitoIdentityProvider;
+using Amazon.CognitoIdentityProvider.Model;
+using Microsoft.Extensions.Options;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using {{ model.names.namespace }}.Models.Configuration;
+
+namespace {{ model.names.namespace }}.Services.Tenancy;
+
+/// <summary>Trusted onboarding. No reassignment, group grants, or client-selected attributes.</summary>
+public sealed class CognitoUserProvisioningService(
+    IAmazonCognitoIdentityProvider cognito,
+    ITenantManagementService tenants,
+    IOptions<ForgeProvisioningOptions> options,
+    ILogger<CognitoUserProvisioningService> logger)
+{
+    private readonly ForgeProvisioningOptions settings = options.Value;
+
+    public async Task<ProvisionedUserPage> ListAsync(Guid tenantId, string? nextToken, CancellationToken cancellationToken)
+    {
+        await RequireTenantAsync(tenantId, false, cancellationToken);
+        if (nextToken?.Length > 4096)
+            throw new ProvisioningException(400, "Invalid continuation token.");
+        // Cognito cannot filter custom attributes. Return ONE bounded page, filtered on the server.
+        var page = await cognito.ListUsersAsync(new ListUsersRequest
+        {
+            UserPoolId = settings.UserPoolId, Limit = 60, PaginationToken = nextToken,
+        }, cancellationToken);
+        var users = (page.Users ?? []).Where(user => Matches(user.Attributes, tenantId))
+            .Select(user => ToUser(user.Username, user.Attributes, user.UserStatus?.Value, user.Enabled == true))
+            .ToArray();
+        return new ProvisionedUserPage(users, page.PaginationToken);
+    }
+
+    public async Task<ProvisionedUser> InviteAsync(Guid tenantId, string email, string actor, CancellationToken cancellationToken)
+    {
+        await RequireTenantAsync(tenantId, true, cancellationToken);
+        email = email.Trim().ToLowerInvariant();
+        if (email.Length > 128 || !MailAddress.TryCreate(email, out var parsed) ||
+            !string.Equals(parsed.Address, email, StringComparison.Ordinal))
+            throw new ProvisioningException(400, "Supply a valid email address of at most 128 characters.");
+        logger.LogInformation("User provisioning requested. Actor {Actor} Tenant {TenantId}", actor, tenantId);
+        try
+        {
+            // Tenant assignment is part of creation, before Cognito can send the invitation.
+            // Never force an alias migration or mark an unverified email as verified.
+            var response = await cognito.AdminCreateUserAsync(new AdminCreateUserRequest
+            {
+                UserPoolId = settings.UserPoolId,
+                Username = email,
+                DesiredDeliveryMediums = [DeliveryMediumType.EMAIL],
+                ForceAliasCreation = false,
+                UserAttributes =
+                [
+                    new AttributeType { Name = "email", Value = email },
+                    new AttributeType { Name = "custom:tenant_id", Value = tenantId.ToString("D") },
+                ],
+            }, cancellationToken);
+            var user = response.User ?? throw new ProvisioningException(503, "Creation outcome is unknown. Retry with the same email.");
+            logger.LogInformation("User created. Actor {Actor} Tenant {TenantId} Subject {Subject}",
+                actor, tenantId, Attribute(user.Attributes, "sub"));
+            return ToUser(user.Username, user.Attributes, user.UserStatus?.Value, user.Enabled == true);
+        }
+        catch (UsernameExistsException)
+        {
+            // A retry can recover creation after a lost response. Never adopt an unassigned user.
+            var user = await GetAssignedAsync(tenantId, email, cancellationToken);
+            if (!string.Equals(Attribute(user.UserAttributes, "email"), email, StringComparison.OrdinalIgnoreCase))
+                throw new ProvisioningException(409, "An existing account requires operator review.");
+            logger.LogInformation("Existing assignment confirmed. Actor {Actor} Tenant {TenantId} Subject {Subject}",
+                actor, tenantId, Attribute(user.UserAttributes, "sub"));
+            return ToUser(user.Username, user.UserAttributes, user.UserStatus?.Value, user.Enabled == true) with { AlreadyExists = true };
+        }
+    }
+
+    public async Task ResendAsync(Guid tenantId, string username, string actor, CancellationToken cancellationToken)
+    {
+        await RequireTenantAsync(tenantId, true, cancellationToken);
+        if (string.IsNullOrWhiteSpace(username) || username.Length > 128)
+            throw new ProvisioningException(400, "Invalid username.");
+        var user = await GetAssignedAsync(tenantId, username, cancellationToken);
+        if (user.Enabled != true || user.UserStatus != UserStatusType.FORCE_CHANGE_PASSWORD)
+            throw new ProvisioningException(409, "Only an enabled user awaiting their first password can receive another invitation.");
+        logger.LogInformation("Invitation resend requested. Actor {Actor} Tenant {TenantId} Subject {Subject}",
+            actor, tenantId, Attribute(user.UserAttributes, "sub"));
+        await cognito.AdminCreateUserAsync(new AdminCreateUserRequest
+        {
+            UserPoolId = settings.UserPoolId, Username = user.Username,
+            MessageAction = MessageActionType.RESEND,
+            DesiredDeliveryMediums = [DeliveryMediumType.EMAIL],
+            ForceAliasCreation = false,
+        }, cancellationToken);
+        logger.LogInformation("Invitation resend accepted. Actor {Actor} Tenant {TenantId} Subject {Subject}",
+            actor, tenantId, Attribute(user.UserAttributes, "sub"));
+    }
+
+    private async Task<AdminGetUserResponse> GetAssignedAsync(Guid tenantId, string username, CancellationToken cancellationToken)
+    {
+        var user = await cognito.AdminGetUserAsync(new AdminGetUserRequest
+        {
+            UserPoolId = settings.UserPoolId, Username = username,
+        }, cancellationToken);
+        if (!Matches(user.UserAttributes, tenantId))
+            throw new ProvisioningException(409, "An existing account requires operator review. Tenant reassignment is not supported.");
+        return user;
+    }
+
+    private async Task RequireTenantAsync(Guid tenantId, bool activeOnly, CancellationToken cancellationToken)
+    {
+        if (!settings.Enabled)
+            throw new ProvisioningException(503, "User provisioning is not enabled. Complete the operator setup.");
+        var tenant = await tenants.GetAsync(tenantId, cancellationToken);
+        if (tenant is null)
+            throw new ProvisioningException(404, "Tenant not found.");
+        if (activeOnly && tenant.Status != TenantStatus.Active)
+            throw new ProvisioningException(409, "Users can be invited only into an active tenant.");
+    }
+
+    private static bool Matches(List<AttributeType>? attributes, Guid tenantId)
+    {
+        var values = (attributes ?? []).Where(attribute => attribute.Name == "custom:tenant_id").ToArray();
+        return values.Length == 1 && Guid.TryParse(values[0].Value, out var assigned) &&
+            assigned != Guid.Empty && assigned == tenantId;
+    }
+
+    private static string? Attribute(List<AttributeType>? attributes, string name) =>
+        attributes?.FirstOrDefault(attribute => attribute.Name == name)?.Value;
+
+    private static ProvisionedUser ToUser(string username, List<AttributeType>? attributes, string? status, bool enabled) =>
+        new(username, Attribute(attributes, "sub"), Attribute(attributes, "email"), status ?? "UNKNOWN", enabled);
+}
+{{ end }}

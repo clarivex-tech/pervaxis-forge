@@ -1,0 +1,63 @@
+{{ if model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Injectable, inject } from '@angular/core';
+import { ApiService } from '../../core/services/api.service';
+
+export interface TenantSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly status: number | string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+export interface ProvisionedUser {
+  readonly username: string;
+  readonly subject: string | null;
+  readonly email: string | null;
+  readonly status: string;
+  readonly enabled: boolean;
+  readonly alreadyExists: boolean;
+}
+export interface UserPage {
+  readonly users: readonly ProvisionedUser[];
+  readonly nextToken: string | null;
+}
+
+@Injectable({ providedIn: 'root' })
+export class AdministrationService {
+  private readonly api = inject(ApiService);
+  listTenants() { return this.api.get<readonly TenantSummary[]>('/api/v1/tenants'); }
+  createTenant(name: string) { return this.api.post<TenantSummary>('/api/v1/tenants', { name }); }
+  renameTenant(id: string, name: string) { return this.api.patch<TenantSummary>(this.tenantPath(id), { name }); }
+  changeStatus(id: string, action: 'suspend' | 'reactivate' | 'offboard') {
+    return this.api.post<TenantSummary>(`${this.tenantPath(id)}/${action}`, {});
+  }
+  listUsers(id: string, nextToken?: string | null) {
+    return this.api.get<UserPage>(`${this.tenantPath(id)}/users`, nextToken ? { nextToken } : undefined);
+  }
+  invite(id: string, email: string) {
+    return this.api.post<ProvisionedUser>(`${this.tenantPath(id)}/users`, { email });
+  }
+  resend(id: string, username: string) {
+    return this.api.post<void>(`${this.tenantPath(id)}/users/resend-invitation`, { username });
+  }
+  private tenantPath(id: string) { return `/api/v1/tenants/${encodeURIComponent(id)}`; }
+}
+{{ end }}

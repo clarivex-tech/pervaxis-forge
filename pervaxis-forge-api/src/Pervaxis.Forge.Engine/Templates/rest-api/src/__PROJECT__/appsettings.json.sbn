@@ -95,6 +95,11 @@
       "EnableDirectoryChecks": true,
       "DirectoryCacheTtl": "00:01:00"
     },
+    "Provisioning": {
+      "Enabled": false,
+      "UserPoolId": "{{ model.manifest.cognito.user_pool_id }}",
+      "Region": "{{ model.manifest.cognito.region }}"
+    },
 {{- else }}
     "Tenant": {
       "Required": false
