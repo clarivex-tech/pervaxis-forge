@@ -1,0 +1,60 @@
+{{ if model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { TestBed } from '@angular/core/testing';
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting, HttpTestingController } from '@angular/common/http/testing';
+import { AdministrationService } from './administration.service';
+import { AppConfigService } from '../../core/config/app-config.service';
+
+describe('AdministrationService', () => {
+  let service: AdministrationService;
+  let http: HttpTestingController;
+  beforeEach(() => {
+    TestBed.configureTestingModule({ providers: [
+      provideHttpClient(), provideHttpClientTesting(),
+      { provide: AppConfigService, useValue: { config: () => ({ apiUrl: 'https://api.example.test' }) } },
+    ] });
+    service = TestBed.inject(AdministrationService);
+    http = TestBed.inject(HttpTestingController);
+  });
+  afterEach(() => http.verify());
+
+  it('sends only email when inviting into the selected tenant', () => {
+    service.invite('tenant-a', 'user@example.com').subscribe();
+    const request = http.expectOne('https://api.example.test/api/v1/tenants/tenant-a/users');
+    expect(request.request.method).toBe('POST');
+    expect(request.request.body).toEqual({ email: 'user@example.com' });
+    request.flush({ username: 'user@example.com', alreadyExists: false });
+  });
+
+  it('encodes a continuation token separately from the path', () => {
+    service.listUsers('tenant-a', 'token+/=').subscribe();
+    const request = http.expectOne(req => req.url.endsWith('/tenant-a/users'));
+    expect(request.request.params.get('nextToken')).toBe('token+/=');
+    request.flush({ users: [], nextToken: null });
+  });
+
+  it('resends only through the explicit operation', () => {
+    service.resend('tenant-a', 'user@example.com').subscribe();
+    const request = http.expectOne('https://api.example.test/api/v1/tenants/tenant-a/users/resend-invitation');
+    expect(request.request.body).toEqual({ username: 'user@example.com' });
+    request.flush(null);
+  });
+});
+{{ end }}

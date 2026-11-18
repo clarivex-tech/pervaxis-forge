@@ -1,0 +1,170 @@
+{{ if model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { AdministrationService, ProvisionedUser, TenantSummary } from './administration.service';
+import { SessionStateRegistry } from '../../core/auth/session-state';
+
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-administration',
+  standalone: true,
+  imports: [FormsModule],
+  templateUrl: './administration.component.html',
+  styles: [`
+    :host { display: block; padding: var(--spacing-xl, 24px); max-width: 1100px; margin: auto; }
+    form, .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 16px 0; }
+    label { display: grid; gap: 6px; }
+    input, select, button { font: inherit; padding: 10px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+    th, td { text-align: left; padding: 12px; border-bottom: 1px solid var(--border-color, #ccc); }
+    .error { color: var(--error-color, #b42318); }
+    code { overflow-wrap: anywhere; }
+  `],
+})
+export class AdministrationComponent {
+  private readonly api = inject(AdministrationService);
+  private epoch = 0;
+  readonly tenants = signal<readonly TenantSummary[]>([]);
+  readonly selected = signal<TenantSummary | null>(null);
+  readonly users = signal<readonly ProvisionedUser[]>([]);
+  readonly nextToken = signal<string | null>(null);
+  readonly busy = signal(false);
+  readonly error = signal('');
+  readonly message = signal('');
+  readonly usersLoaded = signal(false);
+  newTenantName = '';
+  tenantName = '';
+  email = '';
+
+  constructor() {
+    const unregister = inject(SessionStateRegistry).register(() => {
+      ++this.epoch;
+      this.tenants.set([]); this.selected.set(null); this.users.set([]); this.nextToken.set(null);
+      this.email = ''; this.newTenantName = ''; this.tenantName = '';
+      this.message.set(''); this.error.set(''); this.busy.set(false);
+    });
+    inject(DestroyRef).onDestroy(() => { ++this.epoch; unregister(); });
+    void this.refresh();
+  }
+
+  status(tenant: TenantSummary): string {
+    return typeof tenant.status === 'string' ? tenant.status : ['Active', 'Suspended', 'Offboarding', 'Offboarded'][tenant.status] ?? 'Unknown';
+  }
+  select(id: string): void {
+    ++this.epoch;
+    this.selected.set(this.tenants().find(tenant => tenant.id === id) ?? null);
+    this.tenantName = this.selected()?.name ?? '';
+    this.users.set([]); this.nextToken.set(null); this.usersLoaded.set(false);
+    this.error.set(''); this.message.set(''); this.email = ''; this.busy.set(false);
+  }
+  async refresh(): Promise<void> {
+    await this.run(async current => {
+      const tenants = await firstValueFrom(this.api.listTenants());
+      if (!current()) return;
+      this.tenants.set(tenants);
+      const selected = this.selected();
+      if (selected) this.selected.set(tenants.find(tenant => tenant.id === selected.id) ?? null);
+    });
+  }
+  async createTenant(): Promise<void> {
+    const name = this.newTenantName.trim();
+    if (!name) return;
+    await this.run(async current => {
+      const tenant = await firstValueFrom(this.api.createTenant(name));
+      if (!current()) return;
+      this.tenants.update(items => [...items, tenant]); this.selected.set(tenant);
+      this.tenantName = tenant.name; this.newTenantName = '';
+      this.users.set([]); this.nextToken.set(null); this.usersLoaded.set(false);
+      this.message.set('Tenant created. You can now invite its users.');
+    });
+  }
+  async rename(): Promise<void> {
+    const tenant = this.selected(); const name = this.tenantName.trim();
+    if (!tenant || !name) return;
+    await this.run(async current => {
+      const updated = await firstValueFrom(this.api.renameTenant(tenant.id, name));
+      if (current()) this.updateTenant(updated);
+    });
+  }
+  async changeStatus(action: 'suspend' | 'reactivate' | 'offboard'): Promise<void> {
+    const tenant = this.selected();
+    if (!tenant) return;
+    if (!globalThis.confirm(action === 'offboard'
+      ? 'Offboard this tenant permanently? This cannot be undone.'
+      : `${action === 'suspend' ? 'Suspend' : 'Reactivate'} ${tenant.name}?`)) return;
+    await this.run(async current => {
+      const updated = await firstValueFrom(this.api.changeStatus(tenant.id, action));
+      if (current()) { this.updateTenant(updated); this.message.set('Tenant status updated.'); }
+    });
+  }
+  async loadUsers(more = false): Promise<void> {
+    const tenant = this.selected(); if (!tenant) return;
+    await this.run(async current => {
+      const page = await firstValueFrom(this.api.listUsers(tenant.id, more ? this.nextToken() : null));
+      if (!current()) return;
+      this.users.update(users => {
+        const combined = more ? [...users, ...page.users] : [...page.users];
+        return [...new Map(combined.map(user => [user.username, user])).values()];
+      });
+      this.nextToken.set(page.nextToken); this.usersLoaded.set(true);
+    });
+  }
+  async invite(): Promise<void> {
+    const tenant = this.selected(); const email = this.email.trim();
+    if (!tenant || !email) return;
+    await this.run(async current => {
+      const user = await firstValueFrom(this.api.invite(tenant.id, email));
+      if (!current()) return;
+      this.users.update(users => [...users.filter(item => item.username !== user.username), user]);
+      this.email = '';
+      this.message.set(user.alreadyExists
+        ? 'This user already belongs to this tenant. No new invitation was sent; use Resend invitation if needed.'
+        : 'User created and invitation requested. Check the recipient inbox.');
+    });
+  }
+  async resend(user: ProvisionedUser): Promise<void> {
+    const tenant = this.selected(); if (!tenant) return;
+    if (!globalThis.confirm('Resend this invitation? This resets the temporary password.')) return;
+    await this.run(async current => {
+      await firstValueFrom(this.api.resend(tenant.id, user.username));
+      if (current()) this.message.set('Invitation resend requested. Check the recipient inbox.');
+    });
+  }
+  private updateTenant(tenant: TenantSummary): void {
+    this.selected.set(tenant);
+    this.tenants.update(items => items.map(item => item.id === tenant.id ? tenant : item));
+  }
+  private async run(work: (current: () => boolean) => Promise<void>): Promise<void> {
+    if (this.busy()) return;
+    const epoch = this.epoch;
+    const current = () => epoch === this.epoch;
+    this.busy.set(true); this.error.set(''); this.message.set('');
+    try { await work(current); }
+    catch (error: unknown) {
+      if (current()) this.error.set(error instanceof HttpErrorResponse
+        ? error.status === 403 ? 'Platform administrator access is required.'
+          : error.error?.title ?? 'The operation failed. Refresh and retry; creation may have succeeded.'
+        : 'The operation failed. Check your connection and refresh before retrying.');
+    } finally { if (current()) this.busy.set(false); }
+  }
+}
+{{ end }}

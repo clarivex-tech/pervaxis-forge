@@ -1,0 +1,101 @@
+{{ if model.manifest.tenant_ready }}
+# Trusted user provisioning
+
+The REST print includes PlatformAdmin-only tenant administration and Cognito user
+invitation endpoints. User provisioning is disabled until operator setup is complete.
+The Angular monolith print provides the matching screen at /admin/tenants.
+
+## One-time operator setup
+
+1. Apply the generated PostgreSQL migrations. The first tenant is
+   {{ model.default_tenant_id }}. For related services, use the same tenant directory
+   identifiers; independently creating tenants allocates different IDs. Operate one
+   authoritative onboarding API per user pool. Replication into other service
+   directories must be completed before those services can serve the new tenant.
+2. Configure the Cognito pool with the string custom attribute custom:tenant_id.
+   Remove its write permission from EVERY untrusted app client. Do not map a
+   federated identity provider attribute into this authoritative attribute.
+3. Deploy the separate Identity Token Enrichment print and attach its V2_0
+   pre-token-generation trigger. Use an Essentials or Plus pool. Confirm real
+   access tokens contain tenant_id. The Lambda is not deployed by this REST print.
+4. Configure the pool for administrator-created users with email invitations and
+   temporary passwords. The welcome template must include the username and
+   temporary-password placeholders. Configure sender/SES delivery and test it.
+   V1 onboarding uses lowercased email as username (maximum 128 characters);
+   pools using phone-only or incompatible usernames require adaptation.
+5. Give ONLY the API workload role these Cognito actions on the specific user pool:
+   cognito-idp:AdminCreateUser, cognito-idp:AdminGetUser, cognito-idp:ListUsers.
+   The generated runtime does not need AdminUpdateUserAttributes, group membership
+   administration, or pool administration. No AWS keys or client secret go to Angular.
+6. Set Forge:Provisioning:Enabled=true. UserPoolId and Region are generated from
+   the existing Cognito configuration and must match Forge:Oidc:Authority.
+   Use environment overrides when deploying; do not put credentials in configuration.
+7. Set the Angular app's apiUrl to this API and allow its exact origin in
+   Forge:Cors:AllowedOrigins. The existing auth interceptor supplies the bearer token.
+
+## Bootstrap the first platform administrator
+
+Use a trusted operator AWS console/CLI session, outside the application:
+
+- Create the initial administrator with custom:tenant_id set to the seeded tenant
+  GUID at creation time, before attempting sign-in.
+- Create the PlatformAdmin Cognito group if needed and add that administrator.
+- Complete the invitation/password flow and sign in to the generated Angular app.
+- Open /admin/tenants. The backend enforces PlatformAdmin for every operation.
+  Ordinary Admin membership does not grant platform administration.
+
+There is no public bootstrap endpoint and invitations cannot grant roles.
+If you change Forge:Authorization:PlatformAdminGroup, update the Angular route
+permission and dashboard visibility check to match. UI guards are for navigation;
+backend authorization remains authoritative.
+
+## API and retries
+
+- POST api/v1/tenants with a name creates the tenant in PostgreSQL.
+- POST api/v1/tenants/{id}/users with an email creates a Cognito user, assigning the
+  route tenant GUID in the SAME creation request and requesting an email invitation.
+  It requires an active tenant. It does not mark email verified or migrate aliases.
+- A successful new creation returns 201. Retrying the same normalized email returns
+  200 with alreadyExists=true only when its existing tenant AND email match.
+  It sends no new invitation. Unassigned users and users belonging to another tenant
+  require operator review; they are never adopted or reassigned.
+- POST api/v1/tenants/{id}/users/resend-invitation with username explicitly resends
+  for an enabled user in that tenant awaiting their first password. It resets the
+  temporary password. Delivery is not guaranteed by an API success response.
+- GET api/v1/tenants/{id}/users?nextToken=... returns users and nextToken.
+  Cognito cannot search custom attributes, so the server filters a single bounded
+  page. Empty pages can still have a nextToken; continue until it is absent.
+  Large pools should add a durable membership index in a later version.
+
+There is no distributed database/Cognito transaction: tenant creation is separate
+from user creation. A failed invite leaves the tenant intact. A timeout or delivery
+failure may occur after Cognito creates the account. Retry the SAME email first,
+then explicitly resend if appropriate. Never delete a tenant or account as automatic
+compensation. User assignment and the account are created together; there is no
+intermediate account that this API later assigns to a tenant.
+
+Audit events record actor subject, tenant, user subject when known, and operation.
+Route them to the deployment's durable logging retention policy. No passwords,
+tokens, email request bodies, or raw AWS exception messages are logged here.
+Tenant lifecycle updates can race with an invite; runtime directory admission still
+denies inactive tenants. Suspending a tenant blocks API access after directory-cache
+expiry; it does not itself disable Cognito sign-in or revoke tokens.
+
+## Verification before production
+
+Run the generated ProvisioningTests and tenant isolation tests. Then verify against
+the real pool and PostgreSQL:
+
+1. Bootstrap the administrator and open the administration page.
+2. Create tenants A and B; invite a different user into each and complete sign-in.
+3. Inspect validated access-token tenant_id and exercise tenant-owned CRUD isolation.
+4. Confirm an ordinary user cannot call tenant or user administration APIs.
+5. Retry an invite: same tenant is recovered; another tenant gets 409 without changes.
+6. Try an invalid address, disabled provisioning, unavailable Cognito, and explicit resend.
+7. Suspend A: its API access is denied after the configured directory cache TTL.
+8. Confirm public app clients cannot write custom:tenant_id.
+9. Verify an existing pre-token trigger is preserved/integrated and invitations arrive.
+
+Local mocks do not prove remote permissions, trigger setup, email delivery, or live
+isolation. These checks require deployment and real users.
+{{ end }}

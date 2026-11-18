@@ -1,0 +1,87 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Security.Claims;
+using Amazon.CognitoIdentityProvider;
+using Amazon.CognitoIdentityProvider.Model;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Services.Tenancy;
+
+namespace {{ model.names.namespace }}.Controllers;
+
+/// <summary>Platform administration; never available to ordinary tenant administrators.</summary>
+[ApiController]
+[Route("api/v1/tenants/{tenantId:guid}/users")]
+[TenantExempt]
+[Authorize(Policy = AuthorizationPolicyExtensions.PlatformAdminPolicy)]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public sealed class TenantUsersController(
+    CognitoUserProvisioningService provisioning,
+    ILogger<TenantUsersController> logger) : ControllerBase
+{
+    [HttpGet]
+    public Task<IActionResult> ListAsync(Guid tenantId, [FromQuery] string? nextToken, CancellationToken cancellationToken) =>
+        ExecuteAsync(async token => Ok(await provisioning.ListAsync(tenantId, nextToken, token)), cancellationToken);
+
+    [HttpPost]
+    public Task<IActionResult> InviteAsync(Guid tenantId, InviteUserRequest request, CancellationToken cancellationToken) =>
+        ExecuteAsync(async token =>
+        {
+            var user = await provisioning.InviteAsync(tenantId, request.Email ?? "", Actor, token);
+            return StatusCode(user.AlreadyExists ? 200 : 201, user);
+        }, cancellationToken);
+
+    [HttpPost("resend-invitation")]
+    public Task<IActionResult> ResendAsync(Guid tenantId, ResendInvitationRequest request, CancellationToken cancellationToken) =>
+        ExecuteAsync(async token =>
+        {
+            await provisioning.ResendAsync(tenantId, request.Username, Actor, token);
+            return NoContent();
+        }, cancellationToken);
+
+    private string Actor => User.FindFirstValue("sub") ?? User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
+
+    private async Task<IActionResult> ExecuteAsync(Func<CancellationToken, Task<IActionResult>> action, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(20));
+        try { return await action(timeout.Token); }
+        catch (ProvisioningException exception)
+        {
+            return Problem(statusCode: exception.StatusCode, title: exception.Message);
+        }
+        catch (UserNotFoundException) { return Problem(statusCode: 404, title: "User not found."); }
+        catch (AliasExistsException) { return Problem(statusCode: 409, title: "An existing account requires operator review."); }
+        catch (InvalidParameterException) { return Problem(statusCode: 400, title: "Cognito rejected the request. Check the input and pool prerequisites."); }
+        catch (AmazonCognitoIdentityProviderException exception)
+        {
+            logger.LogWarning("Cognito provisioning failed. Actor {Actor} Code {Code} RequestId {RequestId}",
+                Actor, exception.ErrorCode, exception.RequestId);
+            return Problem(statusCode: 503, title: "Cognito could not complete the operation. Creation may have succeeded; retry with the same email before resending an invitation.");
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            return Problem(statusCode: 503, title: "Cognito timed out. Creation may have succeeded; retry with the same email.");
+        }
+    }
+}
+{{ end }}

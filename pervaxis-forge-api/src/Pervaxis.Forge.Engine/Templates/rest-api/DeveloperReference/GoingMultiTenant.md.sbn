@@ -1,6 +1,10 @@
 {{- if model.manifest.tenant_ready -}}
 # Cognito tenant provisioning and onboarding
 
+The generated backend includes trusted user invitations and retry-safe assignment checks.
+Follow [TrustedProvisioning.md](TrustedProvisioning.md) for IAM, first-admin bootstrap,
+Angular connectivity, invitation recovery, and live verification.
+
 This print always uses MultiTenant mode, including deployments with one customer. See [Tenancy.md](Tenancy.md) and [TenancyQuickStart.md](TenancyQuickStart.md).
 
 ## Initial tenant

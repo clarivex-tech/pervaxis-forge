@@ -9,7 +9,11 @@
   <ItemGroup>
     <PackageVersion Include="Swashbuckle.AspNetCore" Version="7.3.2" />
     <PackageVersion Include="AWSSDK.SecretsManager" Version="4.0.5.1" />
+{{- if model.manifest.tenant_ready }}
+    <PackageVersion Include="AWSSDK.CognitoIdentityProvider" Version="4.0.106.6" />
+{{- end }}
     <PackageVersion Include="AWSSDK.Extensions.NETCore.Setup" Version="4.0.4.4" />
+    <PackageVersion Include="AWSSDK.SecurityToken" Version="4.0.7.1" />
     <PackageVersion Include="AWSSDK.SQS" Version="4.0.3.1" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.8" />

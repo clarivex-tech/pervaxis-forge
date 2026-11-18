@@ -683,7 +683,7 @@ const MFE_ONLY_CANVAS_MODULES = ['Dashboard', 'Reports', 'Analytics', 'Admin', '
 								</mat-form-field>
 
 								<mat-form-field>
-									<mat-label>DB Schema *</mat-label>
+									<mat-label>Database name *</mat-label>
 									<input matInput formControlName="databaseSchema" placeholder="e.g. intake" />
 								</mat-form-field>
 							</div>

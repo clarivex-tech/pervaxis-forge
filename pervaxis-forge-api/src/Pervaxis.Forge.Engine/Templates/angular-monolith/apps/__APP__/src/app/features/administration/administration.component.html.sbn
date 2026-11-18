@@ -1,0 +1,57 @@
+{{ if model.angular_cognito_enabled }}
+<h1>Tenant administration</h1>
+<p>Create tenants and invite their users. Each user belongs to one tenant.</p>
+@if (error()) { <p role="alert" class="error"><span [textContent]="error()"></span></p> }
+@if (message()) { <p role="status"><span [textContent]="message()"></span></p> }
+@if (busy()) { <p role="status">Working...</p> }
+<form (ngSubmit)="createTenant()">
+  <label>New tenant name <input name="newTenantName" [(ngModel)]="newTenantName" required maxlength="200" /></label>
+  <button type="submit" [disabled]="busy() || !newTenantName.trim()">Create tenant</button>
+</form>
+<label>Tenant
+  <select #tenantSelect [value]="selected()?.id ?? ''" (change)="select(tenantSelect.value)" [disabled]="busy()">
+    <option value="">Select a tenant</option>
+    @for (tenant of tenants(); track tenant.id) {
+      <option [value]="tenant.id" [textContent]="tenant.name"></option>
+    }
+  </select>
+</label>
+<button type="button" (click)="refresh()" [disabled]="busy()">Refresh tenants</button>
+@if (selected(); as tenant) {
+  <h2><span [textContent]="tenant.name"></span></h2>
+  <p>Tenant ID: <code><span [textContent]="tenant.id"></span></code></p>
+  <p>Status: <span [textContent]="status(tenant)"></span></p>
+  <form (ngSubmit)="rename()">
+    <label>Name <input name="tenantName" [(ngModel)]="tenantName" required maxlength="200" /></label>
+    <button type="submit" [disabled]="busy() || !tenantName.trim()">Rename tenant</button>
+  </form>
+  <div class="actions">
+    @if (status(tenant) === 'Active') { <button (click)="changeStatus('suspend')" [disabled]="busy()">Suspend</button> }
+    @if (status(tenant) === 'Suspended') { <button (click)="changeStatus('reactivate')" [disabled]="busy()">Reactivate</button> }
+    @if (status(tenant) !== 'Offboarded') { <button (click)="changeStatus('offboard')" [disabled]="busy()">Offboard permanently</button> }
+  </div>
+  <h2>Users</h2>
+  <form (ngSubmit)="invite()">
+    <label>Email <input name="email" type="email" [(ngModel)]="email" required maxlength="128" /></label>
+    <button type="submit" [disabled]="busy() || !email.trim() || status(tenant) !== 'Active'">Invite user</button>
+  </form>
+  <button (click)="loadUsers()" [disabled]="busy()">Refresh users</button>
+  <table>
+    <thead><tr><th>Email / username</th><th>Status</th><th>Enabled</th><th>Invitation</th></tr></thead>
+    <tbody>
+      @for (user of users(); track user.username) {
+        <tr>
+          <td><span [textContent]="user.email ?? user.username"></span></td>
+          <td><span [textContent]="user.status"></span></td>
+          <td><span [textContent]="user.enabled ? 'Yes' : 'No'"></span></td>
+          <td>@if (user.enabled && user.status === 'FORCE_CHANGE_PASSWORD' && status(tenant) === 'Active') {
+            <button (click)="resend(user)" [disabled]="busy()">Resend invitation</button>
+          }</td>
+        </tr>
+      }
+    </tbody>
+  </table>
+  @if (usersLoaded() && users().length === 0) { <p>No users found in the pages loaded so far.</p> }
+  @if (nextToken()) { <button (click)="loadUsers(true)" [disabled]="busy()">Load next page</button> }
+}
+{{ end }}
