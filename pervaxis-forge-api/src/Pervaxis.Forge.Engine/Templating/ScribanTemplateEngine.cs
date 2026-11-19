@@ -142,6 +142,9 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
                         : null,
                     ["has_messaging"] = model.Manifest.Queue is not null,
                 },
+                // Keep the web shell opt-in to web-only monoliths; combined/native output retains its baseline.
+                ["web_admin_layout"] = model.Manifest.ServiceType == Pervaxis.Forge.Engine.Manifest.ServiceType.Monolithic
+                    && model.Manifest.UiTargets.Count == 1 && model.Manifest.UiTargets.Contains("web"),
                 ["cloud_provider"] = model.CloudProvider,
                 ["current_year"] = model.CurrentYear,
                 ["current_month"] = DateTime.UtcNow.ToString("MM"),

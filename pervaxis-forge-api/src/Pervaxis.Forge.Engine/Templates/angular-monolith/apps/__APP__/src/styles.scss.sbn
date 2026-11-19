@@ -93,8 +93,13 @@ select {
 }
 
 /* Dark Mode — custom design tokens */
+{{ if !model.web_admin_layout }}
 @media (prefers-color-scheme: dark) {
   :root {
+{{ else }}
+html.dark-mode {
+  & {
+{{ end }}
     --color-primary: #60a5fa;
     --color-primary-dark: #3b82f6;
     --color-primary-light: #1d4ed8;
@@ -149,8 +154,13 @@ select {
   --ion-font-family: var(--font-family-base);
 }
 
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
 @media (prefers-color-scheme: dark) {
   :root {
+{{ else }}
+html.dark-mode {
+  & {
+{{ end }}
     --ion-background-color: #1a1a2e;
     --ion-text-color: #ffffff;
   }
@@ -184,3 +194,9 @@ select {
     box-shadow: none !important;
   }
 }
+
+{{ if model.web_admin_layout }}
+:root { color: var(--color-text); background: var(--color-bg); }
+:focus-visible { outline: 3px solid var(--p-primary-color); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+{{ end }}

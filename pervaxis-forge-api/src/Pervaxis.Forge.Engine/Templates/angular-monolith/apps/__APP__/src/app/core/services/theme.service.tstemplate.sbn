@@ -1,0 +1,59 @@
+{{ if model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { DOCUMENT } from '@angular/common';
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+
+export type ThemePreference = 'system' | 'light' | 'dark';
+
+/** Platform-owned appearance preference. Never stores identity, roles or tenant data. */
+@Injectable({ providedIn: 'root' })
+export class ThemeService {
+  private readonly document = inject(DOCUMENT);
+  private readonly view = this.document.defaultView;
+  private readonly media = this.view?.matchMedia('(prefers-color-scheme: dark)');
+  private readonly choice = signal<ThemePreference>('system');
+  private readonly systemDark = signal(this.media?.matches ?? false);
+  readonly preference = this.choice.asReadonly();
+  readonly dark = computed(() => this.choice() === 'dark' || (this.choice() === 'system' && this.systemDark()));
+
+  constructor() {
+    try { this.choice.set(this.parse(this.view?.localStorage.getItem('pervaxis.appearance'))); } catch { /* Storage is optional. */ }
+    const changed = (): void => { this.systemDark.set(this.media?.matches ?? false); this.apply(); };
+    this.media?.addEventListener('change', changed);
+    inject(DestroyRef).onDestroy(() => this.media?.removeEventListener('change', changed));
+    this.apply();
+  }
+
+  setPreference(value: string): void {
+    this.choice.set(this.parse(value));
+    try { this.view?.localStorage.setItem('pervaxis.appearance', this.choice()); } catch { /* Storage is optional. */ }
+    this.apply();
+  }
+
+  private parse(value: string | null | undefined): ThemePreference {
+    return value === 'light' || value === 'dark' ? value : 'system';
+  }
+
+  private apply(): void {
+    this.document.documentElement.classList.toggle('dark-mode', this.dark());
+    this.document.documentElement.style.colorScheme = this.dark() ? 'dark' : 'light';
+  }
+}
+{{ end }}
