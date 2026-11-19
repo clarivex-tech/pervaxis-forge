@@ -1,0 +1,49 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { TestBed } from '@angular/core/testing';
+import { Subject, of } from 'rxjs';
+import { DOMAIN_HTTP, DOMAIN_OPTIONS, DOMAIN_SESSION_STATE } from '@forge/ui-contracts/v1';
+import { WorkItemsService } from './work-items.service';
+import { WorkItem } from '../models/work-item';
+
+describe('Portable work items', () => {
+  it('discards a late response after the host resets the session', async () => {
+    const response = new Subject<readonly WorkItem[]>();
+    let reset = () => undefined;
+    TestBed.configureTestingModule({ providers: [WorkItemsService,
+      { provide: DOMAIN_HTTP, useValue: { get: () => response } },
+      { provide: DOMAIN_OPTIONS, useValue: { apiPath: '/api/v1/work-items' } },
+      { provide: DOMAIN_SESSION_STATE, useValue: { registerUntilDestroyed: (_destroyRef: unknown, listener: () => undefined) => { reset = listener; } } },
+    ] });
+    const state = TestBed.inject(WorkItemsService);
+    const pending = state.load(); reset();
+    response.next([{ id: 'one', title: 'Previous tenant data' }]); response.complete(); await pending;
+    expect(state.items()).toEqual([]); expect(state.busy()).toBeFalse();
+  });
+
+  it('uses the receiving host HTTP contract and domain-owned public options', async () => {
+    const get = jasmine.createSpy('get').and.returnValue(of([{ id: 'one', title: 'A work item' }]));
+    TestBed.configureTestingModule({ providers: [WorkItemsService,
+      { provide: DOMAIN_HTTP, useValue: { get } },
+      { provide: DOMAIN_OPTIONS, useValue: { apiPath: '/api/v1/work-items' } },
+      { provide: DOMAIN_SESSION_STATE, useValue: { registerUntilDestroyed: () => undefined } },
+    ] });
+    const state = TestBed.inject(WorkItemsService); await state.load();
+    expect(get).toHaveBeenCalledWith('/api/v1/work-items'); expect(state.items()[0].title).toBe('A work item');
+  });
+});

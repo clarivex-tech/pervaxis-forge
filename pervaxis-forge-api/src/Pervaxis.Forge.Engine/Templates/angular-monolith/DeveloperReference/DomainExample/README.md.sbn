@@ -1,0 +1,9 @@
+﻿# Work items domain (opt-in example)
+
+Copy this folder unchanged to `apps/<app>/src/app/domains/work-items/` in a compatible V1 print. Run `npm run build` or `npm start`; no platform registration edit is needed. The example is outside domains initially and makes no API calls until installed and visited.
+
+Requirements: contract major 1, Angular 21, PrimeNG 21, RxJS 7.8, web target and a host with valid Cognito tenant authentication. Exact package ranges and public options are declared in domain.json and domain.config.json. The backend must separately implement a tenant-protected GET at the configured apiPath returning an array of `{ id: string, title: string }`. This example does not create a backend endpoint. Do not put secrets in domain configuration. Environment-specific public option values and additional declared packages must be reconciled with the receiving print before building.
+
+The host requires sign-in and a valid tenant for all domain routes. Add role names to permissions when needed; that also filters navigation. The backend remains authoritative. Route-scoped state clears on session reset and ignores late responses. Domain code imports only the V1 public facade and explicitly declared packages; do not copy host contracts into this folder.
+
+Keep stable selectors, API paths and domain IDs independent of the generated host name. Cross-domain collaboration requires an explicitly versioned shared contract package declared as a requirement, never another domain's implementation. Domain tests travel with the folder and run with `npm test -- --watch=false`.

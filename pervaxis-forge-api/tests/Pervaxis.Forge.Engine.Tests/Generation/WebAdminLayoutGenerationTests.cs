@@ -48,13 +48,13 @@ public sealed class WebAdminLayoutGenerationTests
         using var metadata = JsonDocument.Parse(await Read("manifest.json"));
         Assert.Equal(combined ? new[] { "web", "mobile" } : new[] { "web" },
             metadata.RootElement.GetProperty("uiTargets").EnumerateArray().Select(target => target.GetString()));
-        var shell = await Read("/app.component.html");
+        var shell = await Read("/shell/app.component.html");
         Assert.Equal(!combined, shell.Contains("<p-drawer", StringComparison.Ordinal));
         Assert.Equal(!combined, zip.Entries.Any(e => e.FullName.EndsWith("/theme.service.ts", StringComparison.Ordinal)));
         Assert.Equal(!combined, shell.Contains("Skip to main content", StringComparison.Ordinal));
         var admin = await Read("/administration.component.html");
         Assert.Equal(!combined, admin.Contains("pInputText", StringComparison.Ordinal));
-        Assert.Contains("permissionGuard('PlatformAdmin')", await Read("/app.routes.ts"));
+        Assert.Contains("permissionGuard('PlatformAdmin')", await Read("/platform.routes.ts"));
         Assert.Contains("SessionStateRegistry", await Read("/administration.component.ts"));
         Assert.Contains("epoch === this.epoch", await Read("/administration.component.ts"));
         var packages = await Read("package.json");

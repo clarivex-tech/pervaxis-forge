@@ -3,7 +3,7 @@
 
 {{ model.manifest.service_name }} signs users in with **Amazon Cognito** using the OAuth 2.0
 authorization code flow with **PKCE** (public client, no client secret). The code lives in
-`apps/{{ model.manifest.service_name }}/src/app/core/auth/` and is horizontal: product-specific
+`apps/{{ model.manifest.service_name }}/src/app/platform/core/auth/` and is horizontal: product-specific
 rules belong in your features, not in these files.
 
 {{ if model.manifest.ui_targets | array.contains "mobile" }}

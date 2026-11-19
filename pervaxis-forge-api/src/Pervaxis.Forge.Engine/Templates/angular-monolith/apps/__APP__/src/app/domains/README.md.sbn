@@ -1,0 +1,6 @@
+﻿# Business domains
+
+Copy a compatible domain folder here unchanged, then run `npm run build` (or `npm start`).
+Each immediate child folder must contain `domain.json`, `domain.config.json`, and `routes.ts` exporting `DOMAIN_ROUTES`.
+Do not edit platform files or the generated registry. See [domain portability](../../../../../DeveloperReference/DomainPortability.md).
+The working reference domain is shipped outside this directory in `DeveloperReference/DomainExample/` and is opt-in.

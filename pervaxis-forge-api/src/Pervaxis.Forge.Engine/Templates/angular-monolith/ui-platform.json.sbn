@@ -1,0 +1,7 @@
+﻿{
+  "contractVersion": 1,
+  "angularMajor": 21,
+  "security": "{{ if model.angular_cognito_enabled }}cognito-tenant{{ else }}public{{ end }}",
+  "appRoot": "apps/{{ model.manifest.service_name }}/src/app",
+  "targets": [{{ for target in model.effective_ui_targets }}"{{ target }}"{{ if !for.last }}, {{ end }}{{ end }}]
+}

@@ -1,0 +1,55 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { DOMAIN_HTTP, DOMAIN_OPTIONS, DOMAIN_SESSION_STATE } from '@forge/ui-contracts/v1';
+import { WorkItem } from '../models/work-item';
+
+/** Route-scoped, reset-safe business state. No host namespace, concrete auth or API service dependency. */
+@Injectable()
+export class WorkItemsService {
+  private readonly http = inject(DOMAIN_HTTP);
+  private readonly options = inject(DOMAIN_OPTIONS);
+  private epoch = 0;
+  readonly items = signal<readonly WorkItem[]>([]);
+  readonly busy = signal(false);
+  readonly error = signal('');
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+    inject(DOMAIN_SESSION_STATE).registerUntilDestroyed(destroyRef, () => this.reset());
+    destroyRef.onDestroy(() => this.reset());
+  }
+
+  async load(): Promise<void> {
+    const epoch = ++this.epoch;
+    this.busy.set(true); this.error.set('');
+    try {
+      const apiPath = this.options['apiPath'];
+      if (typeof apiPath !== 'string' || !apiPath.startsWith('/')) throw new Error('A relative apiPath is required.');
+      const items = await firstValueFrom(this.http.get<readonly WorkItem[]>(apiPath));
+      if (epoch === this.epoch) this.items.set(items);
+    } catch {
+      if (epoch === this.epoch) this.error.set('Work items could not be loaded.');
+    } finally { if (epoch === this.epoch) this.busy.set(false); }
+  }
+
+  private reset(): void {
+    ++this.epoch; this.items.set([]); this.busy.set(false); this.error.set('');
+  }
+}

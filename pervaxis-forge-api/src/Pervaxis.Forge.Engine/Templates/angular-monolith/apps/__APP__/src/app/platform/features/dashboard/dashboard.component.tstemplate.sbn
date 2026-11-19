@@ -1,0 +1,60 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component, inject } from '@angular/core';
+{{ if model.angular_cognito_enabled }}
+import { RouterLink } from '@angular/router';
+import { AuthService } from '../../core/auth/auth.service';
+import { SessionSummaryComponent } from '../../core/auth/session-summary.component';
+{{ end }}
+
+/**
+ * PLATFORM: Starter landing page. Business dashboards belong in domains/.
+ * Replace this placeholder with your domain-specific dashboard. The session summary shows the
+ * signed-in user, roles and tenant; keep or remove it.
+ */
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-dashboard',
+  standalone: true,
+  imports: [{{ if model.angular_cognito_enabled }}SessionSummaryComponent, RouterLink{{ end }}],
+  template: `
+    <div class="dashboard">
+      <h1>Welcome to {{ model.manifest.service_name }}</h1>
+      <p>This scaffold is ready for your business logic. Copy a business domain to get started.</p>
+{{ if model.angular_cognito_enabled }}
+      <{{ model.manifest.component_prefix }}-session-summary />
+      @if (auth.hasRole('PlatformAdmin')) {
+        <p><a routerLink="/admin/tenants">Manage tenants and users</a></p>
+      }
+{{ end }}
+    </div>
+  `,
+  styles: [`
+    .dashboard {
+      padding: var(--spacing-xl);
+    }
+    h1 {
+      margin-bottom: var(--spacing-md);
+    }
+  `],
+})
+export class DashboardComponent {
+{{ if model.angular_cognito_enabled }}
+  readonly auth = inject(AuthService);
+{{ end }}
+}

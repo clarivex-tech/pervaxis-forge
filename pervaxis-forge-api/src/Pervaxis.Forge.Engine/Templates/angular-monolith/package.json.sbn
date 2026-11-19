@@ -3,11 +3,13 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
-    "start": "ng serve",
-    "build": "ng build",
-    "test": "ng test",
-    "lint": "ng lint",
-    "build:prod": "ng build --configuration production"
+    "start": "node scripts/serve.mjs",
+    "build": "node scripts/domain-tool.mjs && ng build",
+    "test": "node scripts/domain-tool.mjs && ng test",
+    "lint": "node scripts/domain-tool.mjs && ng lint",
+    "build:prod": "node scripts/domain-tool.mjs && ng build --configuration production",
+    "domains:prepare": "node scripts/domain-tool.mjs",
+    "test:architecture": "node --test scripts/domain-tool.spec.mjs"
   },
   "dependencies": {
     "@angular/animations": "^21.0.0",
@@ -34,6 +36,7 @@
     "zone.js": "~0.15.0"
   },
   "devDependencies": {
+    "semver": "^7.7.0",
     "@angular/build": "^21.0.0",
     "@angular/cli": "^21.0.0",
     "@angular/compiler-cli": "^21.0.0",
