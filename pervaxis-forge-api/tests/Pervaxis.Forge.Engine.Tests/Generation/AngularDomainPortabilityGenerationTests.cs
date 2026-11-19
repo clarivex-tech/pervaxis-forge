@@ -57,6 +57,14 @@ public sealed class AngularDomainPortabilityGenerationTests
         Assert.Contains("scripts/domain-tool.mjs && ng build", Read("package.json"));
         Assert.Contains("ts.resolveModuleName", Read("/scripts/domain-tool.mjs"));
         Assert.Contains("platformBefore", Read("/scripts/verify-copy.mjs"));
+        Assert.Contains("npm run domains:prepare", Read("/.github/workflows/ci.yml"));
+        Assert.Contains("npm run test:architecture", Read("/.github/workflows/ci.yml"));
+        foreach (System.Text.RegularExpressions.Match route in System.Text.RegularExpressions.Regex.Matches(
+            Read("/platform/platform.routes.ts"), "path: '([^']+)'"))
+        {
+            var root = route.Groups[1].Value.Split('/')[0];
+            if (root != "**") Assert.Contains("'" + root + "'", Read("/scripts/domain-tool.mjs"));
+        }
         Assert.Contains("registerUntilDestroyed", Read("/DomainExample/services/work-items.service.ts"));
         Assert.Contains("epoch", Read("/DomainExample/services/work-items.service.ts"));
         Assert.DoesNotContain("domain-host", Read("/DomainExample/routes.ts"));

@@ -70,3 +70,44 @@ test('rejects mismatched security modes', t => { const f = fixture(t); update(pa
 test('rejects private platform type imports', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), "type Private = import('../../platform/contracts/v1/index').Private;"); assert.throws(() => prepareDomains(f.root), /escapes its folder/); });
 test('rejects triple-slash path escapes', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), '/// <reference path="../../platform/contracts/v1/index.ts" />'); assert.throws(() => prepareDomains(f.root), /triple-slash/); });
 test('rejects escaping component resources', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), "const component = { templateUrl: '../../platform/private.html' };"); assert.throws(() => prepareDomains(f.root), /component resources/); });
+
+
+test('rejects duplicate ids regardless of folder sort order', t => {
+  const f = fixture(t); fs.cpSync(f.folder, path.join(f.app, 'domains/aaa-copy'), { recursive: true });
+  assert.throws(() => prepareDomains(f.root), /duplicate domain id work-items/);
+});
+
+test('rejects all reserved platform route roots and conflicting path syntax', t => {
+  for (const id of ['login', 'auth', 'dashboard', 'admin', 'settings', 'not-found', 'access-denied', 'platform', 'admin/tenants', '**']) {
+    const f = fixture(t); update(f.manifest, m => m.id = id);
+    assert.throws(() => prepareDomains(f.root), /invalid, reserved or mismatched/);
+  }
+});
+
+test('recreates an absent generated registry without host edits', t => {
+  const f = fixture(t); prepareDomains(f.root); const first = fs.readFileSync(f.registry, 'utf8');
+  fs.rmSync(path.dirname(f.registry), { recursive: true }); prepareDomains(f.root);
+  assert.equal(fs.readFileSync(f.registry, 'utf8'), first);
+  assert.doesNotMatch(first, /^import .*from .*domains/m);
+});
+
+test('does not mutate package/options files or collect environment secrets', t => {
+  const f = fixture(t), packages = path.join(f.root, 'package.json'), options = path.join(f.folder, 'domain.config.json');
+  const beforePackages = fs.readFileSync(packages, 'utf8'), beforeOptions = fs.readFileSync(options, 'utf8');
+  fs.writeFileSync(path.join(f.root, '.env'), 'PRIVATE_TOKEN=do-not-bundle-this-value');
+  prepareDomains(f.root);
+  assert.equal(fs.readFileSync(packages, 'utf8'), beforePackages); assert.equal(fs.readFileSync(options, 'utf8'), beforeOptions);
+  assert.doesNotMatch(fs.readFileSync(f.registry, 'utf8'), /PRIVATE_TOKEN|do-not-bundle-this-value/);
+});
+
+test('explains missing declared installed packages', t => {
+  const f = fixture(t); update(path.join(f.root, 'package.json'), p => p.dependencies['not-installed'] = '^1.0.0');
+  update(f.manifest, m => m.requirements.packages['not-installed'] = '^1.0.0');
+  assert.throws(() => prepareDomains(f.root), /missing installed package not-installed.*npm install or npm ci/);
+});
+
+test('explains a domain folder with no manifest', t => {
+  const f = fixture(t); fs.rmSync(f.manifest); assert.throws(() => prepareDomains(f.root), /missing domain.json/);
+});
+
+test('explains missing public options files', t => { const f = fixture(t); fs.rmSync(path.join(f.folder, 'domain.config.json')); assert.throws(() => prepareDomains(f.root), /missing public domain.config.json/); });

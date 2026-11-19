@@ -16,6 +16,8 @@
 
 No handwritten edit to platform, bootstrap, route lists or navigation lists is needed. Builds scan immediate domain folders, validate their JSON, check dependency boundaries and generate literal lazy `import()` registrations. Raw `ng build/serve/test` bypass preparation and are low-level commands only; normal build/test/start scripts (including Docker) run it. This uses the Angular application builder, not Vite-specific import.meta.glob or runtime reflection. Literal imports keep routes in separate lazy chunks and allow Angular AOT to analyze them.
 
+If a raw Angular command reports a missing `@forge/generated-domains` module or `.generated/domain-registry.ts`, run `npm run domains:prepare` (or use `npm run build`, `npm test` or `npm start`) from the print root. Supported npm commands recreate a missing registry automatically. Raw Angular compile errors cannot be customized by the preparation tool because those commands bypass it. CI explicitly runs preparation and architecture tests before lint/test/build.
+
 ## Domain V1 format
 
 Every folder is named with its stable kebab-case id and contains:

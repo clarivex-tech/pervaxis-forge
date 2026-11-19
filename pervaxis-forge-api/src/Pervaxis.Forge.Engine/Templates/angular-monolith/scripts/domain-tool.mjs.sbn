@@ -36,8 +36,7 @@ const listFiles = directory => fs.existsSync(directory) ? fs.readdirSync(directo
 }) : [];
 const pkgName = name => name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0];
 
-function inspectManifest(root, folder, host, packages) {
-  const manifest = readJson(path.join(folder, 'domain.json'));
+function inspectManifest(root, folder, manifest, host, packages) {
   if (manifest.contractVersion !== host.contractVersion || manifest.contractVersion !== 1) fail('incompatible contract major in ' + folder);
   if (manifest.security !== host.security || (manifest.security === 'public' && manifest.permissions?.length)) fail('incompatible security mode for ' + folder);
   if (!identifier.test(manifest.id) || manifest.id !== path.basename(folder) || reserved.has(manifest.id)) fail('invalid, reserved or mismatched domain id in ' + folder);
@@ -48,7 +47,9 @@ function inspectManifest(root, folder, host, packages) {
   if (!record(manifest.requirements) || !record(manifest.requirements.packages) || !Array.isArray(manifest.requirements.configuration)
       || !manifest.requirements.configuration.every(key => typeof key === 'string' && key.length)) fail('declare package/configuration requirements for ' + manifest.id);
   if (!fs.existsSync(path.join(folder, 'routes.ts'))) fail('routes.ts exporting DOMAIN_ROUTES is required for ' + manifest.id);
-  const options = readJson(path.join(folder, 'domain.config.json'));
+  const optionsPath = path.join(folder, 'domain.config.json');
+  if (!fs.existsSync(optionsPath)) fail('missing public domain.config.json for ' + manifest.id + '; supply the declared public options, never secrets');
+  const options = readJson(optionsPath);
   if (!record(options)) fail('domain.config.json must be a public options object for ' + manifest.id);
   for (const key of manifest.requirements.configuration) {
     if (!Object.hasOwn(options, key) || options[key] === null || options[key] === '') fail('missing configuration ' + manifest.id + ':' + key);
@@ -56,7 +57,9 @@ function inspectManifest(root, folder, host, packages) {
   for (const [name, range] of Object.entries(manifest.requirements.packages)) {
     if (typeof range !== 'string' || !semver.validRange(range)) fail('invalid package range for ' + name);
     if (!Object.hasOwn(packages, name)) fail('declare ' + name + ' in the receiving package.json for ' + manifest.id);
-    const installed = readJson(path.join(root, 'node_modules', name, 'package.json'));
+    const installedPath = path.join(root, 'node_modules', name, 'package.json');
+    if (!fs.existsSync(installedPath)) fail('missing installed package ' + name + ' for ' + manifest.id + '; install the declared receiving package.json dependencies with npm install or npm ci');
+    const installed = readJson(installedPath);
     if (!semver.satisfies(installed.version, range)) fail('incompatible installed package ' + name + '@' + installed.version + ' for ' + manifest.id + '; needs ' + range);
   }
   return { folder, manifest, options };
@@ -132,9 +135,20 @@ export function prepareDomains(root = path.resolve(path.dirname(fileURLToPath(im
   if (semver.major(angular.version) !== host.angularMajor) fail('Angular major does not match UI contracts');
   const domainRoot = path.join(appRoot, 'domains');
   fs.mkdirSync(domainRoot, { recursive: true });
-  const domains = fs.readdirSync(domainRoot, { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+  const ids = new Map();
+  const candidates = fs.readdirSync(domainRoot, { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
     .filter(entry => { if (entry.isSymbolicLink()) fail('domain symlinks are not supported'); return entry.isDirectory(); })
-    .map(entry => inspectManifest(root, path.join(domainRoot, entry.name), host, packages));
+    .map(entry => {
+      const folder = path.join(domainRoot, entry.name);
+      const file = path.join(folder, 'domain.json');
+      if (!fs.existsSync(file)) fail('missing domain.json in ' + folder);
+      const manifest = readJson(file);
+      if (!record(manifest) || typeof manifest.id !== 'string') fail('domain.json must declare a string id in ' + folder);
+      if (ids.has(manifest.id)) fail('duplicate domain id ' + manifest.id + ' in ' + ids.get(manifest.id) + ' and ' + folder);
+      ids.set(manifest.id, folder);
+      return { folder, manifest };
+    });
+  const domains = candidates.map(({ folder, manifest }) => inspectManifest(root, folder, manifest, host, packages));
   checkBoundaries(root, appRoot, domains);
   const entries = domains.map(({ manifest, options }) => '  { manifest: ' + JSON.stringify(manifest) + ', options: ' + JSON.stringify(options)
     + ", loadRoutes: () => import('../domains/" + manifest.id + "/routes').then(module => module.DOMAIN_ROUTES) }");

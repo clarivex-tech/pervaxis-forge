@@ -44,7 +44,7 @@ Preparation rejects private/cross-domain imports, private type imports, triple-s
 
 - Entire engine suite: **150 passed**. After final template adjustments, **18 focused ownership/auth/admin/provisioning tests passed** again.
 - API generation service suite: **12 passed**; changes there only update expected generated paths.
-- Generated architecture suite: **17 passed**, including deliberately invalid domain fixtures.
+- Generated architecture suite: **24 passed**, including deliberately invalid domain fixtures.
 - Source and differently named receiving print: **78 headless Edge tests passed each**. Final receiving run passed after the last adapter/lint adjustments. Tests include PKCE/session behavior, tenant/permission guards, administration stale responses, domain lazy routes/options/navigation, permission updates and copied service reset handling.
 - Receiving print lint: **passed, no errors/warnings**. Portable domain selector rules use a stable `domain-` prefix instead of the generated host prefix.
 - Actual unchanged domain-folder copy from `source-web` to `fresh-web`: both production AOT builds passed; copied file hashes matched; every receiving platform file hash stayed unchanged. The generated [verify-copy script](../pervaxis-forge-api/src/Pervaxis.Forge.Engine/Templates/angular-monolith/scripts/verify-copy.mjs.sbn) makes that proof repeatable.
@@ -56,3 +56,13 @@ No live Cognito/backend invitation, CRUD or AWS operation was rerun. Auth/admin 
 ## Upgrade acceptance
 
 Generate a fresh compatible print, compare its public contract/security/target and package metadata, copy the domain folder unchanged, reconcile declared dependencies/public configuration, then run production build, architecture tests, domain/platform tests and lint. Verify route/navigation registration and authorization in the receiving app. Keep fresh platform files and deployment-specific auth settings. For an actual deployment, repeat sign-in/refresh/sign-out and tenant-isolated API acceptance in the normal staging environment.
+
+## Acceptance follow-up
+
+Duplicate IDs now report both conflicting folders before folder-name validation, regardless of sort order. Missing manifests, installed declared packages and public options files report actionable errors. The expanded architecture suite verifies all reserved/conflicting roots, missing-registry recovery, stale registration removal, unchanged package/options files and exclusion of .env values.
+
+The generated CI workflow explicitly prepares domains and runs architecture tests before lint, headless Chrome tests and the production build. The workflow definition is covered by generator tests; hosted GitHub Actions was not executed in this session. As with the existing npm ci workflow, generate and commit the receiving application package-lock.json after npm install.
+
+Raw ng commands bypass preparation. Their missing-module compile diagnostics cannot be customized by a tool they never invoke; the generated documentation gives the exact npm run domains:prepare recovery command. Supported npm commands recreate an absent registry automatically, covered by regression tests.
+
+Follow-up verification: 24 architecture tests and 16 focused generator/auth/layout checks passed. An actual production build retained separate lazy domain route/screen chunks; after deleting only the disposable example folder, another production build passed with zero registrations and no domain screen code in its bundles. The earlier two-host copy/hash/routing proof and browser/auth/admin results above remain applicable because the follow-up changes only validation, CI and documentation.
