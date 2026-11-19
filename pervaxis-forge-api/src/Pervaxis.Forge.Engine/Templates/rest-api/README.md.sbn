@@ -75,3 +75,6 @@ dotnet run --project src/{{ model.names.namespace }}
 
 Configuration is loaded from `appsettings.json` and environment-specific overrides.
 Secrets are stored in AWS Secrets Manager at `{env}/{{ model.manifest.product }}/{{ model.manifest.service_name }}/config`.
+
+
+Ownership: Platform contains print-owned runtime code; Domains contains business modules. Data/Migrations is application-owned upgrade history and snapshot state, excluded from Platform replacement. See [the ownership and upgrade policy](DeveloperReference/Ownership.md).

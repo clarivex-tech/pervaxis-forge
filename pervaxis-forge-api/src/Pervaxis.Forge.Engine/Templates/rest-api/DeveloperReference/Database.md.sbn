@@ -3,11 +3,11 @@
 
 The platform already connects to PostgreSQL for you. You do **not** write connection, password or health-check code. You fill in settings, then add your tables and migrations.
 
-Platform code lives in `Infrastructure/Database/` and `Data/{{ model.names.dot_net_class_name }}DbContext.cs`. Do not edit it. If something is missing, raise a platform ticket.
+Platform code lives in `Platform/Infrastructure/Database/` and `Platform/Data/{{ model.names.dot_net_class_name }}DbContext.cs`. Do not edit it. If something is missing, raise a platform ticket.
 
 ## What the platform provides
 
-- One PostgreSQL connection setup (`AddForgeDatabase`, already called in `Program.cs`).
+- One PostgreSQL connection setup (`AddForgeDatabase`, already called in `Platform/Hosting/ForgeHost.cs`).
 - The user name and password read from AWS Secrets Manager, refreshed automatically after a password rotation.
 - A readiness check at `/health/ready` that runs `SELECT 1`.
 {{- if model.manifest.tenant_ready }}
@@ -67,6 +67,9 @@ Put entities and IEntityTypeConfiguration classes inside Domains/<Feature>. Use 
 
 ## Migrations (EF Core)
 
+Data/Migrations is application-owned upgrade state, intentionally outside Platform and Domains. Preserve its entire history and latest snapshot across Platform refreshes. Starter migrations apply only to an empty new database; never overwrite existing history with a fresh print. See [Ownership.md](Ownership.md).
+
+
 Run these from the solution folder. Install the tool once with `dotnet tool install --global dotnet-ef`.
 
 ```powershell
@@ -89,5 +92,5 @@ Rules:
 
 ## Tests
 
-`tests/{{ model.names.test_project_name }}/DatabaseTests.cs` covers the platform rules (password rotation, secret credentials, registration and the readiness check) without needing a database. Keep it. Add your own tests for your queries in separate files.
+`tests/{{ model.names.test_project_name }}/Platform/DatabaseTests.cs` covers the platform rules (password rotation, secret credentials, registration and the readiness check) without needing a database. Keep it. Add your own tests for your queries in separate files.
 {{- end -}}

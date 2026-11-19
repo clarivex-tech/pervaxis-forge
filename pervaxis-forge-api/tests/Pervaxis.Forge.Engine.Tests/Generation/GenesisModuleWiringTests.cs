@@ -80,7 +80,7 @@ public class GenesisModuleWiringTests
     public async Task EveryModule_IsRegisteredWithConfigurationInTheFormItsPackageReads()
     {
         var all = GenesisModules.GetAllNames();
-        var program = Single(await GenerateAsync(Manifest(all)), "/Program.cs");
+        var program = Single(await GenerateAsync(Manifest(all)), "/Platform/Hosting/ForgeHost.cs");
 
         foreach (var module in GenesisModules.GetAll())
         {
@@ -141,9 +141,9 @@ public class GenesisModuleWiringTests
     public async Task Sanitization_CapsJsonBodies_BeforeTheSanitizationMiddleware()
     {
         var files = await GenerateAsync(Manifest(["Sanitization"]));
-        var program = Single(files, "/Program.cs");
+        var program = Single(files, "/Platform/Hosting/ForgeHost.cs");
         program.Should().Contain("app.UseGenesisSanitization();").And.Contain("app.UseMiddleware<JsonBodyLimitMiddleware>();");
-        Single(files, "/Infrastructure/Middleware/JsonBodyLimitMiddleware.cs").Should().Contain("MaxInputLength");
+        Single(files, "/Platform/Infrastructure/Middleware/JsonBodyLimitMiddleware.cs").Should().Contain("MaxInputLength");
         program.IndexOf("app.UseMiddleware<JsonBodyLimitMiddleware>();", StringComparison.Ordinal)
             .Should().BeLessThan(program.IndexOf("app.UseGenesisSanitization();", StringComparison.Ordinal), "the limit must run first");
         program.IndexOf("app.UseGenesisSanitization();", StringComparison.Ordinal)
@@ -155,8 +155,8 @@ public class GenesisModuleWiringTests
     {
         var files = await GenerateAsync(Manifest(["OData"]));
 
-        Single(files, "/Program.cs").Should().Contain("builder.Services.AddODataPagingGuard();");
-        Single(files, "/Infrastructure/Validation/ODataPagingGuardFilter.cs").Should().Contain("EffectiveTop < 0");
+        Single(files, "/Platform/Hosting/ForgeHost.cs").Should().Contain("builder.Services.AddODataPagingGuard();");
+        Single(files, "/Platform/Infrastructure/Validation/ODataPagingGuardFilter.cs").Should().Contain("EffectiveTop < 0");
         Single(files, "/GenesisModuleTests.cs").Should().Contain("class ODataTests").And.NotContain("class SanitizationTests");
     }
 
@@ -165,7 +165,7 @@ public class GenesisModuleWiringTests
     {
         var files = await GenerateAsync(Manifest(["Caching"]));
 
-        Single(files, "/Program.cs").Should().NotContain("AddODataPagingGuard").And.NotContain("UseGenesisSanitization");
+        Single(files, "/Platform/Hosting/ForgeHost.cs").Should().NotContain("AddODataPagingGuard").And.NotContain("UseGenesisSanitization");
         files.Keys.Should().NotContain(k => k.EndsWith("/GenesisModuleTests.cs", StringComparison.Ordinal)
             || k.EndsWith("/ODataPagingGuardFilter.cs", StringComparison.Ordinal)
             || k.EndsWith("/JsonBodyLimitMiddleware.cs", StringComparison.Ordinal));
@@ -174,7 +174,7 @@ public class GenesisModuleWiringTests
     [Fact]
     public async Task WithoutSanitization_ThereIsNoSanitizationMiddleware()
     {
-        var program = Single(await GenerateAsync(Manifest(["OData"])), "/Program.cs");
+        var program = Single(await GenerateAsync(Manifest(["OData"])), "/Platform/Hosting/ForgeHost.cs");
 
         program.Should().NotContain("UseGenesisSanitization").And.NotContain("JsonBodyLimitMiddleware");
     }

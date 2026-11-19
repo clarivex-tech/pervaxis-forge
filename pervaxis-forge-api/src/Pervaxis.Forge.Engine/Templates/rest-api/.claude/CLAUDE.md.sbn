@@ -71,3 +71,6 @@ Standards and patterns are in `.claude/guides/` and `.claude/skills/`. Read befo
 | `guides/PERVAXIS_STANDARDS.md` | General platform coding standards |
 | `skills/csharp-coding-standards/` | C# patterns — read before writing any new class |
 | `skills/microsoft-extensions-dependency-injection/` | DI registration patterns |
+
+
+Ownership: Platform contains print-owned runtime code; Domains contains business modules. Data/Migrations is application-owned upgrade history and snapshot state, excluded from Platform replacement. See [the ownership and upgrade policy](../DeveloperReference/Ownership.md).

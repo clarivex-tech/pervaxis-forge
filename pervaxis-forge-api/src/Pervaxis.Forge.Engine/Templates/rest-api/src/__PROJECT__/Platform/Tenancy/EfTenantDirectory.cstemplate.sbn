@@ -19,7 +19,7 @@
 
 using Microsoft.EntityFrameworkCore;
 using Pervaxis.Core.Abstractions.MultiTenancy;
-using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Platform.Data;
 using {{ model.names.namespace }}.Data.Tenancy;
 
 namespace {{ model.names.namespace }}.Platform.Tenancy;

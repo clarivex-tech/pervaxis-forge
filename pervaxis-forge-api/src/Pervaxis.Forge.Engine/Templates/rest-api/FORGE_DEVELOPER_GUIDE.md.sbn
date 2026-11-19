@@ -1,6 +1,6 @@
 # Forge developer guide
 
-Keep business features in `src/{{ model.names.namespace }}/Domains/<Feature>/`. Platform tenancy code is grouped under `Platform/Tenancy/`; metadata endpoints are under `Platform/Meta/`. Infrastructure supplies authentication, validation, database access and the HTTP pipeline. Some platform namespaces deliberately retain their previous names to preserve EF identities and source compatibility.
+Keep business features in `src/{{ model.names.namespace }}/Domains/<Feature>/`. Platform tenancy code is grouped under `Platform/Tenancy/`; metadata endpoints are under `Platform/Meta/`. Infrastructure supplies authentication, validation, database access and the HTTP pipeline. V1 contract and persisted entity namespaces remain stable; other internal host imports transition to .Platform. Program.cs is the minimal entry point.
 
 Start with [DeveloperReference/Portability.md](DeveloperReference/Portability.md) for automatic module registration, feature structure, business routes, contracts and upgrades. A service layer is optional: simple CRUD may inject the tenant repository directly. Each request DTO has its own file.
 
@@ -88,3 +88,6 @@ Example (`appsettings.json`):
 The `Domain` property is retained for Auth0 management API compatibility and can be left empty for other providers.
 
 ---
+
+
+Ownership: Platform contains print-owned runtime code; Domains contains business modules. Data/Migrations is application-owned upgrade history and snapshot state, excluded from Platform replacement. See [the ownership and upgrade policy](DeveloperReference/Ownership.md).

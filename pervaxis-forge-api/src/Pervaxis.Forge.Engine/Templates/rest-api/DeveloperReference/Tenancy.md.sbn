@@ -144,6 +144,6 @@ using (_tenantScopes.BeginScope(tenantId))   // ITenantScopeFactory
 
 ## Tests
 
-`TenantManagementTests.cs` covers the tenants table, the management rules, the status check, isolation between
+`Platform/TenantManagementTests.cs` covers the tenants table, the management rules, the status check, isolation between
 two tenants in this service's `DbContext`, and single-tenant requests. They use in-memory SQLite. Keep them.
 {{- end -}}

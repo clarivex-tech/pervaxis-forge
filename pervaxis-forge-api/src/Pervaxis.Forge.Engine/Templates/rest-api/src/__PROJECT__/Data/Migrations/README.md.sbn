@@ -1,0 +1,9 @@
+# Application migration history
+
+This directory is application-owned upgrade state, including platform and business schema changes. It is an intentional exception to the `Platform/` and `Domains/` runtime-code layout. It is not replaceable or regenerated scaffold code.
+
+Preserve the complete linear migration chain, every designer and the latest snapshot through every Platform upgrade. Never rewrite or delete applied migrations, overwrite the snapshot with a fresh print's starter snapshot, or baseline over existing tables. Append reviewed migrations for intentional changes.
+
+Use the existing tooling path `--output-dir Data/Migrations --namespace {{ model.names.namespace }}.Data.Migrations`. Historical IDs and entity identities remain stable. Context imports point to the context in `Platform/Data/`; moving the host files must not produce model drift.
+
+Read [the ownership and lifecycle policy](../../../../DeveloperReference/Ownership.md) before upgrading.

@@ -77,7 +77,7 @@ public class OutboundSecurityGenerationTests
         AllowedOrigins(Single(files, "/appsettings.json")).Should().BeEmpty();
         AllowedOrigins(Single(files, "/appsettings.Production.json")).Should().BeEmpty();
         AllowedOrigins(Single(files, "/appsettings.Development.json")).Should().Contain("http://localhost:4200");
-        Single(files, "/Program.cs").Should().NotContain("?? [\"http://localhost");
+        Single(files, "/Platform/Hosting/ForgeHost.cs").Should().NotContain("?? [\"http://localhost");
     }
 
     [Fact]
@@ -88,7 +88,7 @@ public class OutboundSecurityGenerationTests
 
         handler.Should().NotContain("BearerToken").And.NotContain("ForgeAuthenticationOptions");
         handler.Should().Contain("request.Headers.Authorization = null");
-        var program = Single(files, "/Program.cs");
+        var program = Single(files, "/Platform/Hosting/ForgeHost.cs");
         program.Should().Contain("AddOptions<ForgeExternalServicesOptions>()");
 
         // Redirects would be followed below ExternalAuthHandler and carry the API key to another host.
@@ -122,7 +122,7 @@ public class OutboundSecurityGenerationTests
     [Fact]
     public async Task OutputCache_RunsAfterAuthorization_AndOnlyWhenEnabled()
     {
-        var program = Single(await GenerateAsync(), "/Program.cs");
+        var program = Single(await GenerateAsync(), "/Platform/Hosting/ForgeHost.cs");
 
         var cache = program.IndexOf("app.UseOutputCache()", StringComparison.Ordinal);
         cache.Should().BeGreaterThan(program.IndexOf("app.UseAuthorization()", StringComparison.Ordinal));
@@ -135,7 +135,7 @@ public class OutboundSecurityGenerationTests
     [Fact]
     public async Task AuditLog_HonoursEnabled_AndRecordsFailures()
     {
-        var program = Single(await GenerateAsync(), "/Program.cs");
+        var program = Single(await GenerateAsync(), "/Platform/Hosting/ForgeHost.cs");
 
         program.Should().Contain("if (auditLogging.Enabled)");
         var audit = program[program.IndexOf("if (auditLogging.Enabled)", StringComparison.Ordinal)..];

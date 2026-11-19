@@ -2,7 +2,7 @@
 
 The platform already validates tokens for you. You do **not** write token-checking code. You fill in settings and choose which endpoints need which permission.
 
-Code lives in `Infrastructure/Extensions/AuthenticationExtensions.cs`, `Infrastructure/Extensions/AuthorizationPolicyExtensions.cs` and `Auth/CognitoTokenValidator.cs`. Do not edit them. If something is missing, raise a platform ticket.
+Code lives in `Platform/Infrastructure/Extensions/AuthenticationExtensions.cs`, `Platform/Infrastructure/Extensions/AuthorizationPolicyExtensions.cs` and `Platform/Auth/CognitoTokenValidator.cs`. Do not edit them. If something is missing, raise a platform ticket.
 {{- if model.manifest.cognito != null }}
 
 ## This service is already set up for Cognito

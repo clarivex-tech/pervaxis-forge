@@ -27,15 +27,17 @@ namespace Pervaxis.Forge.Engine.Tests.Generation;
 /// <summary>Compiles real prints and exercises copied source through production discovery, without AWS or PostgreSQL.</summary>
 public sealed class SlicePortabilityIntegrationTests
 {
-    [Fact]
-    public async Task CopyToDifferentlyNamedFreshPrintRequiresNoHostEdits()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CopyToDifferentlyNamedFreshPrintRequiresNoHostEdits(bool minimalInfrastructure)
     {
         var root = Path.Combine(Path.GetTempPath(), "forge-port-" + Guid.NewGuid().ToString("N")[..8]);
         Directory.CreateDirectory(root);
         try
         {
-            var source = await GenerateAsync(root, "source");
-            var target = await GenerateAsync(root, "target");
+            var source = await GenerateAsync(root, "source", minimalInfrastructure);
+            var target = await GenerateAsync(root, "target", minimalInfrastructure);
             // First prove that regrouping platform files has not changed the PostgreSQL model/snapshot.
             await RunAsync(target, "test", "--filter", "FullyQualifiedName~SliceArchitectureTests", "--verbosity", "minimal");
 
@@ -55,12 +57,13 @@ public sealed class SlicePortabilityIntegrationTests
             }
             foreach (var (path, content) in before)
                 Assert.Equal(content, await File.ReadAllBytesAsync(path));
-            await File.WriteAllTextAsync(Path.Combine(target, "tests/Pervaxis.Clarivolt.Target.Tests/CopiedCatalogTests.cs"), License + RuntimeTest);
+            Directory.CreateDirectory(Path.Combine(target, "tests/Pervaxis.Clarivolt.Target.Tests/Domains/Catalog"));
+            await File.WriteAllTextAsync(Path.Combine(target, "tests/Pervaxis.Clarivolt.Target.Tests/Domains/Catalog/CopiedCatalogTests.cs"), License + RuntimeTest);
             // New feature intentionally needs an appended migration; it must not match the starter snapshot.
             await RunAsync(target, "test", "--filter", "FullyQualifiedName!~PlatformModelMatchesPreservedMigrationSnapshot", "--verbosity", "minimal");
 
             // Mutation checks: the architecture rules must actually catch runtime coupling.
-            var forbidden = Path.Combine(target, "src/Pervaxis.Clarivolt.Target/ForbiddenHostDependency.cs");
+            var forbidden = Path.Combine(target, "src/Pervaxis.Clarivolt.Target/Platform/ForbiddenHostDependency.cs");
             await File.WriteAllTextAsync(forbidden, License + """
                 namespace Host;
                 public sealed class ForbiddenHostDependency(Example.Domains.Catalog.CatalogService service)
@@ -89,7 +92,7 @@ public sealed class SlicePortabilityIntegrationTests
         }
     }
 
-    private static async Task<string> GenerateAsync(string root, string name)
+    private static async Task<string> GenerateAsync(string root, string name, bool minimalInfrastructure)
     {
         var manifest = new ForgeManifest
         {
@@ -97,6 +100,15 @@ public sealed class SlicePortabilityIntegrationTests
             ServiceType = ServiceType.RestApi, ComponentPrefix = "clv", CloudProvider = "AWS",
             MultiTenancy = true, InitialTenantId = TestTenancy.InitialTenantId, Cognito = TestTenancy.Cognito,
             Database = new DatabaseConfig { Engine = "postgresql", Name = "portability" },
+            Observability = minimalInfrastructure ? new ObservabilityConfig
+            {
+                SerilogEnabled = false, CloudWatchEnabled = false,
+                OpenTelemetryEnabled = false, CorrelationIdEnabled = false,
+            } : null,
+            Resilience = minimalInfrastructure ? new ResilienceConfig
+            {
+                RetryEnabled = false, CircuitBreakerEnabled = false, TimeoutEnabled = false,
+            } : null,
         };
         var directory = Path.Combine(root, name);
         Directory.CreateDirectory(directory);
@@ -247,14 +259,16 @@ public sealed class SlicePortabilityIntegrationTests
         using Pervaxis.Core.Abstractions.MultiTenancy;
         using Pervaxis.Core.Data.EntityFrameworkCore;
         using Pervaxis.Core.MultiTenancy;
-        using Pervaxis.Clarivolt.Target.Data;
-        using Pervaxis.Clarivolt.Target.Extensions;
-        using Pervaxis.Clarivolt.Target.Infrastructure.Domains;
-        using Pervaxis.Clarivolt.Target.Infrastructure.Extensions;
-        using Pervaxis.Clarivolt.Target.Infrastructure.Middleware;
+        using Pervaxis.Clarivolt.Target.Platform.Data;
+        using Pervaxis.Clarivolt.Target.Platform.Extensions;
+        using Pervaxis.Clarivolt.Target.Platform.Infrastructure.Domains;
+        using Pervaxis.Clarivolt.Target.Platform.Infrastructure.Extensions;
+        using Pervaxis.Clarivolt.Target.Platform.Infrastructure.Middleware;
         using Xunit;
 
-        namespace Pervaxis.Clarivolt.Target.Tests;
+        using Pervaxis.Clarivolt.Target.Tests.Platform.Fixtures;
+
+        namespace Example.Domains.Catalog.Tests;
         public sealed class CopiedCatalogTests
         {
             [Fact]
@@ -267,7 +281,7 @@ public sealed class SlicePortabilityIntegrationTests
                 var count = builder.Services.Count;
                 builder.Services.AddForgeDomains(builder.Configuration);
                 Assert.Equal(count, builder.Services.Count);
-                builder.Services.AddControllers().AddApplicationPart(typeof(Program).Assembly);
+                builder.Services.AddControllers().AddApplicationPart(typeof(Pervaxis.Clarivolt.Target.Platform.Hosting.ForgeHost).Assembly);
                 builder.Services.AddForgeValidation();
                 builder.Services.AddPervaxisClaimsMultiTenancy(options =>
                 {

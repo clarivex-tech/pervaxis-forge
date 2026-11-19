@@ -1,0 +1,87 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using System.Reflection;
+using System.Security.Claims;
+using FluentAssertions;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.Data.EntityFrameworkCore;
+using Pervaxis.Core.Exceptions.Exceptions;
+using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Platform.Tenancy.Controllers;
+using {{ model.names.namespace }}.Platform.Data;
+using {{ model.names.namespace }}.Data.Tenancy;
+using {{ model.names.namespace }}.Platform.Infrastructure.Extensions;
+
+using {{ model.names.namespace }}.Platform.Models.Configuration;
+using {{ model.names.namespace }}.Platform.Tenancy.Services;
+using {{ model.names.namespace }}.Platform.Tenancy;
+using Xunit;
+
+namespace {{ model.names.test_project_name }}.Platform.Fixtures;
+
+// These tests cover the platform tenancy code: the tenants table, tenant management, the status check and
+// tenant isolation in this service's DbContext. They use in-memory SQLite, so no PostgreSQL is needed. Keep them.
+
+/// <summary>An in-memory SQLite database with this service's schema, including the seeded first tenant.</summary>
+public sealed class TenantTestDatabase : IDisposable
+{
+    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+
+    public TenantTestDatabase()
+    {
+        _connection.Open();
+        Options = new DbContextOptionsBuilder<{{ model.names.dot_net_class_name }}DbContext>().UseSqlite(_connection).Options;
+        using var context = new {{ model.names.dot_net_class_name }}DbContext(Options, DesignTimeTenantContext.Instance);
+        context.Database.EnsureCreated();
+    }
+
+    public DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> Options { get; }
+
+    /// <summary>Services as Program.cs registers them for tenancy, backed by this database.</summary>
+    public ServiceProvider BuildServices(TenancyMode mode = TenancyMode.MultiTenant)
+    {
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddPervaxisClaimsMultiTenancy(options =>
+        {
+            options.Mode = mode;
+            options.DefaultTenantId = TenantDefaults.DefaultTenantId;
+            options.EnableDirectoryChecks = true;
+        });
+        services.AddScoped(provider => new {{ model.names.dot_net_class_name }}DbContext(Options, provider.GetRequiredService<ITenantContext>()));
+        services.AddScoped<ITenantDirectory, EfTenantDirectory>();
+        services.AddScoped<ITenantManagementService, TenantManagementService>();
+        return services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true });
+    }
+
+    public void Dispose() => _connection.Dispose();
+}
+
+
+{{ end }}

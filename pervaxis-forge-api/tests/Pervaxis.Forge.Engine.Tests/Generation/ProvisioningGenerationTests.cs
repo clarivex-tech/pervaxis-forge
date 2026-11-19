@@ -56,7 +56,7 @@ public sealed class ProvisioningGenerationTests
             Assert.Equal(TestTenancy.Cognito.UserPoolId, provisioning.GetProperty("UserPoolId").GetString());
             Assert.Contains("PlatformAdminPolicy", File("/TenantUsersController.cs"));
             Assert.Contains("[TenantExempt]", File("/TenantUsersController.cs"));
-            Assert.Contains("CognitoUserProvisioningService", File("/Program.cs"));
+            Assert.Contains("CognitoUserProvisioningService", File("/Platform/Hosting/ForgeHost.cs"));
             Assert.Contains("AWSSDK.CognitoIdentityProvider", File("Directory.Packages.props"));
             Assert.Contains("Tenant reassignment is not supported", File("/CognitoUserProvisioningService.cs"));
             Assert.Contains("ProvisioningTests.cs", string.Join(",", files.Keys));

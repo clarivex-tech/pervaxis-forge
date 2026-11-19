@@ -60,6 +60,9 @@ public class DocumentationLinkTests
     private static bool IsEntryDocument(string path) =>
         path == "README.md"
         || path == "FORGE_DEVELOPER_GUIDE.md"
+        || path == "SCAFFOLD_VERSION.md"
+        || path == ".claude/CLAUDE.md"
+        || path.EndsWith("/Data/Migrations/README.md", StringComparison.Ordinal)
         || path.StartsWith("DeveloperReference/", StringComparison.Ordinal)
         || path.EndsWith("/Domains/README.md", StringComparison.Ordinal);
 
@@ -118,7 +121,7 @@ public class DocumentationLinkTests
             .And.Contain("DeveloperReference/GoingMultiTenant.md")
             .And.Contain("Domains/README.md");
 
-        files.Single(f => f.Key.EndsWith("/Domains/README.md", StringComparison.Ordinal)).Value
+        files.Single(f => f.Key.StartsWith("src/", StringComparison.Ordinal) && f.Key.EndsWith("/Domains/README.md", StringComparison.Ordinal)).Value
             .Should().Contain("TenancyQuickStart.md").And.NotContain("DbContext, repositories (if feature-scoped)");
         files[".claude/CLAUDE.md"].Should().Contain("guides/TENANCY_RULES.md");
         files.Keys.Should().Contain(".claude/guides/TENANCY_RULES.md");

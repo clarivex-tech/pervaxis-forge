@@ -37,3 +37,6 @@ Host contract: Pervaxis.Forge.Contracts.V1 (major 1). Source folder discovery in
 ## Migration Guide
 
 Copy Domains/<Feature> and feature tests unchanged into a compatible print. Reconcile declared dependencies and configuration explicitly. For an existing deployment, preserve the entire existing Data/Migrations chain and model snapshot instead of the fresh starter history. Never create a new baseline over existing tables. Follow [the full upgrade policy](DeveloperReference/Portability.md).
+
+
+Ownership: Platform contains print-owned runtime code; Domains contains business modules. Data/Migrations is application-owned upgrade history and snapshot state, excluded from Platform replacement. See [the ownership and upgrade policy](DeveloperReference/Ownership.md).

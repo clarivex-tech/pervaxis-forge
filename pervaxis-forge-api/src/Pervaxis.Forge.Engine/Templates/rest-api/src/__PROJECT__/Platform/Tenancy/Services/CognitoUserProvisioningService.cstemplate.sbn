@@ -22,7 +22,7 @@ using Amazon.CognitoIdentityProvider;
 using Amazon.CognitoIdentityProvider.Model;
 using Microsoft.Extensions.Options;
 using Pervaxis.Core.Abstractions.MultiTenancy;
-using {{ model.names.namespace }}.Models.Configuration;
+using {{ model.names.namespace }}.Platform.Models.Configuration;
 
 namespace {{ model.names.namespace }}.Platform.Tenancy.Services;
 

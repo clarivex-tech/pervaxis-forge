@@ -60,18 +60,18 @@ public class PrintGeneratorTests
 
         entries.Should().Contain("manifest.json");
         entries.Should().Contain($"{src}/Program.cs");
-        entries.Should().Contain($"{src}/Extensions/ServiceCollectionExtensions.cs");
+        entries.Should().Contain($"{src}/Platform/Extensions/ServiceCollectionExtensions.cs");
         entries.Should().Contain($"{src}/Platform/Meta/LegacyScaffoldController.cs");
-        entries.Should().Contain($"{src}/Contracts/V1/IDomainModule.cs");
-        entries.Should().Contain($"{src}/Infrastructure/Domains/DomainModuleExtensions.cs");
+        entries.Should().Contain($"{src}/Platform/Contracts/V1/IDomainModule.cs");
+        entries.Should().Contain($"{src}/Platform/Infrastructure/Domains/DomainModuleExtensions.cs");
         entries.Should().Contain($"{src}/Platform/Meta/MetaController.cs");
         entries.Should().Contain("Dockerfile");
         entries.Should().Contain($"{src}/appsettings.json");
         entries.Should().Contain($"{src}/appsettings.Development.json");
-        entries.Should().Contain($"{tests}/TestBase.cs");
+        entries.Should().Contain($"{tests}/Platform/Fixtures/TestBase.cs");
 
         // Verify cloud provider flows into Program.cs content
-        using var programStream = new StreamReader(archive.GetEntry($"{src}/Program.cs")!.Open());
+        using var programStream = new StreamReader(archive.GetEntry($"{src}/Platform/Hosting/ForgeHost.cs")!.Open());
         var programContent = await programStream.ReadToEndAsync();
         programContent.Should().Contain("AddGenesisFileStorage");
         programContent.Should().Contain("AddGenesisMessaging");
@@ -131,7 +131,7 @@ public class PrintGeneratorTests
             files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Program.cs");
             files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Platform/Meta/LegacyScaffoldController.cs");
             files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Pervaxis.Clarivolt.Intake.csproj");
-            files.Should().Contain("tests/Pervaxis.Clarivolt.Intake.Tests/TestBase.cs");
+            files.Should().Contain("tests/Pervaxis.Clarivolt.Intake.Tests/Platform/Fixtures/TestBase.cs");
             files.Should().Contain("tests/Pervaxis.Clarivolt.Intake.Tests/Pervaxis.Clarivolt.Intake.Tests.csproj");
             files.Should().Contain("Dockerfile");
             files.Should().Contain(".claude/CLAUDE.md");
@@ -141,6 +141,40 @@ public class PrintGeneratorTests
         {
             Directory.Delete(outDir, recursive: true);
         }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task RestCodeHasExplicitPlatformBusinessAndMigrationOwners(bool optionalModules)
+    {
+        var manifest = CreateManifest() with
+        {
+            GenesisModules = optionalModules ? ["OData", "Sanitization", "Messaging"] : [],
+        };
+        using var archive = new ZipArchive(new MemoryStream(await generator.GenerateAsync(manifest, "AWS")));
+        const string src = "src/Pervaxis.Clarivolt.Billing/";
+        const string tests = "tests/Pervaxis.Clarivolt.Billing.Tests/";
+        var sourceFiles = archive.Entries.Where(entry => entry.FullName.StartsWith(src, StringComparison.Ordinal)
+            && entry.FullName.EndsWith(".cs", StringComparison.Ordinal)).Select(entry => entry.FullName[src.Length..]);
+        sourceFiles.Should().OnlyContain(path => path == "Program.cs" || path.StartsWith("Platform/", StringComparison.Ordinal)
+            || path.StartsWith("Domains/", StringComparison.Ordinal) || path.StartsWith("Data/Migrations/", StringComparison.Ordinal));
+        var testFiles = archive.Entries.Where(entry => entry.FullName.StartsWith(tests, StringComparison.Ordinal)
+            && entry.FullName.EndsWith(".cs", StringComparison.Ordinal)).Select(entry => entry.FullName[tests.Length..]);
+        testFiles.Should().OnlyContain(path => path.StartsWith("Platform/", StringComparison.Ordinal)
+            || path.StartsWith("Domains/", StringComparison.Ordinal));
+        archive.GetEntry(src + "Platform/Contracts/V1/IDomainModule.cs").Should().NotBeNull();
+        archive.GetEntry(src + "Platform/Contracts/V1/IDomainQueries.cs").Should().NotBeNull();
+        archive.GetEntry(src + "Platform/Data/BillingServiceDbContext.cs").Should().NotBeNull();
+        archive.GetEntry(src + "Data/Migrations/BillingServiceDbContextModelSnapshot.cs").Should().NotBeNull();
+        archive.GetEntry(tests + "Platform/Fixtures/TenantTestDatabase.cs").Should().NotBeNull();
+        archive.GetEntry(tests + "Domains/README.md").Should().NotBeNull();
+        using var reader = new StreamReader(archive.GetEntry(src + "Program.cs")!.Open());
+        var program = await reader.ReadToEndAsync();
+        program.Should().Contain("await ForgeHost.RunAsync(args);").And.NotContain("WebApplication.CreateBuilder");
+        using var policy = new StreamReader(archive.GetEntry(src + "Data/Migrations/README.md")!.Open());
+        (await policy.ReadToEndAsync()).Should().Contain("application-owned upgrade state")
+            .And.Contain("Never rewrite or delete applied migrations");
     }
 
     private static ForgeManifest CreateManifest() => new()

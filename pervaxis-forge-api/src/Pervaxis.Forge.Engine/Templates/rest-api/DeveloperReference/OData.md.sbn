@@ -129,7 +129,7 @@ Requests that break a rule get `400` with an RFC 7807 body:
 
 - `$top` above the endpoint's `MaxTop` (or the global `MaxTop`).
 - A query option the endpoint does not allow (in the example: `$filter`, `$orderby`, `$select`, `$expand`).
-- Negative `$top` or `$skip` (by the platform filter `Infrastructure/Validation/ODataPagingGuardFilter.cs`; Genesis 3.4 passes them through, and a database would fail with 500).
+- Negative `$top` or `$skip` (by the platform filter `Platform/Infrastructure/Validation/ODataPagingGuardFilter.cs`; Genesis 3.4 passes them through, and a database would fail with 500).
 - Filters, sorting or expansion deeper or more complex than the configured limits.
 
 A non-numeric `$top` or `$skip` (for example `$top=all`) is **ignored**, and the default page size applies.
@@ -147,6 +147,6 @@ This service has no database, so no tenant filter applies. If a list holds data 
 
 - `ProductResponse` must be a class or record (the envelope requires a reference type).
 - `GenesisModuleTests.cs` checks the settings binding and every rule above{{ if model.manifest.tenant_ready }}, including tenant isolation{{ end }}. Keep it.
-- Use `PageResult<T>` for OData-style endpoints. Use `Common/PagedResult<T>` (page and pageSize style) for plain REST list endpoints. Do not mix them on one endpoint.
+- Use `PageResult<T>` for OData-style endpoints. Use `Platform/Common/PagedResult<T>` (page and pageSize style) for plain REST list endpoints. Do not mix them on one endpoint.
 - Per-entity property rules can be registered through `EntityConfigurationRegistry`. See the OData package README.
 {{- end -}}
