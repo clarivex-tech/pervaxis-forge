@@ -67,6 +67,24 @@ describe('AdministrationComponent', () => {
     fixture.destroy();
   });
 
+{{ if model.web_admin_layout }}
+  it('labels web controls and prevents invalid email invitations', async () => {
+    const fixture = TestBed.createComponent(AdministrationComponent);
+    const component = fixture.componentInstance;
+    await Promise.resolve(); component.select(tenant.id); fixture.detectChanges(); await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('#invite-email') as HTMLInputElement;
+    expect(fixture.nativeElement.querySelector('label[for="invite-email"]').textContent).toContain('Email');
+    input.value = 'invalid'; input.dispatchEvent(new Event('input')); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    const button = Array.from(fixture.nativeElement.querySelectorAll('button') as NodeListOf<HTMLButtonElement>).find(b => b.textContent?.includes('Invite user'))!;
+    expect(button.disabled).toBeTrue();
+    input.value = 'new@example.com'; input.dispatchEvent(new Event('input')); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    expect(button.disabled).toBeFalse();
+    component.selected.set({ ...tenant, status: 'Suspended' }); fixture.detectChanges();
+    expect(button.disabled).toBeTrue();
+    fixture.destroy();
+  });
+{{ end }}
+
   it('maps every lifecycle state correctly', () => {
     const fixture = TestBed.createComponent(AdministrationComponent);
     expect(fixture.componentInstance.status({ ...tenant, status: 2 })).toBe('Offboarding');

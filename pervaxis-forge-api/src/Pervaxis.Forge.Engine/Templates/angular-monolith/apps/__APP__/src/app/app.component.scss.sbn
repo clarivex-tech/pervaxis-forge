@@ -1,3 +1,4 @@
+{{ if !model.web_admin_layout }}
 :host {
   display: block;
   height: 100vh;
@@ -191,3 +192,114 @@
     }
   }
 }
+
+{{ else }}
+
+:host { display: block; min-height: 100dvh; }
+.app-layout { display: grid; grid-template: "header header" auto "sidebar content" 1fr / 260px minmax(0, 1fr); min-height: 100dvh; }
+.app-layout.sidebar-collapsed { grid-template-columns: 76px minmax(0, 1fr); }
+.app-header { grid-area: header; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--color-border); }
+.app-header__brand { font-weight: 700; margin-inline: .5rem; overflow-wrap: anywhere; }
+.app-header__identity { display: grid; margin-inline: 1rem; font-size: .875rem; }
+.app-header__tenant { color: var(--color-text-muted); font-size: .75rem; }
+.navigation-toggle { display: inline-grid; place-items: center; width: 44px; height: 44px; background: transparent; border: 0; border-radius: .5rem; color: var(--color-text); cursor: pointer; }
+.navigation-toggle:hover { background: var(--color-surface); }
+.theme-control select { border: 1px solid var(--color-border); border-radius: .5rem; padding: .5rem; color: var(--color-text); background: var(--color-bg); }
+.app-sidebar { grid-area: sidebar; border-inline-end: 1px solid var(--color-border); background: var(--color-bg); padding: 1.25rem .75rem; }
+.app-sidebar__nav { display: grid; gap: .375rem; }
+.navigation-heading { color: var(--color-text-muted); font-size: .6875rem; font-weight: 700; letter-spacing: .08em; padding: 1rem .75rem .5rem; }
+.sidebar-item { display: flex; align-items: center; gap: .75rem; min-height: 44px; padding: .75rem; border-radius: .625rem; color: var(--color-text); text-decoration: none; }
+.sidebar-item:hover { background: var(--color-surface); }
+.sidebar-item.active { color: var(--p-primary-color); background: var(--p-highlight-background); font-weight: 600; }
+.sidebar-item i { width: 1.25rem; text-align: center; flex-shrink: 0; }
+.sidebar-collapsed .app-sidebar .sidebar-item span, .sidebar-collapsed .app-sidebar .navigation-heading { display: none; }
+.app-content { grid-area: content; min-width: 0; padding: clamp(1rem, 3vw, 2.5rem); background: var(--color-surface); }
+.skip-link { position: fixed; inset: .5rem auto auto .5rem; transform: translateY(-200%); z-index: 10000; padding: .75rem; background: var(--color-bg); color: var(--color-text); }
+.skip-link:focus { transform: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (max-width: 1023px) {
+  .app-layout, .app-layout.sidebar-collapsed { grid-template: "header" auto "content" 1fr / minmax(0, 1fr); }
+  .app-sidebar { display: none; }
+  .app-header__identity { display: none; }
+}
+@media (max-width: 480px) {
+  .app-header__brand { max-width: 10rem; font-size: .875rem; }
+}
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+// -- Horizontal concerns (do not modify) --
+.notification-container {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.notification-toast {
+  padding: 0.75rem 1rem;
+  border-radius: var(--p-border-radius);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: var(--p-overlay-shadow);
+  background: var(--p-surface-0);
+  border-left: 4px solid var(--p-primary-color);
+
+  &--error { border-left-color: var(--p-red-500); }
+  &--success { border-left-color: var(--p-green-500); }
+  &--warning { border-left-color: var(--p-yellow-500); }
+
+  button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.25rem;
+    color: var(--p-text-muted-color);
+  }
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.confirm-dialog {
+  background: var(--p-surface-0);
+  border-radius: var(--p-border-radius);
+  padding: 1.5rem;
+  min-width: 360px;
+  box-shadow: var(--p-overlay-shadow);
+
+  h3 { margin: 0 0 0.5rem; }
+  p { color: var(--p-text-muted-color); margin: 0 0 1.5rem; }
+
+  .confirm-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border-radius: var(--p-border-radius);
+      border: 1px solid var(--p-surface-border);
+      background: var(--p-surface-0);
+      cursor: pointer;
+      font-weight: 500;
+
+      &--danger {
+        background: var(--p-red-500);
+        color: white;
+        border-color: var(--p-red-500);
+      }
+    }
+  }
+}
+
+{{ end }}

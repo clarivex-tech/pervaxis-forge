@@ -1,3 +1,4 @@
+{{ if !model.web_admin_layout }}
 /**
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -118,3 +119,182 @@ export class AppComponent {
     this.confirmService.resolve(false);
   };
 }
+
+{{ else }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+import { IonApp, IonRouterOutlet, IonProgressBar, IonToast, IonAlert } from '@ionic/angular/standalone';
+{{ end }}
+{{ if model.web_admin_layout }}
+import { DOCUMENT, NgTemplateOutlet } from '@angular/common';
+import { NavigationEnd, Router } from '@angular/router';
+import { DrawerModule } from 'primeng/drawer';
+import { ThemeService } from './core/services/theme.service';
+{{ end }}
+import { ToolbarModule } from 'primeng/toolbar';
+import { ButtonModule } from 'primeng/button';
+import { AvatarModule } from 'primeng/avatar';
+import { MenuModule } from 'primeng/menu';
+import { RippleModule } from 'primeng/ripple';
+import { LoadingService } from './core/services/loading.service';
+import { NotificationService } from './core/services/notification.service';
+import { ConfirmDialogService } from '@shared/services/confirm-dialog.service';
+import { RouteLoadingService } from './core/services/route-loading.service';
+{{ if model.angular_cognito_enabled }}
+import { InactivityService } from './core/services/inactivity.service';
+{{ end }}
+{{ if model.angular_cognito_enabled }}
+import { AuthService } from './core/auth/auth.service';
+{{ if model.web_admin_layout }}
+import { SessionStateRegistry } from './core/auth/session-state';
+{{ end }}
+{{ end }}
+{{ if model.angular_cognito_enabled }}
+import { TenantContextService } from './core/auth/tenant-context.service';
+{{ end }}
+
+/**
+ * Root application component.
+ *
+ * HORIZONTAL (do not modify):
+ *   - Loading indicator
+ *   - Notification toasts
+ *   - Confirmation dialog
+ *   - App shell layout (header, sidebar)
+ *   - Route loading, inactivity detection
+ *   - Signed-in user, tenant and sign-out in the header (cross-tab sign-out runs in AuthService)
+ *
+ * VERTICAL (extend as needed):
+ *   - Add navigation links in the header/sidebar
+ *   - Add shared UI imports to the imports array
+ */
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-root',
+  standalone: true,
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+  imports: [IonApp, IonRouterOutlet, IonProgressBar, IonToast, IonAlert],
+{{ else }}
+  imports: [RouterOutlet, RouterLink, RouterLinkActive, NgTemplateOutlet, DrawerModule, ToolbarModule, ButtonModule, AvatarModule, MenuModule, RippleModule],
+{{ end }}
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.scss'],
+})
+export class AppComponent {
+  title = '{{ model.manifest.service_name }}';
+  protected readonly loading = inject(LoadingService);
+  private readonly notificationService = inject(NotificationService);
+  protected readonly notifications = this.notificationService.notifications;
+  protected readonly confirmDialog = inject(ConfirmDialogService).activeDialog;
+  private readonly confirmService = inject(ConfirmDialogService);
+  private readonly routeLoading = inject(RouteLoadingService);
+{{ if model.angular_cognito_enabled }}
+  private readonly inactivity = inject(InactivityService);
+{{ end }}
+{{ if model.angular_cognito_enabled }}
+  protected readonly auth = inject(AuthService);
+{{ end }}
+{{ if model.angular_cognito_enabled }}
+  protected readonly tenant = inject(TenantContextService);
+{{ end }}
+
+  readonly sidebarCollapsed = signal(false);
+
+  menuItems = [
+    { label: 'Dashboard', icon: 'pi pi-home', routerLink: '/dashboard' },
+  ];
+
+  toggleSidebar(): void {
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+    this.sidebarCollapsed.update(value => !value);
+{{ else }}
+    if (this.narrowScreen()) this.mobileNavigationOpen.set(true);
+    else this.sidebarCollapsed.update(value => !value);
+{{ end }}
+  }
+{{ if model.web_admin_layout }}
+  protected readonly theme = inject(ThemeService);
+  private readonly document = inject(DOCUMENT);
+  readonly mobileNavigationOpen = signal(false);
+  readonly narrowScreen = signal(this.document.defaultView?.matchMedia('(max-width: 1023px)').matches ?? false);
+
+  closeNavigation(restoreFocus = false): void {
+    this.mobileNavigationOpen.set(false);
+    if (restoreFocus && this.narrowScreen()) this.document.getElementById('navigation-toggle')?.focus();
+  }
+
+  focusNavigation(): void {
+    this.document.defaultView?.requestAnimationFrame(() => {
+      if (this.mobileNavigationOpen()) this.document.querySelector<HTMLElement>('.app-navigation-drawer button, .app-navigation-drawer a')?.focus();
+    });
+  }
+
+  navigationVisibilityChanged(visible: boolean): void {
+    if (visible) this.mobileNavigationOpen.set(true);
+    else this.closeNavigation(true);
+  }
+{{ end }}
+
+  constructor() {
+    this.routeLoading.init();
+{{ if model.web_admin_layout }}
+    const destroyRef = inject(DestroyRef);
+    const viewport = this.document.defaultView?.matchMedia('(max-width: 1023px)');
+    const resize = (): void => {
+      this.narrowScreen.set(viewport?.matches ?? false);
+      this.closeNavigation();
+    };
+    viewport?.addEventListener('change', resize);
+    destroyRef.onDestroy(() => viewport?.removeEventListener('change', resize));
+    const navigation = inject(Router).events.subscribe(event => {
+      if (event instanceof NavigationEnd) this.closeNavigation();
+    });
+    destroyRef.onDestroy(() => navigation.unsubscribe());
+{{ if model.angular_cognito_enabled }}
+    const unregister = inject(SessionStateRegistry).register(() => this.closeNavigation());
+    destroyRef.onDestroy(unregister);
+{{ end }}
+{{ end }}
+{{ if model.angular_cognito_enabled }}
+    this.inactivity.start();
+{{ end }}
+  }
+
+{{ if model.angular_cognito_enabled }}
+  signOut(): void {
+    void this.auth.logout();
+  }
+{{ end }}
+
+  dismissNotification(id: number): void {
+    this.notificationService.dismiss(id);
+  }
+
+  onConfirmOk = (): void => {
+    this.confirmService.resolve(true);
+  };
+
+  onConfirmCancel = (): void => {
+    this.confirmService.resolve(false);
+  };
+}
+
+{{ end }}

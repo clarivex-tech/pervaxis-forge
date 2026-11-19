@@ -1,0 +1,32 @@
+{{ if model.web_admin_layout }}
+:host { display: block; max-width: 1440px; margin: auto; }
+code { overflow-wrap: anywhere; }
+.administration { color: var(--color-text); }
+h1 { font-size: clamp(1.5rem, 3vw, 2rem); margin: .375rem 0; }
+h2 { font-size: 1.125rem; margin: 0; overflow-wrap: anywhere; }
+h3 { font-size: 1rem; margin: .75rem 0; }
+p { line-height: 1.6; }
+.page-heading, .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.eyebrow { color: var(--p-primary-color); font-size: .75rem; font-weight: 700; letter-spacing: .08em; }
+.muted, .page-heading p:not(.eyebrow), .tenant-id { color: var(--color-text-muted); font-size: .875rem; margin: .75rem 0; }
+.admin-grid { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2.5fr); gap: 1.5rem; align-items: start; }
+.admin-panel { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: .875rem; padding: clamp(1rem, 2vw, 1.5rem); min-width: 0; }
+.tenant-details, .stack, .field { display: grid; gap: .625rem; min-width: 0; }
+.tenant-details { gap: 1.5rem; }
+label { font-weight: 600; font-size: .875rem; }
+input, p-select { width: 100%; min-width: 0; }
+.inline-form { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; margin: 1.25rem 0 .5rem; }
+.field { flex: 1 1 220px; }
+.actions { display: flex; flex-wrap: wrap; gap: .75rem; }
+hr, .lifecycle { border: 0; border-top: 1px solid var(--color-border); margin-top: 1.5rem; padding-top: 1rem; }
+.table-scroll { max-width: 100%; overflow-x: auto; margin: 1.5rem 0; }
+table { width: 100%; min-width: 540px; border-collapse: collapse; }
+th, td { text-align: start; padding: .875rem; border-bottom: 1px solid var(--color-border); }
+th { font-size: .75rem; color: var(--color-text-muted); background: var(--color-surface); }
+td { font-size: .875rem; overflow-wrap: anywhere; }
+.empty-state { padding: 2rem 1rem; text-align: center; color: var(--color-text-muted); }
+.empty-state i { font-size: 2rem; margin-bottom: 1rem; }
+.working { margin: 1rem 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+@media (max-width: 900px) { .admin-grid { grid-template-columns: minmax(0, 1fr); } }
+{{ end }}

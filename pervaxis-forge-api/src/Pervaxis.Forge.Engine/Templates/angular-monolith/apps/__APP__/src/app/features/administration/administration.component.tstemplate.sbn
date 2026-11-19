@@ -19,6 +19,14 @@
 
 import { Component, DestroyRef, inject, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+{{ if model.web_admin_layout }}
+import { computed } from '@angular/core';
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
+import { TagModule } from 'primeng/tag';
+import { MessageModule } from 'primeng/message';
+{{ end }}
 import { HttpErrorResponse } from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import { AdministrationService, ProvisionedUser, TenantSummary } from './administration.service';
@@ -27,8 +35,12 @@ import { SessionStateRegistry } from '../../core/auth/session-state';
 @Component({
   selector: '{{ model.manifest.component_prefix }}-administration',
   standalone: true,
-  imports: [FormsModule],
+  imports: [FormsModule{{ if model.web_admin_layout }}, ButtonModule, InputTextModule, SelectModule, TagModule, MessageModule{{ end }}],
+{{ if model.web_admin_layout }}
+  styleUrls: ['./administration.component.scss'],
+{{ end }}
   templateUrl: './administration.component.html',
+{{ if !model.web_admin_layout }}
   styles: [`
     :host { display: block; padding: var(--spacing-xl, 24px); max-width: 1100px; margin: auto; }
     form, .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; margin: 16px 0; }
@@ -39,11 +51,15 @@ import { SessionStateRegistry } from '../../core/auth/session-state';
     .error { color: var(--error-color, #b42318); }
     code { overflow-wrap: anywhere; }
   `],
+{{ end }}
 })
 export class AdministrationComponent {
   private readonly api = inject(AdministrationService);
   private epoch = 0;
   readonly tenants = signal<readonly TenantSummary[]>([]);
+{{ if model.web_admin_layout }}
+  readonly tenantOptions = computed(() => [...this.tenants()]);
+{{ end }}
   readonly selected = signal<TenantSummary | null>(null);
   readonly users = signal<readonly ProvisionedUser[]>([]);
   readonly nextToken = signal<string | null>(null);

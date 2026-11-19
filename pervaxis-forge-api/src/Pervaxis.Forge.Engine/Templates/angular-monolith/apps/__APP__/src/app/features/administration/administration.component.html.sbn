@@ -1,4 +1,6 @@
 {{ if model.angular_cognito_enabled }}
+{{ if !model.web_admin_layout }}
+
 <h1>Tenant administration</h1>
 <p>Create tenants and invite their users. Each user belongs to one tenant.</p>
 @if (error()) { <p role="alert" class="error"><span [textContent]="error()"></span></p> }
@@ -54,4 +56,72 @@
   @if (usersLoaded() && users().length === 0) { <p>No users found in the pages loaded so far.</p> }
   @if (nextToken()) { <button (click)="loadUsers(true)" [disabled]="busy()">Load next page</button> }
 }
+
+{{ else }}
+<section class="administration" aria-labelledby="administration-title" [attr.aria-busy]="busy()">
+  <header class="page-heading"><div><p class="eyebrow">PLATFORM ADMINISTRATION</p><h1 id="administration-title">Tenants and users</h1>
+    <p>Manage tenant access and send secure user invitations.</p></div>
+    <p-button label="Refresh tenants" icon="pi pi-refresh" [outlined]="true" (onClick)="refresh()" [disabled]="busy()" />
+  </header>
+  @if (error()) { <p-message severity="error" role="alert"><span [textContent]="error()"></span></p-message> }
+  @if (message()) { <p-message severity="success" role="status"><span [textContent]="message()"></span></p-message> }
+  @if (busy()) { <p class="working" role="status"><i class="pi pi-spin pi-spinner" aria-hidden="true"></i> Working'</p> }
+  <div class="admin-grid">
+    <section class="admin-panel" aria-labelledby="tenant-list-title"><h2 id="tenant-list-title">Tenant workspace</h2>
+      <p class="muted">Select a tenant to manage its details and invitations. This does not change your signed-in tenant.</p>
+      <label id="tenant-selection-label" for="tenant-selection">Tenant</label>
+      <p-select inputId="tenant-selection" ariaLabelledBy="tenant-selection-label" [options]="tenantOptions()" optionLabel="name" optionValue="id"
+        placeholder="Select a tenant" [ngModel]="selected()?.id ?? null" (ngModelChange)="select($event)" [disabled]="busy()" />
+      <hr />
+      <h3>Create tenant</h3><form #createForm="ngForm" (ngSubmit)="createTenant()" class="stack">
+        <label for="new-tenant-name">New tenant name</label>
+        <input pInputText id="new-tenant-name" name="newTenantName" [(ngModel)]="newTenantName" required maxlength="200" [disabled]="busy()" />
+        <p-button type="submit" label="Create tenant" icon="pi pi-plus" [disabled]="busy() || createForm.invalid || !newTenantName.trim()" />
+      </form>
+    </section>
+    <div class="tenant-details">
+    @if (selected(); as tenant) {
+      <section class="admin-panel" aria-labelledby="tenant-details-title">
+        <div class="section-heading"><h2 id="tenant-details-title" [textContent]="tenant.name"></h2><p-tag [value]="status(tenant)" /></div>
+        <p class="tenant-id">Tenant ID: <code [textContent]="tenant.id"></code></p>
+        <form #renameForm="ngForm" (ngSubmit)="rename()" class="inline-form">
+          <div class="field"><label for="tenant-name">Tenant name</label><input pInputText id="tenant-name" name="tenantName" [(ngModel)]="tenantName" required maxlength="200" [disabled]="busy()" /></div>
+          <p-button type="submit" label="Save name" [disabled]="busy() || renameForm.invalid || !tenantName.trim()" />
+        </form>
+        <div class="lifecycle"><h3>Tenant access</h3><p class="muted">Lifecycle changes affect this tenant's access. Offboarding is permanent.</p>
+          <div class="actions">
+            @if (status(tenant) === 'Active') { <p-button label="Suspend" severity="warn" [outlined]="true" (onClick)="changeStatus('suspend')" [disabled]="busy()" /> }
+            @if (status(tenant) === 'Suspended') { <p-button label="Reactivate" severity="success" [outlined]="true" (onClick)="changeStatus('reactivate')" [disabled]="busy()" /> }
+            @if (status(tenant) !== 'Offboarded') { <p-button label="Offboard permanently" severity="danger" [outlined]="true" (onClick)="changeStatus('offboard')" [disabled]="busy()" /> }
+          </div>
+        </div>
+      </section>
+      <section class="admin-panel" aria-labelledby="users-title">
+        <div class="section-heading"><h2 id="users-title">Users</h2><p-button label="Refresh users" icon="pi pi-refresh" [text]="true" (onClick)="loadUsers()" [disabled]="busy()" /></div>
+        <p class="muted">Each user belongs to one tenant. Invitations are sent by the trusted backend.</p>
+        <form #inviteForm="ngForm" (ngSubmit)="invite()" class="inline-form">
+          <div class="field"><label for="invite-email">Email address</label><input pInputText id="invite-email" name="email" type="email" email [(ngModel)]="email" required maxlength="128" [disabled]="busy() || status(tenant) !== 'Active'" aria-describedby="invite-help" /></div>
+          <p-button type="submit" label="Invite user" icon="pi pi-send" [disabled]="busy() || inviteForm.invalid || !email.trim() || status(tenant) !== 'Active'" />
+        </form>
+        <p id="invite-help" class="muted">Invitations and resends are available for active tenants.</p>
+        <div class="table-scroll" role="region" aria-label="Tenant users" tabindex="0">
+          <table><caption class="sr-only">Users in the selected tenant</caption>
+            <thead><tr><th scope="col">Email / username</th><th scope="col">Status</th><th scope="col">Access</th><th scope="col">Invitation</th></tr></thead>
+            <tbody>@for (user of users(); track user.username) {
+              <tr><td [textContent]="user.email ?? user.username"></td><td><p-tag [value]="user.status" /></td><td [textContent]="user.enabled ? 'Enabled' : 'Disabled'"></td>
+                <td>@if (user.enabled && user.status === 'FORCE_CHANGE_PASSWORD' && status(tenant) === 'Active') {
+                  <p-button label="Resend invitation" [text]="true" (onClick)="resend(user)" [disabled]="busy()" [ariaLabel]="'Resend invitation to ' + (user.email ?? user.username)" />
+                }</td></tr>
+            }</tbody>
+          </table>
+        </div>
+        @if (!usersLoaded()) { <p class="empty-state">Refresh users to load this tenant's accounts.</p> }
+        @if (usersLoaded() && users().length === 0) { <p class="empty-state" role="status">No users found in the pages loaded so far.</p> }
+        @if (nextToken()) { <p-button label="Load next page" [outlined]="true" (onClick)="loadUsers(true)" [disabled]="busy()" /> }
+      </section>
+    } @else { <section class="admin-panel empty-state"><i class="pi pi-building" aria-hidden="true"></i><h2>Select a tenant</h2><p>Choose an existing tenant or create one to manage its users.</p></section> }
+    </div>
+  </div>
+</section>
+{{ end }}
 {{ end }}
