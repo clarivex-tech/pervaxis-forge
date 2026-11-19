@@ -388,7 +388,7 @@ public sealed class GenerationService : IGenerationService
             };
         }
 
-        return manifest;
+        return manifest with { UiTargets = manifest.GetEffectiveUiTargets() };
     }
 
     private async Task WriteGenerationLogAsync(Guid verticalId, ForgeManifest manifest, int serviceCount, bool gitHubReposCreated, CancellationToken ct = default)

@@ -234,7 +234,7 @@ public sealed class GenerationServiceTests
     }
 
     [Fact]
-    public async Task ValidateAsync_TreatsMissingCollectionsAsEmpty()
+    public async Task ValidateAsync_DefaultsMissingMonolithTargetsToWeb()
     {
         await using var fixture = await TestDb.CreateAsync();
 
@@ -251,8 +251,13 @@ public sealed class GenerationServiceTests
 
         var result = await service.ValidateAsync(request);
 
-        result.IsValid.Should().BeFalse();
-        result.Errors.Should().Contain(error => error.Contains("Monolithic requests must include uiTargets"));
+        result.IsValid.Should().BeTrue();
+        using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(await service.GenerateZipAsync(request)));
+        using var metadataReader = new StreamReader(zip.GetEntry("manifest.json")!.Open());
+        using var metadata = System.Text.Json.JsonDocument.Parse(await metadataReader.ReadToEndAsync());
+        metadata.RootElement.GetProperty("uiTargets").EnumerateArray().Select(t => t.GetString()).Should().Equal("web");
+        using var shellReader = new StreamReader(zip.GetEntry("apps/claims-web/src/app/app.component.html")!.Open());
+        (await shellReader.ReadToEndAsync()).Should().Contain("<p-drawer");
     }
 
     [Theory]

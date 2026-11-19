@@ -17,7 +17,7 @@ The default navigation includes Dashboard and a PlatformAdmin-only Tenants and u
 
 ## Target boundary
 
-The renderer's explicit web_admin_layout flag enables these changes only for a Monolithic manifest with uiTargets [web]. Mobile and combined output retain baseline templates. The existing renderer does not expose manifest.ui_targets even though older templates reference it; fixing that existing native-target behavior is a separate task because changing it would alter generated output broadly.
+The renderer's explicit web_admin_layout flag enables these changes for a Monolithic manifest with omitted/empty uiTargets (default web) or explicit uiTargets [web]. Mobile and combined output retain baseline templates. The existing renderer does not expose manifest.ui_targets even though older templates reference it; fixing that existing native-target behavior is a separate task because changing it would alter generated output broadly.
 
 ## Verification
 
@@ -35,3 +35,9 @@ Combined-target output was compared to develop baseline for the shell, administr
 - Combined shell, configuration, administration and global styles matched develop baseline with whitespace normalized.
 
 Live Cognito/invitation delivery and native device behavior were not reverified. No live AWS changes were made.
+
+## Default-target correction
+
+The V2 wizard sends explicit [web] for monoliths and GenerationApiService posts that request unchanged. The former downloaded manifest nevertheless printed [] because its template referenced manifest.ui_targets, an unmapped renderer member. It is now emitted through effective_ui_targets. Default/empty monolith targets resolve to [web] consistently in validation, API manifest creation and shell selection; explicit combined and Ionic targets are unchanged. The legacy ui_targets member is deliberately not enabled globally, preserving existing combined/native template branches.
+
+Correction verification: 12 API generation-service tests passed, including null request targets through validation and ZIP rendering. Targeted engine generation/auth tests passed (26), followed by validator/renderer/layout tests (15), including a regression proving default and explicit-web manifests render identical complete file sets with the same model context. No Angular source or dependency changes were needed for this correction; those identical web sources retain the production-build verification above.
