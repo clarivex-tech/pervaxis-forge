@@ -48,9 +48,8 @@ public sealed class ManifestValidator
 
         if (manifest.ServiceType == ServiceType.Monolithic)
         {
-            if (manifest.UiTargets.Count == 0)
-                errors.Add("Monolithic requests must include uiTargets.");
-            else if (!manifest.UiTargets.SequenceEqual(["web"]) && !manifest.UiTargets.SequenceEqual(["web", "mobile"]))
+            var uiTargets = manifest.GetEffectiveUiTargets();
+            if (!uiTargets.SequenceEqual(["web"]) && !uiTargets.SequenceEqual(["web", "mobile"]))
                 errors.Add("Monolithic requests must use uiTargets [\"web\"] or [\"web\", \"mobile\"].");
         }
 

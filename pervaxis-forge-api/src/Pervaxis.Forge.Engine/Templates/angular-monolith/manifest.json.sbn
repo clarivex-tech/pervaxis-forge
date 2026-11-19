@@ -4,5 +4,5 @@
   "serviceName": "{{ model.manifest.service_name }}",
   "serviceType": "Monolithic",
   "componentPrefix": "{{ model.manifest.component_prefix }}",
-  "uiTargets": [{{ for target in model.manifest.ui_targets }}"{{ target }}"{{ if !for.last }}, {{ end }}{{ end }}]
+  "uiTargets": [{{ for target in model.effective_ui_targets }}"{{ target }}"{{ if !for.last }}, {{ end }}{{ end }}]
 }

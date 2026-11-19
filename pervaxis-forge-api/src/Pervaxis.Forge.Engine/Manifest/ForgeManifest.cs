@@ -20,6 +20,10 @@ public sealed record ForgeManifest
 
     public IReadOnlyList<string> UiTargets { get; init; } = [];
 
+    /// <summary>Monoliths default to web when a caller omits targets; explicit targets are preserved.</summary>
+    public IReadOnlyList<string> GetEffectiveUiTargets() =>
+        ServiceType == ServiceType.Monolithic && UiTargets.Count == 0 ? ["web"] : UiTargets;
+
     public DatabaseConfig? Database { get; init; }
 
     public QueueConfig? Queue { get; init; }
