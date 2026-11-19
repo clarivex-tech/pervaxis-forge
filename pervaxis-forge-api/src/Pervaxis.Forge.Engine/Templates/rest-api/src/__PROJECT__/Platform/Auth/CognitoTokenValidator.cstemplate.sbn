@@ -23,8 +23,9 @@ namespace {{ model.names.namespace }}.Platform.Auth;
 /// <summary>
 /// Cognito-specific checks that run after the JWT signature, issuer and expiry have been validated.
 ///
-/// Cognito access tokens do not carry a normal <c>aud</c> claim. They identify the app client in
-/// <c>client_id</c> and mark their type in <c>token_use</c>. These two checks replace audience validation.
+/// Unbound Cognito access tokens identify the app client in <c>client_id</c> and mark their type in
+/// <c>token_use</c>. Resource-bound tokens can additionally carry <c>aud</c>; this validator does not
+/// enforce resource binding. Expected resource audience is a separate authentication policy decision.
 /// </summary>
 public static class CognitoTokenValidator
 {

@@ -1,0 +1,152 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net.Http.Headers;
+using System.Security.Cryptography;
+using System.Text;
+using Amazon.SecretsManager;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
+using Moq;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Platform.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Platform.Models.Configuration;
+using {{ model.names.namespace }}.Platform.Profile;
+using Xunit;
+
+namespace {{ model.names.test_project_name }}.Platform.Profile;
+
+/// <summary>Real MVC/auth/tenancy pipeline, locally signed tokens and a mocked directory; no cloud or database.</summary>
+public sealed class MeHostFixture : IAsyncLifetime
+{
+    public const string Issuer = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_TestPool";
+    public const string ClientId = "profile-web-client";
+    public const string TenantA = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+    public const string TenantB = "8c9bfd10-1d4a-4a3c-bd5b-0a1b2c3d4e5f";
+    public const string Suspended = "3f2504e0-4f89-11d3-9a0c-0305e82c3302";
+    public const string Offboarded = "3f2504e0-4f89-11d3-9a0c-0305e82c3303";
+    public const string Unknown = "3f2504e0-4f89-11d3-9a0c-0305e82c3304";
+    public const string Unavailable = "3f2504e0-4f89-11d3-9a0c-0305e82c3305";
+    public string Scheme { get; init; } = "Both";
+    public string? GroupClaimType { get; init; }
+
+    private readonly RSA _rsa = RSA.Create(2048);
+    private readonly Mock<IAmazonSecretsManager> _secrets = new(MockBehavior.Strict);
+    private WebApplication? _app;
+    public HttpClient Client { get; private set; } = null!;
+
+    public async Task InitializeAsync()
+    {
+        var builder = WebApplication.CreateBuilder(new WebApplicationOptions { EnvironmentName = Environments.Production });
+        builder.Configuration.Sources.Clear();
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Forge:Authentication:Scheme"] = Scheme,
+            ["Forge:Authentication:ApiKey"] = "local-profile-test-key",
+            ["Forge:Oidc:Provider"] = "Cognito",
+            ["Forge:Oidc:Authority"] = Issuer,
+            ["Forge:Oidc:ClientIds:0"] = ClientId,
+            ["Forge:Authorization:GroupClaimType"] = GroupClaimType,
+        });
+        builder.Services.Configure<ForgeAuthenticationOptions>(builder.Configuration.GetSection(ForgeAuthenticationOptions.SectionName));
+        builder.Services.Configure<ForgeAuthorizationOptions>(builder.Configuration.GetSection(ForgeAuthorizationOptions.SectionName));
+        builder.Services.Configure<ForgeOidcOptions>(builder.Configuration.GetSection(ForgeOidcOptions.SectionName));
+        builder.Services.AddSingleton(_secrets.Object);
+        builder.Services.AddForgeAuthentication(builder.Configuration);
+        builder.Services.AddPervaxisClaimsMultiTenancy(options => options.EnableDirectoryChecks = true);
+        var directory = new Mock<ITenantDirectory>(MockBehavior.Strict);
+        directory.Setup(value => value.FindAsync(It.IsAny<TenantId>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TenantId id, CancellationToken _) => id.Value switch
+            {
+                TenantA => new TenantDirectoryEntry(id, "Tenant A directory name", TenantStatus.Active),
+                TenantB => new TenantDirectoryEntry(id, "Tenant B directory name", TenantStatus.Active),
+                Suspended => new TenantDirectoryEntry(id, "Suspended", TenantStatus.Suspended),
+                Offboarded => new TenantDirectoryEntry(id, "Offboarded", TenantStatus.Offboarded),
+                Unavailable => throw new InvalidOperationException("Local directory unavailable"),
+                _ => null,
+            });
+        builder.Services.AddSingleton(directory.Object);
+        if (Scheme is "Bearer" or "Both")
+            builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+            {
+                var metadata = new OpenIdConnectConfiguration { Issuer = Issuer };
+                metadata.SigningKeys.Add(new RsaSecurityKey(_rsa) { KeyId = "profile-test-key" });
+                options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(metadata);
+            });
+        builder.Services.AddControllers().AddApplicationPart(typeof(MeController).Assembly);
+        _app = builder.Build();
+        _app.UseRouting();
+        _app.UseAuthentication();
+        _app.UsePervaxisClaimsTenancy();
+        _app.UseAuthorization();
+        _app.MapControllers();
+        await _app.StartAsync();
+        Client = _app.GetTestClient();
+    }
+
+    /// <summary>Raw members let identity-shape tests retain arrays and duplicate JSON keys.</summary>
+    public string CreateToken(string? identity = null, string? tenant = null, string? extra = null, string tokenUse = "access",
+        int expiresInMinutes = 10, int notBeforeMinutes = -5, string issuer = Issuer, string clientId = ClientId)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var payload = "{"
+            + (identity ?? "\"sub\":\"user-a\",\"username\":\"alice\",")
+            + (tenant ?? $"\"tenant_id\":\"{TenantA}\",")
+            + $"\"token_use\":\"{tokenUse}\",\"client_id\":\"{clientId}\",\"iss\":\"{issuer}\","
+            + $"\"nbf\":{now.AddMinutes(notBeforeMinutes).ToUnixTimeSeconds()},\"iat\":{now.AddMinutes(-30).ToUnixTimeSeconds()},"
+            + $"\"exp\":{now.AddMinutes(expiresInMinutes).ToUnixTimeSeconds()}" + (extra is null ? "" : "," + extra) + "}";
+        var header = Base64UrlEncoder.Encode("{\"alg\":\"RS256\",\"typ\":\"JWT\",\"kid\":\"profile-test-key\"}");
+        var encodedPayload = Base64UrlEncoder.Encode(payload);
+        var signature = Base64UrlEncoder.Encode(_rsa.SignData(Encoding.ASCII.GetBytes(header + "." + encodedPayload),
+            HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1));
+        return header + "." + encodedPayload + "." + signature;
+    }
+
+    public async Task<HttpResponseMessage> GetAsync(string? token, string path = "/api/v1/me", string? tenantHeader = null, bool apiKey = false)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Get, path);
+        if (token is not null)
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (tenantHeader is not null)
+            request.Headers.Add("X-Tenant-ID", tenantHeader);
+        if (apiKey)
+            request.Headers.Add("X-Api-Key", "local-profile-test-key");
+        return await Client.SendAsync(request);
+    }
+
+    public async Task DisposeAsync()
+    {
+        Client.Dispose();
+        if (_app is not null)
+            await _app.DisposeAsync();
+        _rsa.Dispose();
+        _secrets.VerifyNoOtherCalls();
+    }
+}
+{{ end }}

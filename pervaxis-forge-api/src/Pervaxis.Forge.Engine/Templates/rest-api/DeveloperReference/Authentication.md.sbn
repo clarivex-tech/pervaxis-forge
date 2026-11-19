@@ -71,7 +71,7 @@ Teams usually share one user pool per vertical, with one app client per frontend
 - `token_use` must be `access`. ID tokens are rejected.
 - `client_id` must be one of `ClientIds`.
 
-Cognito access tokens have no normal `aud` claim, so `Audience` is not used for Cognito. Older services stored the client ID in `Audience`. That still works when `ClientIds` is empty, but it is deprecated. Move the value to `ClientIds`.
+Unbound Cognito access tokens normally identify the app client with `client_id`. Resource-bound access tokens can additionally contain `aud` for the requested resource URL. The current host disables audience validation for Cognito, including when `aud` is present; it checks `client_id` instead. It does not enforce resource binding. Older services stored the client ID in `Audience`. That still works when `ClientIds` is empty, but it is deprecated. Move the value to `ClientIds`. See [self-profile and caller context](SelfProfile.md) for the separate audience and freshness review.
 
 Claims keep their original Cognito names (`username`, `cognito:groups`, `client_id`). The user name is the `username` claim.
 
@@ -114,7 +114,7 @@ Rules:
 - The user needs **any one** of the listed groups, and **any one** of the listed scopes.
 - If both lists are filled in, the user needs both.
 - A policy needs at least one group or scope.
-- `AdminOnly` is reserved.
+- `AdminOnly`, `PlatformAdmin` and `SelfProfile` are reserved.
 - Mistakes in these settings stop the service at startup.
 
 Groups come from the `cognito:groups` claim for Cognito and from `groups` for other providers. Change it with `Forge:Authorization:GroupClaimType` if your provider uses another claim name.
@@ -126,9 +126,9 @@ API key callers have no groups or scopes. They cannot satisfy `AdminOnly` or you
 ## What this does not cover
 
 - **Frontend sign-in, callback, refresh and logout** are separate. The frontend must send the **access token**, not the ID token.
-- **Sign-out does not revoke a token.** An access token stays valid until it expires.
+- **Offline validation does not detect token revocation.** Cognito can revoke tokens, but this host's local JWT signature/lifetime checks cannot detect revocation before expiry (subject to the token library's clock skew). Provider user-token APIs reject revoked tokens. Browser sign-out, provider revocation and API enforcement are separate concerns.
 - **Creating the AWS resources** (pool, app clients, groups) is done in AWS or your infrastructure code.
 
 ## Tests
 
-`tests/{{ model.names.test_project_name }}/CognitoAuthenticationTests.cs` covers the platform rules with real signed tokens, so nothing calls AWS. Keep it. Add your own tests for your endpoints in separate files.
+`tests/{{ model.names.test_project_name }}/Platform/CognitoAuthenticationTests.cs` covers the platform rules with real signed tokens, so nothing calls AWS. Keep it. Add your own tests for your endpoints in separate files.

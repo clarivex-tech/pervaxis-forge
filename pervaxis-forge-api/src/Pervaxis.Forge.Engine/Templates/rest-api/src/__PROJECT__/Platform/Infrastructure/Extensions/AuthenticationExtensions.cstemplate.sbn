@@ -102,12 +102,16 @@ public static class AuthenticationExtensions
             authBuilder.AddJwtBearer(options =>
             {
                 options.Authority = oidcOptions.Authority;
+                // Keep the accepted token only in this request's authentication properties. /me checks
+                // scalar user identity in its original payload; nothing is persisted or returned.
+                options.SaveToken = true;
 
                 // Issuer, signature and expiry are always validated.
                 var validation = new TokenValidationParameters
                 {
                     ValidateIssuer = true,
-                    // Cognito access tokens have no normal "aud" claim. They are checked by client_id below.
+                    // Preserve existing Cognito behavior: check client_id below, without enforcing
+                    // resource binding even when a resource-bound token additionally carries aud.
                     ValidateAudience = !isCognito,
                     ValidateLifetime = true,
                     ValidateIssuerSigningKey = true,
@@ -195,6 +199,18 @@ public static class AuthenticationExtensions
 
             // AdminOnly plus any policies a service defines under Forge:Authorization:Policies.
             options.AddForgePolicies(authorizationOptions, oidcOptions.Provider);
+{{- if model.manifest.tenant_ready }}
+
+            options.AddPolicy(AuthorizationPolicyExtensions.SelfProfilePolicy, policy =>
+            {
+                // Select only JwtBearer even in Both mode; an API key cannot become a user.
+                if (scheme is "Bearer" or "Both")
+                    policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme);
+                policy.RequireAuthenticatedUser();
+                // Avoid attempting an unregistered handler in API-key-only mode.
+                policy.RequireAssertion(_ => isCognito && scheme is ("Bearer" or "Both"));
+            });
+{{- end }}
         });
 
         // Add Swagger Bearer security definition when JWT is active

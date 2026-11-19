@@ -1,0 +1,168 @@
+# Self-profile and application context
+
+The API exposes a read-only caller-context endpoint. Cognito owns profile attributes:
+name and email reads and optional display-name edits belong to Cognito user APIs called
+by the UI. This split was selected during architecture review on 2026-11-19.
+There is no REST profile write or password endpoint.
+
+## GET /api/v1/me
+
+Send the user's Cognito bearer access token. The endpoint returns:
+
+```json
+{
+  "subject": "<validated Cognito sub>",
+  "tenant": {
+    "id": "<admitted tenant GUID>",
+    "name": "<tenant directory display name>"
+  },
+  "roles": ["Users"]
+}
+```
+
+- Subject comes from the SAME bearer token already accepted by JwtBearer. Both `sub`
+  and Cognito `username` must be unambiguous non-empty scalar strings. The endpoint
+  rejects machine access tokens, including tokens whose `sub` equals `client_id`.
+- Tenant comes from the existing Core tenant context after active-directory admission.
+  It never comes from a header, query selector, a default tenant or unverified UI claims.
+  PlatformAdmin callers receive the same tenant admission checks as other callers.
+- Roles are distinct, ordinally sorted values of the configured group claim used by API
+  policies (`cognito:groups` by default). Case is preserved, as in policy evaluation.
+  These values are token-time role claims, not a live group lookup or a complete list of
+  permissions; endpoint policies still decide access.
+- Identity profile attributes, email, user name, tokens and provider-edit capabilities are
+  deliberately absent. No Cognito self-service scope, online provider call, IAM grant,
+  database table or migration is needed for this endpoint.
+- No subject or tenant selector is accepted. Extra query parameters and `X-Tenant-ID`
+  cannot select another identity or tenant. There is no `/me/{id}` route.
+- Only GET is exposed; write verbs return 405. Responses containing caller context use
+  `Cache-Control: no-store`. No profile bodies or tokens are logged by this feature.
+
+Anonymous/invalid bearer requests and non-user identities are rejected. A valid API key
+does not grant user access, including in `Both` mode; an invalid bearer cannot fall back
+to an API key. Missing/invalid/inactive tenant admission returns 403; directory
+unavailability returns 503. Existing tenancy middleware can reject requests before
+endpoint authorization. In API-key-only configuration the endpoint fails closed without
+attempting to use an unregistered bearer handler.
+
+Code belongs to `Platform/Profile`, with matching `Platform/Profile` tests. Simple
+context projection needs no separate service layer or custom DI registration. MVC
+discovers the controller through the existing application part. The built-in
+`SelfProfile` policy name is reserved and cannot be replaced by configuration.
+
+## Cognito profile reads and optional name edit (UI work is separate)
+
+Recommended identity read: direct Cognito `GetUser`, authorized with the user's access
+token. Optional update: direct `UpdateUserAttributes` with only standard `name`.
+Both need `aws.cognito.signin.user.admin` and app-client attribute permissions; neither
+requires AWS credentials or IAM permissions. A REST wrapper would require the same
+permissions and adds no privilege bypass. Never reuse trusted administrator provisioning
+or introduce `AdminUpdateUserAttributes`/`AdminGetUser` for self-profile.
+
+For read-only managed-login integrations, `GET /oauth2/userInfo` is another supported
+identity read. It needs `openid`; `email` and `profile` control returned attributes.
+That path does not authorize attribute updates. `openid email profile` alone does not
+authorize `GetUser` or `UpdateUserAttributes`.
+
+Cognito `name` can be absent. Preserve that absence rather than saving an email/username
+display fallback as the user's name. Identity reads must match their returned `sub`
+to the current session subject; discard results after logout, account/tenant change or
+a superseding read. Re-read the provider after an edit; token claims do not change in
+place. The UI must continue using its supported session refresh and state-reset lifecycle.
+The generated UI currently displays ID-token profile claims and access-token tenant/roles;
+this API change does not implement or change UI profile flows.
+
+## Operator prerequisites for self-service editing
+
+Editing starts disabled in the planned UI flow. These are operator verification steps;
+this print neither changes AWS configuration nor proves the deployed settings.
+Audit write permissions BEFORE issuing the reserved scope even for `GetUser` reads:
+a read-only UI does not make that token read-only. Existing ID-token display or an
+appropriate read-only `userInfo` integration can avoid requesting that scope merely
+to show identity attributes.
+
+1. Use the existing public authorization-code + PKCE app client without a browser client
+   secret. For managed login, BOTH allow and request `aws.cognito.signin.user.admin`
+   before `GetUser` or `UpdateUserAttributes` is used. Adding configuration does not
+   upgrade an existing token: use a new authorization flow rather than assuming refresh
+   adds new scope grants. Do not add this scope merely to call the REST `/me` endpoint.
+2. Configure readable attributes for `sub`, `name`, `email` and `email_verified`,
+   with trusted tenant attributes readable only where needed. Attributes missing from
+   the account or unreadable to the client remain unavailable.
+3. Review EVERY untrusted/public app client's write attributes. Allow `name` only where
+   the pool permits that policy; remove email, phone, tenant and other assignment writes
+   if the product requires those attributes to be read-only. Hiding UI fields cannot
+   constrain direct requests made with the same self-service token. The reserved scope
+   authorizes other user self-service operations; it is not a name-only scope.
+4. Pool-required attributes must be writable by an app client. Federated mappings can
+   require write permissions and overwrite attributes at sign-in. If required email or
+   external IdP ownership/mappings conflict with a name-only edit policy, keep editing
+   disabled and resolve the architecture explicitly. A disabled button alone does not
+   prove directly callable Cognito operations are disabled.
+5. Keep `custom:tenant_id` outside EVERY untrusted client's write permissions and
+   external IdP mappings, as required by [trusted provisioning](TrustedProvisioning.md).
+   Tenant, roles, email assignment and verification status stay read-only in Settings.
+   Existing PlatformAdmin provisioning permissions are separate and remain unchanged.
+6. Before enabling name edit, verify denied direct attempts to update protected
+   attributes, approved name updates, missing scopes, federated-account behavior and
+   newly authorized sessions against an operator-controlled test environment. Local
+   mocks cannot prove remote client settings. Do not change live AWS as part of template tests.
+
+## Current token validation and freshness limits
+
+`Platform/Infrastructure/Extensions/AuthenticationExtensions.cs` validates JWT signature,
+issuer and lifetime. `Platform/Auth/CognitoTokenValidator.cs` additionally requires
+`token_use=access` and an allowed `client_id`. Raw scalar `tenant_id` validation and
+active-directory admission remain unchanged. The new endpoint validates user-subject
+shape locally; this does not strengthen subject requirements on existing routes.
+
+Unbound Cognito access tokens normally use `client_id` rather than `aud`. Resource-bound
+tokens can additionally carry `aud` equal to a requested resource URL. Current REST
+code disables audience validation for Cognito, including when `aud` is present.
+It does not enforce resource binding. The legacy `Audience` setting can still act as
+a client-ID fallback when `ClientIds` is empty; it is not a resource-audience setting.
+Any resource-audience enforcement is a separate explicit auth change, preserving current
+behavior until reviewed.
+
+JWT lifetime validation uses the token library's default clock skew; it is not explicitly
+configured. Offline signature/lifetime validation cannot detect revocation before expiry.
+Cognito token-authorized user APIs can reject revoked tokens, but direct UI provider reads
+do not turn other API calls into online revocation checks. Tenant directory admission also
+has its existing cache lifetime. Roles and tenant claims remain token-time state until
+refresh/re-authorization; directory status is observed according to admission/cache policy.
+
+Viewing this context has no new recent-login requirement. Tightening clock skew or adding
+recent interactive authentication must be reviewed separately for sensitive actions.
+A recent `iat` can result from refresh and does not prove recent interactive login;
+`auth_time`, with an agreed maximum age and reauthentication behavior, would be needed
+for that guarantee. Neither refresh, `GetUser` nor an existing login cookie proves that
+the user just entered credentials.
+
+## Passwords and verification boundary
+
+Password flow remains a separate decision. No REST password payload, proxy, storage or
+logging is permitted, and there is no invented managed-login account/settings URL.
+Cognito documents a token-authorized `ChangePassword` operation; suitability depends on
+local-password, federated and passwordless accounts and an approved UI/recovery design.
+This feature does not enable that flow.
+
+Generated profile tests use real locally signed JWTs, MVC, the production authentication
+registration and Core admission middleware, with mocked directory/secret dependencies.
+They check response fields, no-store, custom role mapping, user/machine identity shape,
+bearer-only access, tenant selection resistance, directory denials and no write routes.
+Existing Cognito/JWT, tenant-isolation, architecture and model-snapshot tests remain
+applicable. No cloud calls or migrations are part of verification.
+
+## Official references
+
+Reviewed on 2026-11-19:
+
+- [Cognito JWT verification](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-tokens-verifying-a-jwt.html)
+- [Access token claims and self-service authorization](https://docs.aws.amazon.com/cognito/latest/developerguide/amazon-cognito-user-pools-using-the-access-token.html)
+- [GetUser](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_GetUser.html)
+- [UpdateUserAttributes](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_UpdateUserAttributes.html)
+- [UserInfo scopes and responses](https://docs.aws.amazon.com/cognito/latest/developerguide/userinfo-endpoint.html)
+- [App-client attribute permissions and required attributes](https://docs.aws.amazon.com/cognito/latest/developerguide/user-pool-settings-client-apps.html)
+- [Resource binding](https://docs.aws.amazon.com/cognito/latest/developerguide/cognito-user-pools-define-resource-servers.html)
+- [Token revocation](https://docs.aws.amazon.com/cognito/latest/developerguide/token-revocation.html)
+- [ChangePassword](https://docs.aws.amazon.com/cognito-user-identity-pools/latest/APIReference/API_ChangePassword.html)
