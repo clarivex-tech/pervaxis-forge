@@ -52,12 +52,14 @@ Human-readable version with a complete example: `DeveloperReference/TenancyQuick
 
 ## Platform code you must not change
 
-`Data/{{ model.names.dot_net_class_name }}DbContext.cs`, `Platform/Tenancy/Data/*`, `Data/Migrations/*_AddTenants*`,
+`Platform/Data/{{ model.names.dot_net_class_name }}DbContext.cs`, `Platform/Tenancy/Data/*`,
 `Platform/Tenancy/EfTenantDirectory.cs`, `Platform/Tenancy/Services/*`, `Platform/Tenancy/Controllers/TenantsController.cs`, and the tenancy registration in
-`Program.cs`. Tenants are managed through `api/v1/tenants` (PlatformAdmin only), never by editing rows directly.
+`Platform/Hosting/ForgeHost.cs`. Tenants are managed through `api/v1/tenants` (PlatformAdmin only), never by editing rows directly.
+
+Application migration history and the latest snapshot at `Data/Migrations/` are application-owned upgrade state, not disposable platform files. Preserve applied history and append intentional changes; see `DeveloperReference/Ownership.md`.
 
 ## Tests
 
 For every new tenant-owned entity, add a test that writes as one tenant and proves another tenant sees nothing.
-Use `TenantTestDatabase` from `TenantManagementTests.cs`; an example is in `DeveloperReference/TenancyQuickStart.md`, step 6.
+Use `TenantTestDatabase` from `Platform/Fixtures/TenantTestDatabase.cs`; an example is in `DeveloperReference/TenancyQuickStart.md`, step 6.
 {{- end -}}

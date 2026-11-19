@@ -113,7 +113,7 @@ public class MultiTenancyGenerationTests
     {
         var files = await GenerateAsync(Manifest(multiTenancy: true));
 
-        var program = Single(files, "/Program.cs");
+        var program = Single(files, "/Platform/Hosting/ForgeHost.cs");
         program.Should().Contain("AddPervaxisClaimsMultiTenancy").And.Contain("UsePervaxisClaimsTenancy");
         program.Should().Contain("AddPervaxisTenantRepositories");
         program.Should().Contain(".WithTenantExempt()");
@@ -124,8 +124,8 @@ public class MultiTenancyGenerationTests
         program.Should().NotContain("AddDbContextPool");
 
         files.Keys.Should().NotContain(k => k.EndsWith("/TenantMiddleware.cs", StringComparison.Ordinal));
-        files.Keys.Should().NotContain(k => k.EndsWith("/Infrastructure/Tenancy/ITenantContext.cs", StringComparison.Ordinal));
-        files.Keys.Should().NotContain(k => k.EndsWith("/Infrastructure/Tenancy/TenantContext.cs", StringComparison.Ordinal));
+        files.Keys.Should().NotContain(k => k.EndsWith("/Platform/Infrastructure/Tenancy/ITenantContext.cs", StringComparison.Ordinal));
+        files.Keys.Should().NotContain(k => k.EndsWith("/Platform/Infrastructure/Tenancy/TenantContext.cs", StringComparison.Ordinal));
         files.Values.Should().NotContain(v => v.Contains("X-Tenant-ID", StringComparison.OrdinalIgnoreCase) && !v.Contains("ignored", StringComparison.OrdinalIgnoreCase)
             || v.Contains("TenantMiddleware", StringComparison.Ordinal));
     }
@@ -135,9 +135,9 @@ public class MultiTenancyGenerationTests
     {
         var files = await GenerateAsync(Manifest(multiTenancy: true));
 
-        Single(files, "/Infrastructure/Extensions/AuthenticationExtensions.cs")
+        Single(files, "/Platform/Infrastructure/Extensions/AuthenticationExtensions.cs")
             .Should().Contain("TenantClaimGuard.Enforce");
-        Single(files, "/Auth/TenantClaimGuard.cs").Should().Contain("TenantClaimPayloadValidator.Validate");
+        Single(files, "/Platform/Auth/TenantClaimGuard.cs").Should().Contain("TenantClaimPayloadValidator.Validate");
         files.Keys.Should().Contain(k => k.EndsWith("/TenantIsolationTests.cs", StringComparison.Ordinal));
     }
 
@@ -146,9 +146,9 @@ public class MultiTenancyGenerationTests
     {
         var files = await GenerateAsync(Manifest(multiTenancy: true));
 
-        Single(files, "/Data/BillingServiceDbContext.cs").Should().Contain(": TenantDbContext");
-        Single(files, "/Data/DesignTimeDbContextFactory.cs").Should().Contain("DesignTimeTenantContext.Instance");
-        Single(files, "/Infrastructure/Middleware/ExceptionHandlerMiddleware.cs")
+        Single(files, "/Platform/Data/BillingServiceDbContext.cs").Should().Contain(": TenantDbContext");
+        Single(files, "/Platform/Data/DesignTimeDbContextFactory.cs").Should().Contain("DesignTimeTenantContext.Instance");
+        Single(files, "/Platform/Infrastructure/Middleware/ExceptionHandlerMiddleware.cs")
             .Should().Contain("TenantResourceNotFoundException").And.Contain("DbUpdateConcurrencyException");
 
         var packages = Single(files, "Directory.Packages.props");

@@ -14,9 +14,9 @@ and descriptions. Choose the fields on purpose: sanitization changes the value.
 
 | Protection | Where | Default |
 |---|---|---|
-| Settings read from `Genesis:Sanitization` in `appsettings.json` | `Program.cs` | On |
+| Settings read from `Genesis:Sanitization` in `appsettings.json` | `Platform/Hosting/ForgeHost.cs` | On |
 | `[Sanitize]` properties are cleaned before validation | Global filter from `AddGenesisSanitization` | On |
-| JSON bodies larger than `MaxInputLength` are rejected with **413** | `Infrastructure/Middleware/JsonBodyLimitMiddleware.cs` | On |
+| JSON bodies larger than `MaxInputLength` are rejected with **413** | `Platform/Infrastructure/Middleware/JsonBodyLimitMiddleware.cs` | On |
 | Every string in every JSON POST, PUT and PATCH body is cleaned, including nested values | `app.UseGenesisSanitization()` | **Off** (`EnableMiddleware: false`) |
 
 Why the body limit: the sanitizer refuses strings longer than `MaxInputLength`. Without the limit, the body-wide
@@ -139,7 +139,7 @@ public sealed class CreateCommentRequestValidator : AbstractValidator<CreateComm
 
 ## Option 4: clean every JSON body (the middleware)
 
-`app.UseGenesisSanitization()` is already in `Program.cs`, but does nothing until `EnableMiddleware` is `true`.
+`app.UseGenesisSanitization()` is already in `Platform/Hosting/ForgeHost.cs`, but does nothing until `EnableMiddleware` is `true`.
 When on, it cleans **every** string in **every** JSON POST, PUT and PATCH body with `DefaultProfile`, including values in
 nested objects and lists. That includes fields such as passwords, so before turning it on:
 

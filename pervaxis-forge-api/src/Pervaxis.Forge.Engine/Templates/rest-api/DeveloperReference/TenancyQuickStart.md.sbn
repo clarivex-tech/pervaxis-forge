@@ -216,25 +216,27 @@ and a concurrent edit is **409**. Do not catch these.
 
 ### 6. The test: prove tenant A cannot see tenant B
 
-`tests/{{ model.names.test_project_name }}/ProjectIsolationTests.cs`
+`tests/{{ model.names.test_project_name }}/Domains/Projects/ProjectIsolationTests.cs`
 
 ```csharp
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Pervaxis.Core.Abstractions.MultiTenancy;
-using {{ model.names.namespace }}.Data;
+using {{ model.names.namespace }}.Platform.Data;
 using Company.Product.Domains.Projects.Data;
 using Xunit;
 
-namespace {{ model.names.test_project_name }};
+using {{ model.names.test_project_name }}.Platform.Fixtures;
+
+namespace Company.Product.Domains.Projects.Tests;
 
 public sealed class ProjectIsolationTests : IDisposable
 {
     private static readonly TenantId TenantA = new(Guid.NewGuid().ToString("D"));
     private static readonly TenantId TenantB = new(Guid.NewGuid().ToString("D"));
 
-    // In-memory SQLite with this service's schema (see TenantManagementTests.cs).
+    // In-memory SQLite with this service's schema (see Platform/Fixtures/TenantTestDatabase.cs).
     private readonly TenantTestDatabase _database = new();
     private readonly ServiceProvider _services;
 

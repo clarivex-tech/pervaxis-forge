@@ -32,4 +32,7 @@ This folder holds **copy-and-adapt examples** for the platform features this ser
 
 - Examples follow the standards in `.claude/guides/PERVAXIS_STANDARDS.md`.
 - The package behind each example is the source of truth. If an example and the package disagree, trust the package and tell the platform team.
-- Keep domain code in `Domains/`. Do not edit `Program.cs` to wire a feature. Raise a platform ticket instead.
+- Keep domain code in `Domains/`. Do not edit `Platform/Hosting/ForgeHost.cs` to wire a feature. Raise a platform ticket instead.
+
+
+Ownership: Platform contains print-owned runtime code; Domains contains business modules. Data/Migrations is application-owned upgrade history and snapshot state, excluded from Platform replacement. See [the ownership and upgrade policy](Ownership.md).

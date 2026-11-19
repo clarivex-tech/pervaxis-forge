@@ -1,0 +1,187 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+using Amazon.CognitoIdentityProvider;
+using Amazon.CognitoIdentityProvider.Model;
+using System.Reflection;
+using Microsoft.AspNetCore.Authorization;
+using Pervaxis.Core.MultiTenancy;
+using {{ model.names.namespace }}.Platform.Tenancy.Controllers;
+using {{ model.names.namespace }}.Platform.Infrastructure.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Moq;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using {{ model.names.namespace }}.Platform.Models.Configuration;
+using {{ model.names.namespace }}.Platform.Tenancy.Services;
+using Xunit;
+
+namespace {{ model.names.test_project_name }}.Platform;
+
+public sealed class ProvisioningTests
+{
+    [Fact]
+    public void UserAdministration_IsTenantExempt_AndPlatformAdminOnly()
+    {
+        var controller = typeof(TenantUsersController);
+        Assert.NotNull(controller.GetCustomAttribute<TenantExemptAttribute>());
+        Assert.Equal(AuthorizationPolicyExtensions.PlatformAdminPolicy,
+            controller.GetCustomAttribute<AuthorizeAttribute>()?.Policy);
+        Assert.Null(controller.GetCustomAttribute<AllowAnonymousAttribute>());
+    }
+
+    private static readonly Guid TenantId = Guid.Parse("4ba801c5-55ae-4629-87a5-801ddbdce735");
+    private readonly Mock<IAmazonCognitoIdentityProvider> cognito = new(MockBehavior.Strict);
+    private readonly Mock<ITenantManagementService> tenants = new(MockBehavior.Strict);
+
+    private CognitoUserProvisioningService Service(TenantStatus status = TenantStatus.Active, bool enabled = true)
+    {
+        tenants.Setup(service => service.GetAsync(TenantId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new TenantSummary(TenantId, "Customer", status, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow));
+        return new(cognito.Object, tenants.Object, Options.Create(new ForgeProvisioningOptions
+        {
+            Enabled = enabled, UserPoolId = "us-east-1_Example", Region = "us-east-1",
+        }), NullLogger<CognitoUserProvisioningService>.Instance);
+    }
+
+    private static List<AttributeType> Attributes(Guid id) =>
+    [
+        new() { Name = "custom:tenant_id", Value = id.ToString("D") },
+        new() { Name = "email", Value = "user@example.com" },
+        new() { Name = "sub", Value = "subject" },
+    ];
+
+    [Fact]
+    public async Task Invite_AssignsTenantInCreation_WithoutGrantingRolesOrVerifyingEmail()
+    {
+        AdminCreateUserRequest? captured = null;
+        cognito.Setup(client => client.AdminCreateUserAsync(It.IsAny<AdminCreateUserRequest>(), It.IsAny<CancellationToken>()))
+            .Callback<AdminCreateUserRequest, CancellationToken>((request, _) => captured = request)
+            .ReturnsAsync(new AdminCreateUserResponse { User = new UserType
+            {
+                Username = "user@example.com", Attributes = Attributes(TenantId), UserStatus = UserStatusType.FORCE_CHANGE_PASSWORD, Enabled = true,
+            } });
+        var result = await Service().InviteAsync(TenantId, " User@Example.com ", "actor", default);
+        Assert.False(result.AlreadyExists);
+        Assert.NotNull(captured);
+        Assert.Equal("user@example.com", captured.Username);
+        Assert.Contains(captured.UserAttributes, attribute => attribute.Name == "custom:tenant_id" && attribute.Value == TenantId.ToString("D"));
+        Assert.DoesNotContain(captured.UserAttributes, attribute => attribute.Name == "email_verified");
+        Assert.False(captured.ForceAliasCreation == true);
+        cognito.VerifyAll();
+    }
+
+    [Theory]
+    [InlineData(TenantStatus.Suspended)]
+    [InlineData(TenantStatus.Offboarding)]
+    [InlineData(TenantStatus.Offboarded)]
+    public async Task InactiveTenant_NeverCallsCognito(TenantStatus status)
+    {
+        var error = await Assert.ThrowsAsync<ProvisioningException>(() => Service(status).InviteAsync(TenantId, "user@example.com", "actor", default));
+        Assert.Equal(409, error.StatusCode);
+        cognito.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DisabledProvisioning_NeverCallsCognito()
+    {
+        var error = await Assert.ThrowsAsync<ProvisioningException>(() => Service(enabled: false).InviteAsync(TenantId, "user@example.com", "actor", default));
+        Assert.Equal(503, error.StatusCode);
+        cognito.VerifyNoOtherCalls();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ExistingUser_IsRecoveredOnlyForTheSameTenant(bool sameTenant)
+    {
+        cognito.Setup(client => client.AdminCreateUserAsync(It.IsAny<AdminCreateUserRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new UsernameExistsException("exists"));
+        cognito.Setup(client => client.AdminGetUserAsync(It.IsAny<AdminGetUserRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AdminGetUserResponse
+            {
+                Username = "user@example.com", UserAttributes = Attributes(sameTenant ? TenantId : Guid.NewGuid()), Enabled = true,
+            });
+        var service = Service();
+        if (sameTenant) Assert.True((await service.InviteAsync(TenantId, "user@example.com", "actor", default)).AlreadyExists);
+        else Assert.Equal(409, (await Assert.ThrowsAsync<ProvisioningException>(
+            () => service.InviteAsync(TenantId, "user@example.com", "actor", default))).StatusCode);
+        cognito.Verify(client => client.AdminCreateUserAsync(It.IsAny<AdminCreateUserRequest>(), It.IsAny<CancellationToken>()), Times.Once);
+        cognito.VerifyAll();
+    }
+
+    [Fact]
+    public async Task List_FiltersOtherTenants_AndPreservesContinuationForEmptyPages()
+    {
+        cognito.Setup(client => client.ListUsersAsync(It.Is<ListUsersRequest>(request => request.Limit == 60), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ListUsersResponse
+            {
+                Users = [new UserType { Username = "other", Attributes = Attributes(Guid.NewGuid()) }],
+                PaginationToken = "next-page",
+            });
+        var page = await Service().ListAsync(TenantId, null, default);
+        Assert.Empty(page.Users);
+        Assert.Equal("next-page", page.NextToken);
+    }
+
+    [Fact]
+    public async Task Resend_RejectsAnAccountThatAlreadyCompletedSignIn()
+    {
+        cognito.Setup(client => client.AdminGetUserAsync(It.IsAny<AdminGetUserRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AdminGetUserResponse
+            {
+                Username = "user@example.com", UserAttributes = Attributes(TenantId),
+                UserStatus = UserStatusType.CONFIRMED, Enabled = true,
+            });
+        var error = await Assert.ThrowsAsync<ProvisioningException>(() => Service().ResendAsync(TenantId, "user@example.com", "actor", default));
+        Assert.Equal(409, error.StatusCode);
+        cognito.VerifyAll();
+        cognito.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task ExistingUnassignedUser_IsNeverAdopted()
+    {
+        cognito.Setup(client => client.AdminCreateUserAsync(It.IsAny<AdminCreateUserRequest>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new UsernameExistsException("exists"));
+        cognito.Setup(client => client.AdminGetUserAsync(It.IsAny<AdminGetUserRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AdminGetUserResponse { Username = "user@example.com", UserAttributes = [] });
+        var error = await Assert.ThrowsAsync<ProvisioningException>(() => Service().InviteAsync(TenantId, "user@example.com", "actor", default));
+        Assert.Equal(409, error.StatusCode);
+        cognito.VerifyAll();
+        cognito.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task Resend_ValidatesAssignment_AndExplicitlyRequestsEmail()
+    {
+        cognito.Setup(client => client.AdminGetUserAsync(It.IsAny<AdminGetUserRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AdminGetUserResponse
+            {
+                Username = "user@example.com", UserAttributes = Attributes(TenantId),
+                UserStatus = UserStatusType.FORCE_CHANGE_PASSWORD, Enabled = true,
+            });
+        cognito.Setup(client => client.AdminCreateUserAsync(It.Is<AdminCreateUserRequest>(request =>
+                request.MessageAction == MessageActionType.RESEND && request.Username == "user@example.com" &&
+                request.DesiredDeliveryMediums.Contains(DeliveryMediumType.EMAIL)), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new AdminCreateUserResponse());
+        await Service().ResendAsync(TenantId, "user@example.com", "actor", default);
+        cognito.VerifyAll();
+    }
+}
+{{ end }}

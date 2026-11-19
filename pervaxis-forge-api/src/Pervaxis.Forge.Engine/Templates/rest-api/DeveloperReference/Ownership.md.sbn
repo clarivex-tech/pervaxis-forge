@@ -1,0 +1,35 @@
+# Print ownership and application upgrade state
+
+The generated project has two runtime code owners:
+
+| Location in `src/{{ model.names.namespace }}/` | Owner and lifecycle |
+|---|---|
+| `Platform/` | Print-owned runtime composition, authentication, tenancy, configuration types, contracts, helpers, HTTP pipeline and DbContext. Reconcile with newer print versions as a unit. |
+| `Domains/<Feature>/` | Application-owned business modules, controllers, DTOs, validators and EF configurations. Copy unchanged between compatible prints. |
+| `Program.cs` | Minimal entry point delegating to `Platform/Hosting/ForgeHost.cs`, plus the public entry-point marker for host integration testing. |
+| Project file, settings and tooling assets | Stay at the project root where .NET, configuration and container tooling expect them. Reconcile dependencies/settings explicitly. |
+| `Data/Migrations/` | **Application-owned upgrade state.** Deliberate exception to the two runtime folders; includes every migration, designer file and the single latest model snapshot. This is never disposable Platform code. |
+
+Tests mirror the owners: `tests/{{ model.names.test_project_name }}/Platform/` holds print-owned verification, `Platform/Fixtures/` holds shared platform test infrastructure, and `Domains/<Feature>/` holds application feature tests. The test project file remains at its root. A feature can use the shared fixtures without copying or modifying platform tests. Avoid placing business services or entities in Platform fixtures.
+
+## Namespace compatibility
+
+Internal runtime host types previously under `.Auth`, `.Common`, `.Extensions`, `.Infrastructure`, `.Models`, `.Services` and the concrete `.Data` context now live under `.Platform` with the same subfolder suffix. Update imports in application-specific host integrations and tests once. Business slices using the V1 contracts require no import changes.
+
+The physically relocated `Platform/Contracts/V1/` files retain **`Pervaxis.Forge.Contracts.V1`** and their existing signatures. Business namespaces remain independent of the generated service namespace. Platform entity identities **`.Data.Tenancy`** and **`.Data.Outbox`** deliberately retain their previous namespaces; renaming them can change EF model identity. Historical migrations retain `.Data.Migrations` and all existing IDs. Only their context import changes to `.Platform.Data`. Folder ownership does not require renaming persisted CLR identities.
+
+## Migration history survives every Platform refresh
+
+For an existing deployment, carry forward the complete existing `Data/Migrations/` directory intact, including applied business and platform migrations, designer target models and latest snapshot. Keep it outside any Platform refresh/copy/cleanup operation. Preserve tenant seed IDs and timestamps. A fresh print's starter migrations are **only for a genuinely empty database starting a new application lineage**; they must never overwrite, replace or be combined as a second baseline with an existing application's history.
+
+When updating a candidate application, refresh/reconcile Platform and root tooling separately from its preserved migration state. Context namespace transitions may require changing context imports in existing designer/snapshot metadata; do not change applied migration operations, IDs or recorded entity names. No schema migration should result from moving files. Build, run the model drift check and review the model diff before intentional schema changes. Append reviewed migrations after the application's existing tip for intentional platform or business model changes, then validate SQL and data retention against a restored test database. Never generate a fresh baseline over existing tables, rewrite an applied migration, or take a starter snapshot in place of the application's current snapshot.
+
+EF tooling still uses the application project and existing output directory:
+
+```bash
+dotnet ef migrations has-pending-model-changes --project src/{{ model.names.namespace }}
+dotnet ef migrations add AddFeature --project src/{{ model.names.namespace }} --output-dir Data/Migrations --namespace {{ model.names.namespace }}.Data.Migrations
+dotnet ef migrations script --idempotent --project src/{{ model.names.namespace }} --output migrations.sql
+```
+
+Migrations are applied through the deployment pipeline, never on host startup. Model/script generation does not require connecting to the live database. See [Portability.md](Portability.md) and [Database.md](Database.md) for the full dependency, configuration and database upgrade procedure.

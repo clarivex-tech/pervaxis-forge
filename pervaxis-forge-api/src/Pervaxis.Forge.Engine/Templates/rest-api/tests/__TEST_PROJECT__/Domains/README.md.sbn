@@ -1,0 +1,5 @@
+# Business feature tests
+
+Keep application-owned tests under `Domains/<Feature>/` and copy them with their feature when moving to a compatible print. Print-owned tests live in `Platform/`; shared test infrastructure lives in `Platform/Fixtures/`.
+
+Feature tests may use the public shared fixtures. Keep feature entities/services in the application's `Domains/` folder, never in Platform fixtures. Application-wide migration history and the latest snapshot remain application-owned state at `src/{{ model.names.namespace }}/Data/Migrations/`.
