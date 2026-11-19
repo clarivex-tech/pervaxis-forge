@@ -17,10 +17,7 @@
  ************************************************************************
  */
 
-namespace {{ model.names.namespace }}.Controllers;
+namespace {{ model.names.namespace }}.Platform.Tenancy.Controllers;
 
-public sealed record ResendInvitationRequest
-{
-    public required string Username { get; init; }
-}
+public sealed record TenantNameRequest(string Name);
 {{ end }}

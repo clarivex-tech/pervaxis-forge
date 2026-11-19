@@ -9,7 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 
-namespace {{ model.names.namespace }}.Controllers;
+namespace {{ model.names.namespace }}.Platform.Meta;
 
 /// <summary>
 /// HORIZONTAL: Scaffold metadata endpoint.

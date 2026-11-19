@@ -52,8 +52,8 @@ Human-readable version with a complete example: `DeveloperReference/TenancyQuick
 
 ## Platform code you must not change
 
-`Data/{{ model.names.dot_net_class_name }}DbContext.cs`, `Data/Tenancy/*`, `Data/Migrations/*_AddTenants*`,
-`Infrastructure/Tenancy/*`, `Services/Tenancy/*`, `Controllers/TenantsController.cs`, and the tenancy registration in
+`Data/{{ model.names.dot_net_class_name }}DbContext.cs`, `Platform/Tenancy/Data/*`, `Data/Migrations/*_AddTenants*`,
+`Platform/Tenancy/EfTenantDirectory.cs`, `Platform/Tenancy/Services/*`, `Platform/Tenancy/Controllers/TenantsController.cs`, and the tenancy registration in
 `Program.cs`. Tenants are managed through `api/v1/tenants` (PlatformAdmin only), never by editing rows directly.
 
 ## Tests

@@ -16,11 +16,11 @@
  ************************************************************************
  */
 
-namespace {{ model.names.namespace }}.Models;
+namespace Pervaxis.Forge.Contracts.V1;
 
-public sealed record {{ model.names.dot_net_class_name }}Response
+/// <summary>Read-only LINQ queries through the host's tenant-aware EF context. Never disable tenant query filters.</summary>
+public interface IDomainQueries
 {
-    public required string Id { get; init; }
-
-    public required DateTimeOffset CreatedAt { get; init; }
+    /// <summary>Returns an untracked query for an entity registered by an EF configuration in this assembly.</summary>
+    IQueryable<TEntity> Query<TEntity>() where TEntity : class;
 }

@@ -1,3 +1,4 @@
+{{ if model.manifest.tenant_ready }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -16,11 +17,8 @@
  ************************************************************************
  */
 
-using {{ model.names.namespace }}.Models;
+namespace {{ model.names.namespace }}.Platform.Tenancy.Services;
 
-namespace {{ model.names.namespace }}.Services;
-
-public interface I{{ model.names.dot_net_class_name }}
-{
-    Task<{{ model.names.dot_net_class_name }}Response?> GetAsync(string id, CancellationToken cancellationToken = default);
-}
+/// <summary>Administrative user information; never includes credentials.</summary>
+public sealed record ProvisionedUser(string Username, string? Subject, string? Email, string Status, bool Enabled, bool AlreadyExists = false);
+{{ end }}

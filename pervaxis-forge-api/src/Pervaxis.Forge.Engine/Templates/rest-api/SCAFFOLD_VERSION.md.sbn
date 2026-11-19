@@ -30,21 +30,10 @@
 None
 {{- end }}
 
+## Portability contract
+
+Host contract: Pervaxis.Forge.Contracts.V1 (major 1). Source folder discovery in the host assembly; MVC and EF configuration scanning; FluentValidation requires its manifest toggle. Tenant-ready prints use Core 1.8.0. See manifest and central package versions for all prerequisites.
+
 ## Migration Guide
 
-When a newer version of this scaffold is released, follow these steps to migrate:
-
-1. Generate a new service from the same `manifest.json` using the new Forge version.
-2. Compare `SCAFFOLD_VERSION.md` files to understand what changed in the scaffold infrastructure.
-3. Copy your domain code (`Controllers/`, `Services/`, `Data/`) into the new scaffold.
-4. Update the CI/CD pipeline from the new scaffold's `.github/workflows/`.
-5. Run `dotnet build` and fix any compilation errors.
-6. Run `dotnet test` and verify tests pass.
-
-**Domain folders (yours — copy on migration):**
-- `Controllers/` — API controllers
-- `Services/` — Business logic
-- `Data/` — EF Core DbContext, entities, migrations
-
-**Scaffold infrastructure (take from new print — do not copy):**
-- `Program.cs`, `csproj`, `Dockerfile`, `appsettings.json`, `.github/workflows/`
+Copy Domains/<Feature> and feature tests unchanged into a compatible print. Reconcile declared dependencies and configuration explicitly. For an existing deployment, preserve the entire existing Data/Migrations chain and model snapshot instead of the fresh starter history. Never create a new baseline over existing tables. Follow [the full upgrade policy](DeveloperReference/Portability.md).

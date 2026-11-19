@@ -24,7 +24,7 @@ using Microsoft.Extensions.Options;
 using Pervaxis.Core.Abstractions.MultiTenancy;
 using {{ model.names.namespace }}.Models.Configuration;
 
-namespace {{ model.names.namespace }}.Services.Tenancy;
+namespace {{ model.names.namespace }}.Platform.Tenancy.Services;
 
 /// <summary>Trusted onboarding. No reassignment, group grants, or client-selected attributes.</summary>
 public sealed class CognitoUserProvisioningService(

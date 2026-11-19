@@ -21,7 +21,7 @@ The example adds a `Projects` feature. Replace the names with yours.
 ```csharp
 using Pervaxis.Core.Data.EntityFrameworkCore;
 
-namespace {{ model.names.namespace }}.Domains.Projects.Data;
+namespace Company.Product.Domains.Projects.Data;
 
 public sealed class Project : TenantEntity<Guid>
 {
@@ -50,7 +50,7 @@ public sealed class Project : TenantEntity<Guid>
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace {{ model.names.namespace }}.Domains.Projects.Data;
+namespace Company.Product.Domains.Projects.Data;
 
 public sealed class ProjectConfiguration : IEntityTypeConfiguration<Project>
 {
@@ -79,17 +79,17 @@ dotnet ef migrations add AddProjects --project src/{{ model.names.namespace }} -
 dotnet ef database update --project src/{{ model.names.namespace }}
 ```
 
-Commit the generated files. See [`Database.md`](Database.md) for how migrations reach test and production.
+Append to the existing lineage; never replace an applied migration or snapshot with a fresh baseline. Commit the generated files. See [`Database.md`](Database.md) for how migrations reach test and production.
 
-### 4. The service: use the repository
+### 4. Optional service: use the repository
 
-`src/{{ model.names.namespace }}/Domains/Projects/Services/ProjectService.cs`
+`Domains/Projects/Services/IProjectService.cs`
 
 ```csharp
 using Pervaxis.Core.Abstractions.Data;
-using {{ model.names.namespace }}.Domains.Projects.Data;
+using Company.Product.Domains.Projects.Data;
 
-namespace {{ model.names.namespace }}.Domains.Projects.Services;
+namespace Company.Product.Domains.Projects.Services;
 
 public interface IProjectService
 {
@@ -99,6 +99,16 @@ public interface IProjectService
 
     Task<Project> CreateAsync(string code, string name, CancellationToken cancellationToken);
 }
+
+```
+
+Domains/Projects/Services/ProjectService.cs:
+
+```csharp
+using Pervaxis.Core.Abstractions.Data;
+using Company.Product.Domains.Projects.Data;
+
+namespace Company.Product.Domains.Projects.Services;
 
 public sealed class ProjectService : IProjectService
 {
@@ -129,30 +139,52 @@ public sealed class ProjectService : IProjectService
 }
 ```
 
-Register it in `Extensions/ServiceCollectionExtensions.cs`:
+Register it in `Domains/Projects/ProjectsModule.cs` (one public type per file):
 
 ```csharp
-services.AddScoped<IProjectService, ProjectService>();
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Pervaxis.Forge.Contracts.V1;
+using Company.Product.Domains.Projects.Services;
+
+namespace Company.Product.Domains.Projects;
+
+public sealed class ProjectsModule : IDomainModule
+{
+    public void Register(IServiceCollection services, IConfiguration configuration)
+        => services.AddScoped<IProjectService, ProjectService>();
+}
 ```
 
-`IRepository<,>` and `IUnitOfWork` are already registered for every tenant-owned entity.
+`IRepository<,>` and `IUnitOfWork` are already registered for every tenant-owned entity. A simple CRUD controller may inject them directly and omit this service. Put each request DTO in its own file. Keep feature namespaces stable when copying to a print with a different name. Follow [Portability.md](Portability.md) before upgrading an existing database.
 
 ### 5. The endpoint: no tenant in the request
 
-`src/{{ model.names.namespace }}/Domains/Projects/Controllers/ProjectsController.cs`
+`Domains/Projects/Models/CreateProjectRequest.cs`:
+
+```csharp
+namespace Company.Product.Domains.Projects.Models;
+public sealed record CreateProjectRequest(string Code, string Name); // no TenantId
+```
+
+`Domains/Projects/Models/ProjectResponse.cs`:
+
+```csharp
+namespace Company.Product.Domains.Projects.Models;
+public sealed record ProjectResponse(Guid Id, string Code, string Name);
+```
+
+`Domains/Projects/Controllers/ProjectsController.cs`:
 
 ```csharp
 using Microsoft.AspNetCore.Mvc;
-using {{ model.names.namespace }}.Domains.Projects.Services;
+using Company.Product.Domains.Projects.Services;
+using Company.Product.Domains.Projects.Models;
 
-namespace {{ model.names.namespace }}.Domains.Projects.Controllers;
-
-public sealed record CreateProjectRequest(string Code, string Name);   // no TenantId here, ever
-
-public sealed record ProjectResponse(Guid Id, string Code, string Name);
+namespace Company.Product.Domains.Projects.Controllers;
 
 [ApiController]
-[Route("{{ model.names.api_base_route }}/projects")]
+[Route("api/v1/projects")]
 public sealed class ProjectsController : ControllerBase
 {
     private readonly IProjectService _projects;
@@ -174,7 +206,7 @@ public sealed class ProjectsController : ControllerBase
     public async Task<IActionResult> CreateAsync([FromBody] CreateProjectRequest request, CancellationToken cancellationToken)
     {
         var project = await _projects.CreateAsync(request.Code, request.Name, cancellationToken);
-        return Created($"{{ model.names.api_base_route }}/projects/{project.Id}", new ProjectResponse(project.Id, project.Code, project.Name));
+        return Created($"api/v1/projects/{project.Id}", new ProjectResponse(project.Id, project.Code, project.Name));
     }
 }
 ```
@@ -192,7 +224,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Pervaxis.Core.Abstractions.MultiTenancy;
 using {{ model.names.namespace }}.Data;
-using {{ model.names.namespace }}.Domains.Projects.Data;
+using Company.Product.Domains.Projects.Data;
 using Xunit;
 
 namespace {{ model.names.test_project_name }};

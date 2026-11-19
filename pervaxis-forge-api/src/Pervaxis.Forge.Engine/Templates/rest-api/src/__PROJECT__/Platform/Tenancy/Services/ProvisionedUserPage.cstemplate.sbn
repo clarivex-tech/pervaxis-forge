@@ -17,11 +17,8 @@
  ************************************************************************
  */
 
-namespace {{ model.names.namespace }}.Controllers;
+namespace {{ model.names.namespace }}.Platform.Tenancy.Services;
 
-/// <summary>Tenant comes from the authorized route. Arbitrary attributes and roles are not accepted.</summary>
-public sealed record InviteUserRequest
-{
-    public required string Email { get; init; }
-}
+/// <summary>A filtered page. Empty pages can still have a continuation token.</summary>
+public sealed record ProvisionedUserPage(IReadOnlyList<ProvisionedUser> Users, string? NextToken);
 {{ end }}

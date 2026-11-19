@@ -68,7 +68,7 @@ The package runs a filter before validation and cleans every property marked wit
 ```csharp
 using Pervaxis.Genesis.Sanitization.Filters;
 
-namespace {{ model.names.namespace }}.Domains.Comments.Models;
+namespace Company.Product.Domains.Comments.Models;
 
 public sealed record CreateCommentRequest
 {
@@ -93,7 +93,7 @@ Use this when the value does not come straight from a request model, or is neste
 ```csharp
 using Pervaxis.Genesis.Sanitization.Abstractions;
 
-namespace {{ model.names.namespace }}.Domains.Comments.Services;
+namespace Company.Product.Domains.Comments.Services;
 
 public sealed class CommentService(ISanitizer sanitizer) : ICommentService
 {
@@ -107,7 +107,7 @@ public sealed class CommentService(ISanitizer sanitizer) : ICommentService
 
 `ISanitizer` methods: `StripAll`, `SanitizeHtml`, `Sanitize(input, profileName)` and `Sanitize(input, profile)`. All of them return `null` for `null` input.
 {{- if model.manifest.tenant_ready }}
-Store the cleaned values through the service's repository or `{{ model.names.dot_net_class_name }}DbContext` as usual (see `TenancyQuickStart.md`). Do not create a feature `DbContext`.
+Store the cleaned values through the tenant repository and unit of work (see `TenancyQuickStart.md`). Do not create a feature `DbContext`.
 {{- end }}
 
 ## Option 3: inside a FluentValidation validator
@@ -119,7 +119,7 @@ using FluentValidation;
 using Pervaxis.Genesis.Sanitization.Abstractions;
 using Pervaxis.Genesis.Sanitization.Extensions;
 
-namespace {{ model.names.namespace }}.Domains.Comments.Validators;
+namespace Company.Product.Domains.Comments.Validators;
 
 public sealed class CreateCommentRequestValidator : AbstractValidator<CreateCommentRequest>
 {

@@ -1,4 +1,3 @@
-{{ if model.manifest.tenant_ready }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -17,8 +16,14 @@
  ************************************************************************
  */
 
-namespace {{ model.names.namespace }}.Services.Tenancy;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 
-/// <summary>A filtered page. Empty pages can still have a continuation token.</summary>
-public sealed record ProvisionedUserPage(IReadOnlyList<ProvisionedUser> Users, string? NextToken);
-{{ end }}
+namespace Pervaxis.Forge.Contracts.V1;
+
+/// <summary>Host contract version 1. Implement inside a feature with a public parameterless constructor.</summary>
+public interface IDomainModule
+{
+    /// <summary>Registers this feature's services and options. Must not build a service provider or perform I/O.</summary>
+    void Register(IServiceCollection services, IConfiguration configuration);
+}

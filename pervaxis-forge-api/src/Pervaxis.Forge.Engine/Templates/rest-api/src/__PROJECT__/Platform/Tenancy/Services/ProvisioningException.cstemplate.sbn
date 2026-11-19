@@ -1,3 +1,4 @@
+{{ if model.manifest.tenant_ready }}
 /*
  ************************************************************************
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
@@ -16,9 +17,11 @@
  ************************************************************************
  */
 
-namespace {{ model.names.namespace }}.Models;
+namespace {{ model.names.namespace }}.Platform.Tenancy.Services;
 
-public sealed record {{ model.names.dot_net_class_name }}Request
+/// <summary>A safe administrative error suitable for Problem Details.</summary>
+public sealed class ProvisioningException(int statusCode, string message) : Exception(message)
 {
-    public required string Id { get; init; }
+    public int StatusCode { get; } = statusCode;
 }
+{{ end }}
