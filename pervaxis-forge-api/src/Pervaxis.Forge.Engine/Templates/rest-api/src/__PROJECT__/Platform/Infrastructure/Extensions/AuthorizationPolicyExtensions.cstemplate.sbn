@@ -37,6 +37,9 @@ public static class AuthorizationPolicyExtensions
     /// </summary>
     public const string PlatformAdminPolicy = "PlatformAdmin";
 
+    /// <summary>Reserved bearer-user policy for the current caller's application context.</summary>
+    public const string SelfProfilePolicy = "SelfProfile";
+
     private const string DefaultAdminGroup = "Admin";
     private const string DefaultPlatformAdminGroup = "PlatformAdmin";
     private const string CognitoGroupClaim = "cognito:groups";
@@ -110,6 +113,9 @@ public static class AuthorizationPolicyExtensions
             if (!seenNames.Add(name))
                 throw new InvalidOperationException(
                     $"Policy '{name}' is defined more than once in '{ForgeAuthorizationOptions.SectionName}:Policies' (names are compared without case or surrounding spaces).");
+
+            if (string.Equals(name, SelfProfilePolicy, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"'{SelfProfilePolicy}' is a reserved platform policy.");
 
             var groups = Clean(definition?.Groups);
             var scopes = Clean(definition?.Scopes);

@@ -1,0 +1,205 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using {{ model.names.namespace }}.Platform.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Platform.Models.Configuration;
+using {{ model.names.namespace }}.Platform.Profile;
+using Xunit;
+
+namespace {{ model.names.test_project_name }}.Platform.Profile;
+
+public sealed class MeTests(MeHostFixture host) : IClassFixture<MeHostFixture>
+{
+    [Fact]
+    public async Task Read_ReturnsOnlyApplicationContext_WithoutSelfServiceScope()
+    {
+        using var response = await host.GetAsync(host.CreateToken(extra:
+            "\"cognito:groups\":[\"Users\",\"Admin\",\"Users\"],\"name\":\"Private Name\",\"email\":\"private@example.com\""));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(response.Headers.CacheControl?.NoStore);
+        var context = (await response.Content.ReadFromJsonAsync<MeResponse>())!;
+        Assert.Equal("user-a", context.Subject);
+        Assert.Equal(MeHostFixture.TenantA, context.Tenant.Id);
+        Assert.Equal("Tenant A directory name", context.Tenant.Name);
+        Assert.Equal(new[] { "Admin", "Users" }, context.Roles);
+        using var json = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        Assert.Equal(new[] { "roles", "subject", "tenant" }, json.RootElement.EnumerateObject().Select(value => value.Name).Order());
+    }
+
+    [Fact]
+    public async Task ConcurrentCallers_CannotSelectAnotherUserOrTenant()
+    {
+        var reads = new[]
+        {
+            host.GetAsync(host.CreateToken(), "/api/v1/me?subject=user-b&tenantId=" + MeHostFixture.TenantB, MeHostFixture.TenantB),
+            host.GetAsync(host.CreateToken("\"sub\":\"user-b\",\"username\":\"bob\",",
+                $"\"tenant_id\":\"{MeHostFixture.TenantB}\","), tenantHeader: MeHostFixture.TenantA),
+        };
+        var responses = await Task.WhenAll(reads);
+        try
+        {
+            var a = (await responses[0].Content.ReadFromJsonAsync<MeResponse>())!;
+            var b = (await responses[1].Content.ReadFromJsonAsync<MeResponse>())!;
+            Assert.Equal("user-a", a.Subject);
+            Assert.Equal(MeHostFixture.TenantA, a.Tenant.Id);
+            Assert.Equal("user-b", b.Subject);
+            Assert.Equal(MeHostFixture.TenantB, b.Tenant.Id);
+            Assert.Empty(a.Roles);
+            Assert.Empty(b.Roles);
+        }
+        finally { foreach (var response in responses) response.Dispose(); }
+    }
+
+    [Fact]
+    public async Task MissingBearer_AndIdTokenCannotReadContext()
+    {
+        using var anonymous = await host.GetAsync(null);
+        using var id = await host.GetAsync(host.CreateToken(tokenUse: "id"));
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, id.StatusCode);
+    }
+
+    [Fact]
+    public async Task BothMode_DoesNotPromoteApiKeyToAUserOrFallbackAfterInvalidBearer()
+    {
+        using var key = await host.GetAsync(null, apiKey: true);
+        using var invalid = await host.GetAsync("not-a-jwt", apiKey: true);
+        // The existing admission middleware rejects the key's missing tenant before MVC authorization.
+        Assert.Equal(HttpStatusCode.Forbidden, key.StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, invalid.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("expired")]
+    [InlineData("not-yet-valid")]
+    [InlineData("other-pool")]
+    [InlineData("other-client")]
+    public async Task InvalidBearer_CannotReadContextEvenWithAValidApiKey(string reason)
+    {
+        var token = reason switch
+        {
+            "expired" => host.CreateToken(expiresInMinutes: -20, notBeforeMinutes: -30),
+            "not-yet-valid" => host.CreateToken(notBeforeMinutes: 20, expiresInMinutes: 30),
+            "other-pool" => host.CreateToken(issuer: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_OtherPool"),
+            _ => host.CreateToken(clientId: "other-client"),
+        };
+        using var response = await host.GetAsync(token, apiKey: true);
+        Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("\"username\":\"alice\",", HttpStatusCode.Unauthorized)]
+    [InlineData("\"sub\":\"\",\"username\":\"alice\",", HttpStatusCode.Unauthorized)]
+    [InlineData("\"sub\":\"user-a\",", HttpStatusCode.Unauthorized)]
+    [InlineData("\"sub\":[\"user-a\"],\"username\":\"alice\",", HttpStatusCode.Unauthorized)]
+    [InlineData("\"sub\":\"user-a\",\"sub\":\"user-b\",\"username\":\"alice\",", HttpStatusCode.Forbidden)]
+    [InlineData("\"sub\":\"user-a\",\"username\":[\"alice\"],", HttpStatusCode.Unauthorized)]
+    [InlineData("\"sub\":\"user-a\",\"username\":\"alice\",\"username\":\"bob\",", HttpStatusCode.Forbidden)]
+    [InlineData("\"sub\":\"profile-web-client\",", HttpStatusCode.Unauthorized)]
+    [InlineData("\"sub\":\"profile-web-client\",\"username\":\"machine\",", HttpStatusCode.Unauthorized)]
+    public async Task NonUserOrAmbiguousSubject_IsRejected(string identity, HttpStatusCode expected)
+    {
+        using var response = await host.GetAsync(host.CreateToken(identity));
+        // Core's raw tenant-payload guard can reject duplicate JSON members before MVC runs.
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("\"tenant_id\":\"not-a-guid\",")]
+    [InlineData("\"tenant_id\":[\"3f2504e0-4f89-11d3-9a0c-0305e82c3301\"],")]
+    public async Task InvalidTenant_HasNoFallbackEvenForPlatformAdmin(string tenant)
+    {
+        using var response = await host.GetAsync(host.CreateToken(tenant: tenant, extra: "\"cognito:groups\":[\"PlatformAdmin\"]"));
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData(MeHostFixture.Suspended, HttpStatusCode.Forbidden)]
+    [InlineData(MeHostFixture.Offboarded, HttpStatusCode.Forbidden)]
+    [InlineData(MeHostFixture.Unknown, HttpStatusCode.Forbidden)]
+    [InlineData(MeHostFixture.Unavailable, HttpStatusCode.ServiceUnavailable)]
+    public async Task DirectoryAdmission_AppliesToPlatformAdmin(string tenant, HttpStatusCode expected)
+    {
+        using var response = await host.GetAsync(host.CreateToken(tenant: $"\"tenant_id\":\"{tenant}\",",
+            extra: "\"cognito:groups\":[\"PlatformAdmin\"]"));
+        Assert.Equal(expected, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task CustomGroupClaim_UsesTheSameMappingAsAuthorization()
+    {
+        var custom = new MeHostFixture { GroupClaimType = "application_roles", Scheme = "Bearer" };
+        await custom.InitializeAsync();
+        try
+        {
+            using var response = await custom.GetAsync(custom.CreateToken(extra:
+                "\"application_roles\":[\"Reader\",\"reader\",\"Reader\"],\"cognito:groups\":[\"PlatformAdmin\"]"));
+            Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+            var value = (await response.Content.ReadFromJsonAsync<MeResponse>())!;
+            Assert.Equal(new[] { "Reader", "reader" }, value.Roles);
+        }
+        finally { await custom.DisposeAsync(); }
+    }
+
+    [Fact]
+    public async Task ApiKeyOnlyConfiguration_FailsClosedWithoutMissingHandlerException()
+    {
+        var keyOnly = new MeHostFixture { Scheme = "ApiKey" };
+        await keyOnly.InitializeAsync();
+        try
+        {
+            using var response = await keyOnly.GetAsync(null, apiKey: true);
+            Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+        }
+        finally { await keyOnly.DisposeAsync(); }
+    }
+
+    [Theory]
+    [InlineData("SelfProfile")]
+    [InlineData(" selfprofile ")]
+    public void Configuration_CannotReplaceTheReservedProfilePolicy(string name)
+    {
+        var settings = new ForgeAuthorizationOptions
+        {
+            Policies = { [name] = new ForgePolicyOptions { Groups = ["Users"] } },
+        };
+        Assert.Throws<InvalidOperationException>(() => new AuthorizationOptions().AddForgePolicies(settings, "Cognito"));
+    }
+
+    [Theory]
+    [InlineData("POST")]
+    [InlineData("PATCH")]
+    [InlineData("PUT")]
+    [InlineData("DELETE")]
+    public async Task ProfileHasNoWriteRoute(string method)
+    {
+        using var request = new HttpRequestMessage(new HttpMethod(method), "/api/v1/me");
+        request.Headers.Authorization = new("Bearer", host.CreateToken());
+        using var response = await host.Client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+}
+{{ end }}

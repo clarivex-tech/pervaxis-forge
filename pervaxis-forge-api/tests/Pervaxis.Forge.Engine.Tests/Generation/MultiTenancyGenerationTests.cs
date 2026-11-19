@@ -126,7 +126,11 @@ public class MultiTenancyGenerationTests
         files.Keys.Should().NotContain(k => k.EndsWith("/TenantMiddleware.cs", StringComparison.Ordinal));
         files.Keys.Should().NotContain(k => k.EndsWith("/Platform/Infrastructure/Tenancy/ITenantContext.cs", StringComparison.Ordinal));
         files.Keys.Should().NotContain(k => k.EndsWith("/Platform/Infrastructure/Tenancy/TenantContext.cs", StringComparison.Ordinal));
-        files.Values.Should().NotContain(v => v.Contains("X-Tenant-ID", StringComparison.OrdinalIgnoreCase) && !v.Contains("ignored", StringComparison.OrdinalIgnoreCase)
+        // Production tenant resolution must never read caller-supplied headers. Documentation
+        // and security tests can name/send that header to prove it cannot override signed claims.
+        files.Where(file => file.Key.StartsWith("src/", StringComparison.Ordinal)
+            && file.Key.EndsWith(".cs", StringComparison.Ordinal)).Select(file => file.Value)
+            .Should().NotContain(v => v.Contains("X-Tenant-ID", StringComparison.OrdinalIgnoreCase) && !v.Contains("ignored", StringComparison.OrdinalIgnoreCase)
             || v.Contains("TenantMiddleware", StringComparison.Ordinal));
     }
 

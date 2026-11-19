@@ -11,6 +11,7 @@ This folder holds **copy-and-adapt examples** for the platform features this ser
 - [Portability.md](Portability.md): feature contracts, discovery, dependencies, configuration and safe upgrades
 
 - [`Authentication.md`](Authentication.md): Cognito and other OIDC providers, policies and admin groups
+- [Self-profile](SelfProfile.md): caller context, Cognito self-service prerequisites and separate security decisions
 {{- if model.manifest.database != null }}
 - [`Database.md`](Database.md): PostgreSQL settings, password rotation, health checks, tables and EF migrations
 {{- end }}
