@@ -31,8 +31,8 @@ using Pervaxis.Core.Abstractions.MultiTenancy;
 using Pervaxis.Core.Data.EntityFrameworkCore;
 using Pervaxis.Core.MultiTenancy;
 using {{ model.names.namespace }}.Data.Tenancy;
-using {{ model.names.namespace }}.Infrastructure.Tenancy;
-using {{ model.names.namespace }}.Services.Tenancy;
+using {{ model.names.namespace }}.Platform.Tenancy.Services;
+using {{ model.names.namespace }}.Platform.Tenancy;
 {{- end }}
 {{- if model.manifest.has_messaging }}
 using {{ model.names.namespace }}.Infrastructure.Outbox;
@@ -383,4 +383,3 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check 
 app.MapControllers().RequireAuthorization();
 
 app.Run();
-

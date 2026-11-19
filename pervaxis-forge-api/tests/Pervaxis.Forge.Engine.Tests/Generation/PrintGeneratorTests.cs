@@ -61,10 +61,10 @@ public class PrintGeneratorTests
         entries.Should().Contain("manifest.json");
         entries.Should().Contain($"{src}/Program.cs");
         entries.Should().Contain($"{src}/Extensions/ServiceCollectionExtensions.cs");
-        entries.Should().Contain($"{src}/Controllers/Controller.cs");
-        entries.Should().Contain($"{src}/Services/IService.cs");
-        entries.Should().Contain($"{src}/Models/Request.cs");
-        entries.Should().Contain($"{src}/Models/Response.cs");
+        entries.Should().Contain($"{src}/Platform/Meta/LegacyScaffoldController.cs");
+        entries.Should().Contain($"{src}/Contracts/V1/IDomainModule.cs");
+        entries.Should().Contain($"{src}/Infrastructure/Domains/DomainModuleExtensions.cs");
+        entries.Should().Contain($"{src}/Platform/Meta/MetaController.cs");
         entries.Should().Contain("Dockerfile");
         entries.Should().Contain($"{src}/appsettings.json");
         entries.Should().Contain($"{src}/appsettings.Development.json");
@@ -129,7 +129,7 @@ public class PrintGeneratorTests
                 Console.WriteLine($"  {file}");
 
             files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Program.cs");
-            files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Controllers/Controller.cs");
+            files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Platform/Meta/LegacyScaffoldController.cs");
             files.Should().Contain("src/Pervaxis.Clarivolt.Intake/Pervaxis.Clarivolt.Intake.csproj");
             files.Should().Contain("tests/Pervaxis.Clarivolt.Intake.Tests/TestBase.cs");
             files.Should().Contain("tests/Pervaxis.Clarivolt.Intake.Tests/Pervaxis.Clarivolt.Intake.Tests.csproj");

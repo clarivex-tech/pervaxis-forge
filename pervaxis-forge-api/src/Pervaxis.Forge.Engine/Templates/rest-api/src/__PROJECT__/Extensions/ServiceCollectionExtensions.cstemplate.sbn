@@ -16,9 +16,10 @@
  ************************************************************************
  */
 
+using Pervaxis.Forge.Contracts.V1;
 using {{ model.names.namespace }}.Infrastructure.Extensions;
 using {{ model.names.namespace }}.Infrastructure.Http;
-using {{ model.names.namespace }}.Services;
+using {{ model.names.namespace }}.Infrastructure.Domains;
 
 namespace {{ model.names.namespace }}.Extensions;
 
@@ -28,10 +29,11 @@ public static class ServiceCollectionExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
-        services.AddScoped<I{{ model.names.dot_net_class_name }}, {{ model.names.dot_net_class_name }}Service>();
+        services.AddScoped<IDomainQueries, DomainQueries>();
+        services.AddForgeDomains(configuration);
 
         // HTTP client with full DelegatingHandler chain:
-        // CorrelationId → JwtPropagation → HttpLogging → Resilience (retry + circuit breaker + timeout)
+        // CorrelationId -> JwtPropagation -> HttpLogging -> Resilience (retry + circuit breaker + timeout)
         // Handlers whose feature is switched off for this service are left out of the chain.
         services.AddHttpClient<IForgeInternalHttpClient, ForgeInternalHttpClient>()
 {{- if model.manifest.observability == null || model.manifest.observability.correlation_id_enabled }}

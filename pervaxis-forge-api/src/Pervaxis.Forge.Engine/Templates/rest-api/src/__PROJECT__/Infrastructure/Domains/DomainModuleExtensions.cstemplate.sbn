@@ -1,0 +1,54 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Pervaxis.Forge.Contracts.V1;
+
+namespace {{ model.names.namespace }}.Infrastructure.Domains;
+
+/// <summary>Discovers modules in the host assembly once. No references to feature implementations belong here.</summary>
+public static class DomainModuleExtensions
+{
+    public static IServiceCollection AddForgeDomains(this IServiceCollection services, IConfiguration configuration)
+    {
+        ArgumentNullException.ThrowIfNull(services);
+        ArgumentNullException.ThrowIfNull(configuration);
+        if (services.Any(descriptor => descriptor.ServiceType == typeof(DomainModulesRegistered)))
+            return services;
+
+        var modules = typeof(DomainModuleExtensions).Assembly.GetTypes()
+            .Where(type => typeof(IDomainModule).IsAssignableFrom(type) && type.IsClass && !type.IsAbstract)
+            .OrderBy(type => type.FullName, StringComparer.Ordinal)
+            .ToArray();
+
+        foreach (var type in modules)
+        {
+            if (!type.IsPublic || type.ContainsGenericParameters || type.GetConstructor(Type.EmptyTypes) is null)
+                throw new InvalidOperationException($"Domain module {type.FullName} must be public, concrete and have a public parameterless constructor.");
+        }
+
+        foreach (var type in modules)
+            ((IDomainModule)Activator.CreateInstance(type)!).Register(services, configuration);
+
+        services.TryAddSingleton<DomainModulesRegistered>();
+        return services;
+    }
+
+    private sealed class DomainModulesRegistered;
+}

@@ -20,9 +20,9 @@ The initial tenant GUID is supplied during generation and shared across related 
 
 ## The tenants table
 
-`Data/Tenancy/Tenant.cs` is the master table (`tenants`): id, name, status, created and updated time.
+`Platform/Tenancy/Data/Tenant.cs` is the master table (`tenants`): id, name, status, created and updated time.
 
-- The first tenant is created by Forge. Its id is in `Data/Tenancy/TenantDefaults.cs` and in
+- The first tenant is created by Forge. Its id is in `Platform/Tenancy/Data/TenantDefaults.cs` and in
   `Forge:Tenant:DefaultTenantId`, and the `AddTenants` migration inserts it. Do not change that id after the migration has run.
 - Status is `Active`, `Suspended` or `Offboarded`. Only `Active` tenants are served.
 - Every tenant-protected request checks the table (`Forge:Tenant:EnableDirectoryChecks`, on by default).
@@ -34,7 +34,7 @@ Until the table exists, tenant-protected endpoints return 503. Health endpoints 
 
 ## Tenant management API
 
-`Controllers/TenantsController.cs`, all under `api/v1/tenants`:
+`Platform/Tenancy/Controllers/TenantsController.cs`, all under `api/v1/tenants`:
 
 | Call | What it does |
 |---|---|

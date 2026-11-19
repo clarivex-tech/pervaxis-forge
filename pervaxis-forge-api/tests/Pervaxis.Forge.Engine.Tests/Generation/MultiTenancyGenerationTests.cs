@@ -169,7 +169,7 @@ public class MultiTenancyGenerationTests
     {
         var files = await GenerateAsync(Manifest(multiTenancy));
 
-        var defaults = Single(files, "/Data/Tenancy/TenantDefaults.cs");
+        var defaults = Single(files, "/Platform/Tenancy/Data/TenantDefaults.cs");
         var id = System.Text.RegularExpressions.Regex.Match(defaults, "DefaultTenantId = \"([0-9a-f-]{36})\"").Groups[1].Value;
 
         Guid.TryParse(id, out var parsed).Should().BeTrue();
@@ -183,8 +183,8 @@ public class MultiTenancyGenerationTests
     [Fact]
     public async Task RelatedPrints_ReuseTheProvidedTenantId()
     {
-        var first = Single(await GenerateAsync(Manifest(multiTenancy: true)), "/Data/Tenancy/TenantDefaults.cs");
-        var second = Single(await GenerateAsync(Manifest(multiTenancy: true)), "/Data/Tenancy/TenantDefaults.cs");
+        var first = Single(await GenerateAsync(Manifest(multiTenancy: true)), "/Platform/Tenancy/Data/TenantDefaults.cs");
+        var second = Single(await GenerateAsync(Manifest(multiTenancy: true)), "/Platform/Tenancy/Data/TenantDefaults.cs");
 
         first.Should().Be(second);
     }

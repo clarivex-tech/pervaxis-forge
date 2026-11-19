@@ -22,7 +22,7 @@ using Pervaxis.Core.Abstractions.MultiTenancy;
 using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Data.Tenancy;
 
-namespace {{ model.names.namespace }}.Infrastructure.Tenancy;
+namespace {{ model.names.namespace }}.Platform.Tenancy;
 
 /// <summary>
 /// Answers "does this tenant exist and is it active?" from the tenants table. Core calls it for every

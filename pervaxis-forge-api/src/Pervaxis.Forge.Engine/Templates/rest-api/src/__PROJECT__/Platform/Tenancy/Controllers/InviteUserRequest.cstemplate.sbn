@@ -17,11 +17,11 @@
  ************************************************************************
  */
 
-namespace {{ model.names.namespace }}.Services.Tenancy;
+namespace {{ model.names.namespace }}.Platform.Tenancy.Controllers;
 
-/// <summary>A safe administrative error suitable for Problem Details.</summary>
-public sealed class ProvisioningException(int statusCode, string message) : Exception(message)
+/// <summary>Tenant comes from the authorized route. Arbitrary attributes and roles are not accepted.</summary>
+public sealed record InviteUserRequest
 {
-    public int StatusCode { get; } = statusCode;
+    public required string Email { get; init; }
 }
 {{ end }}

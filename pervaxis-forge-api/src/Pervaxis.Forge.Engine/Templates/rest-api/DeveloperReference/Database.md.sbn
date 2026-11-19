@@ -63,69 +63,14 @@ Limits:
 
 ## Adding tables
 
-Add an entity and a configuration class in your feature folder. The platform finds every `IEntityTypeConfiguration<T>` in the project, so you never edit the platform DbContext to add a table.
-
-```csharp
-// Domains/Billing/Data/InvoiceEntity.cs
-namespace {{ model.names.namespace }}.Domains.Billing.Data;
-
-public sealed class InvoiceEntity
-{
-    public required Guid Id { get; set; }
-    public required string Number { get; set; }
-    public required DateTimeOffset CreatedAt { get; set; }
-}
-```
-
-```csharp
-// Domains/Billing/Data/InvoiceConfiguration.cs
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Metadata.Builders;
-
-namespace {{ model.names.namespace }}.Domains.Billing.Data;
-
-public sealed class InvoiceConfiguration : IEntityTypeConfiguration<InvoiceEntity>
-{
-    public void Configure(EntityTypeBuilder<InvoiceEntity> builder)
-    {
-        builder.ToTable("invoices");
-        builder.HasKey(e => e.Id);
-        builder.Property(e => e.Number).HasMaxLength(50).IsRequired();
-        builder.HasIndex(e => e.Number).IsUnique();
-    }
-}
-```
-
-The DbContext is a `partial` class, so you can add a `DbSet` from your own file:
-
-```csharp
-// Domains/Billing/Data/{{ model.names.dot_net_class_name }}DbContext.Billing.cs
-using Microsoft.EntityFrameworkCore;
-
-namespace {{ model.names.namespace }}.Data;
-
-public partial class {{ model.names.dot_net_class_name }}DbContext
-{
-    public DbSet<InvoiceEntity> Invoices => Set<InvoiceEntity>();
-}
-```
-
-Services take the DbContext through the constructor and keep queries inside the service layer:
-
-```csharp
-public sealed class InvoiceService({{ model.names.dot_net_class_name }}DbContext dbContext)
-{
-    public Task<InvoiceEntity?> FindAsync(Guid id, CancellationToken cancellationToken) =>
-        dbContext.Invoices.AsNoTracking().FirstOrDefaultAsync(i => i.Id == id, cancellationToken);
-}
-```
+Put entities and IEntityTypeConfiguration classes inside Domains/<Feature>. Use stable namespaces and explicit table names. The host discovers configurations automatically. Use the tenant repository and unit-of-work contracts rather than the generated concrete DbContext in portable business code. Simple CRUD may access repositories directly; services are optional. See [TenancyQuickStart.md](TenancyQuickStart.md) for tenant-safe examples and [Portability.md](Portability.md) for empty versus existing database upgrade procedures.
 
 ## Migrations (EF Core)
 
 Run these from the solution folder. Install the tool once with `dotnet tool install --global dotnet-ef`.
 
 ```powershell
-# 1. After changing entities, create a migration
+# 1. Preserve the existing migration chain and snapshot first (see Portability.md). Then append a migration for intentional changes.
 dotnet ef migrations add AddInvoices --project src/{{ model.names.namespace }} --output-dir Data/Migrations
 
 # 2. Produce the SQL the pipeline applies (safe to run more than once)

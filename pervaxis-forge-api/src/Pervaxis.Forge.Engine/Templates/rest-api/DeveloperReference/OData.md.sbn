@@ -47,7 +47,7 @@ using Pervaxis.Genesis.OData.Options;
 using Pervaxis.Genesis.OData.Results;
 using Pervaxis.Genesis.OData.Services;
 
-namespace {{ model.names.namespace }}.Domains.Products.Controllers;
+namespace Company.Product.Domains.Products.Controllers;
 
 [ApiController]
 [Route("api/v1/products")]
@@ -76,14 +76,14 @@ public sealed class ProductsController(IProductService service) : ControllerBase
 using Microsoft.EntityFrameworkCore;
 using Pervaxis.Genesis.OData.Results;
 {{- if model.manifest.database != null }}
-using {{ model.names.namespace }}.Data;
+using Pervaxis.Forge.Contracts.V1;
 {{- end }}
 
-namespace {{ model.names.namespace }}.Domains.Products.Services;
+namespace Company.Product.Domains.Products.Services;
 
 {{ if model.manifest.database != null -}}
 // Product is a tenant-owned entity (TenantEntity<Guid>); see TenancyQuickStart.md.
-public sealed class ProductService({{ model.names.dot_net_class_name }}DbContext dbContext) : IProductService
+public sealed class ProductService(IDomainQueries queries) : IProductService
 {{- else -}}
 // Replace dbContext with your data source.
 public sealed class ProductService(YourDataContext dbContext) : IProductService
@@ -93,7 +93,7 @@ public sealed class ProductService(YourDataContext dbContext) : IProductService
         int skip, int top, bool includeCount, CancellationToken cancellationToken)
     {
         // Always order before Skip/Take so pages are stable.{{ if model.manifest.database != null }} The tenant filter applies: only the current tenant's rows are counted and listed.{{ end }}
-        var query = dbContext.Set<Product>().AsNoTracking().OrderBy(p => p.Id);
+        var query = queries.Query<Product>().OrderBy(p => p.Id);
 
         long? total = includeCount ? await query.LongCountAsync(cancellationToken) : null;
 
@@ -137,7 +137,7 @@ A non-numeric `$top` or `$skip` (for example `$top=all`) is **ignored**, and the
 ## Tenancy
 
 {{- if model.manifest.tenant_ready }}
-OData lists are tenant-safe because they query `{{ model.names.dot_net_class_name }}DbContext`: every row and the count come only from the current tenant.
+OData lists use `IDomainQueries`, backed by the tenant-aware host context: every row and the count come only from the current tenant.
 Never call `IgnoreQueryFilters()` in a list query. The package's `EnableTenantIsolation` setting does not filter rows; the DbContext does.
 {{- else }}
 This service has no database, so no tenant filter applies. If a list holds data of several customers, filter it yourself.

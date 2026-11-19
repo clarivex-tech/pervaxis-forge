@@ -21,12 +21,12 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Pervaxis.Core.MultiTenancy;
 using {{ model.names.namespace }}.Infrastructure.Extensions;
-using {{ model.names.namespace }}.Services.Tenancy;
+using {{ model.names.namespace }}.Platform.Tenancy.Services;
 
-namespace {{ model.names.namespace }}.Controllers;
+namespace {{ model.names.namespace }}.Platform.Tenancy.Controllers;
 
 /// <summary>Body of <c>POST api/v1/tenants</c> and <c>PATCH api/v1/tenants/{id}</c>.</summary>
-public sealed record TenantNameRequest(string Name);
+
 
 /// <summary>
 /// Tenant management: list, create, rename, suspend, reactivate and offboard tenants.

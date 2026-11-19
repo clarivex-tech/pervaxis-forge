@@ -124,7 +124,7 @@ public class DocumentationLinkTests
         files.Keys.Should().Contain(".claude/guides/TENANCY_RULES.md");
 
         var guide = files["FORGE_DEVELOPER_GUIDE.md"];
-        guide.Should().Contain(": TenantEntity<Guid>").And.Contain("ITenantContext");
+        guide.Should().Contain("DeveloperReference/Portability.md").And.Contain("TenancyQuickStart.md");
         guide.Should().NotContain("GetDashboardAsync(string tenantId", "the tenant must never be a method parameter");
     }
 

@@ -24,7 +24,7 @@ using Pervaxis.Core.MultiTenancy;
 using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Data.Tenancy;
 
-namespace {{ model.names.namespace }}.Services.Tenancy;
+namespace {{ model.names.namespace }}.Platform.Tenancy.Services;
 
 /// <summary>A tenant as returned by tenant management.</summary>
 public sealed record TenantSummary(Guid Id, string Name, TenantStatus Status, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);

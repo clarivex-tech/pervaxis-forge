@@ -33,13 +33,14 @@ using Pervaxis.Core.Abstractions.MultiTenancy;
 using Pervaxis.Core.Data.EntityFrameworkCore;
 using Pervaxis.Core.Exceptions.Exceptions;
 using Pervaxis.Core.MultiTenancy;
-using {{ model.names.namespace }}.Controllers;
+using {{ model.names.namespace }}.Platform.Tenancy.Controllers;
 using {{ model.names.namespace }}.Data;
 using {{ model.names.namespace }}.Data.Tenancy;
 using {{ model.names.namespace }}.Infrastructure.Extensions;
-using {{ model.names.namespace }}.Infrastructure.Tenancy;
+
 using {{ model.names.namespace }}.Models.Configuration;
-using {{ model.names.namespace }}.Services.Tenancy;
+using {{ model.names.namespace }}.Platform.Tenancy.Services;
+using {{ model.names.namespace }}.Platform.Tenancy;
 using Xunit;
 
 namespace {{ model.names.test_project_name }};

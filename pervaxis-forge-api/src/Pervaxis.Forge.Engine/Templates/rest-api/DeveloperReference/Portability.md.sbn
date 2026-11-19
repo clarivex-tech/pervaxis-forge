@@ -1,0 +1,57 @@
+# Business slices and print upgrades
+
+Business code belongs in `src/{{ model.names.namespace }}/Domains/<Feature>/`. Copy a feature folder unchanged into a compatible fresh print: no edits to Program, DI extensions, the DbContext or MVC setup are needed.
+
+## Compatibility boundary (version 1)
+
+Use a stable namespace independent of the generated host name, for example `Company.Product.Domains.Billing`. The host supplies `Pervaxis.Forge.Contracts.V1.IDomainModule`, the read-only `IDomainQueries.Query<TEntity>()` LINQ contract, ASP.NET Core MVC, FluentValidation, EF Core configurations, and (tenant-ready prints) Core 1.8 repository/unit-of-work and tenant contracts. Do not reference the generated concrete DbContext, Program, platform implementations, or another slice's implementation. Cross-slice calls use separately owned versioned contracts (in `Contracts/` or a versioned package), injected through DI; publish events where appropriate. Do not copy duplicate host contract definitions into a slice.
+
+Compatibility means the same contract major version, database provider, tenancy model, required validation toggle, framework and compatible package APIs. Compare `SCAFFOLD_VERSION.md`, both manifests and central package versions before copying. V1 contracts remain source compatible; breaking changes require a new contract namespace and an explicit migration. Source namespaces and explicit table/column names must remain stable even when the receiving service name differs.
+
+## A feature owns its registration
+
+Create `Domains/Billing/BillingModule.cs`:
+
+```csharp
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Pervaxis.Forge.Contracts.V1;
+
+namespace Company.Product.Domains.Billing;
+
+public sealed class BillingModule : IDomainModule
+{
+    public void Register(IServiceCollection services, IConfiguration configuration)
+    {
+        services.AddScoped<IInvoiceService, InvoiceService>();
+        // Bind feature options from Domains:Billing; validate required settings on start.
+    }
+}
+```
+
+Modules must be public concrete types with a public parameterless constructor. Registration runs once per service collection, in ordinal full-name order, without constructing a provider or performing I/O. Do not rely on module order for cross-feature dependencies. MVC discovers public controllers, FluentValidation discovers public validators when enabled, and the single host context applies `IEntityTypeConfiguration<T>` automatically from this assembly. This supports source folders compiled into the host; external plugin assemblies require a separate integration design.
+
+Use one request record per file. Co-locate controllers, models, validators, data configurations, optional services and tests within the feature's ownership. Simple CRUD controllers may inject `IRepository<TEntity, Guid>` and `IUnitOfWork` directly. Use IDomainQueries for untracked LINQ projections/pagination through the tenant-aware context; never disable filters or issue bulk/raw commands on tenant-owned data. Use services for reusable business rules and orchestration; neither approach is mandatory. Keep transaction, validation and error behavior consistent within a feature. Avoid host-specific partial DbContexts and DbSet properties in portable slices.
+
+Use explicit business routes such as `api/v1/billing/invoices`, independent of the host service slug. Preserve published routes during upgrades. Platform exceptions are deliberate: `/meta`, `/health`, `/health/ready`, and `/api/v1/tenants` (including user administration) keep their existing routes and security policies. The original generic scaffold `GET {{ model.names.api_base_route }}/{id}` is retained as a 501 compatibility endpoint; it no longer fabricates business records.
+
+## Dependencies and configuration
+
+Each feature should include an upgrade README listing required package IDs/version ranges, contract majors, manifest toggles/Genesis modules, configuration keys, permissions, migrations and tests. Add explicit package references and reconcile `Directory.Packages.props` with the fresh print; restore with locked versions in CI. These are declared upgrade steps, not handwritten host wiring. Merge feature options and environment/secret references into configuration; keep new platform defaults, never copy old settings wholesale or commit credentials. Do not change seed tenant IDs or seed timestamps on an existing deployment.
+
+## Upgrade an existing deployment
+
+1. Back up the database and retain the deployed artifact, manifest and applied migration inventory. Generate a new print with the same tenancy, provider and seed identity. Compare contracts, packages and platform behavior before copying.
+2. Copy `Domains/<Feature>/` and its tests unchanged. Copy separately owned shared contract sources/packages once. Port legacy layered business code into a slice once, replacing concrete host references with contracts and module registration.
+3. **Preserve the complete existing `Data/Migrations/` chain, every designer file and the latest model snapshot.** Replace the fresh print's starter migration directory with that deployed lineage, including applied business migrations. Do not merge two baseline histories. Retain migration IDs, target models and snapshot model identities. Do not rename entity namespaces as part of moving files; platform tenancy entity files retain their legacy namespaces for precisely this reason.
+4. Build and run tests. Run `dotnet ef migrations has-pending-model-changes --project src/{{ model.names.namespace }}` before intentional model changes. A file move alone must produce no model drift. For host namespace renames, review and adapt context references in migration metadata while preserving IDs and entity model names; prove no DDL change before proceeding.
+5. For intentional schema/platform differences, add a new migration after the preserved tip, review Up/Down and generated SQL, and test against a restored copy of the existing database. Never delete, regenerate, reorder or rewrite an applied migration or replace its snapshot with the fresh starter snapshot. Never generate a fresh baseline over existing tables. If the existing database has no trustworthy history, stop and design an explicit reconciliation with its owner.
+6. Review an idempotent SQL script or migration bundle, test data retention and tenant isolation, then apply through the deployment pipeline with rollback/restore planning. Application startup must not apply migrations. No database operation is needed to discover modules.
+
+## A genuinely empty database
+
+Use the one chosen service lineage (starter platform migrations plus appended business migrations) and apply its full chain. Do not copy starter migrations from another independent print. `EnsureCreated` is for disposable tests only; never mix it with production migrations. Adding a new feature to an existing deployment follows the existing-deployment procedure above, even if that feature has no rows yet.
+
+## Verify portability
+
+Build/test the fresh print after copying; verify module services resolve, MVC endpoints execute, invalid DTOs fail validation, EF configurations are present, and tenant A cannot access tenant B's rows. Run the architecture checks and pending-model check. EF-generated migrations and model metadata intentionally reference entity types and are exempt from the runtime host-to-slice dependency rule. See [Database.md](Database.md) and [TenancyQuickStart.md](TenancyQuickStart.md).

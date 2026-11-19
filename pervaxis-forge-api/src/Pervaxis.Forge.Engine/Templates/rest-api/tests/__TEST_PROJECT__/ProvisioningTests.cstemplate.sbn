@@ -21,14 +21,14 @@ using Amazon.CognitoIdentityProvider.Model;
 using System.Reflection;
 using Microsoft.AspNetCore.Authorization;
 using Pervaxis.Core.MultiTenancy;
-using {{ model.names.namespace }}.Controllers;
+using {{ model.names.namespace }}.Platform.Tenancy.Controllers;
 using {{ model.names.namespace }}.Infrastructure.Extensions;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Moq;
 using Pervaxis.Core.Abstractions.MultiTenancy;
 using {{ model.names.namespace }}.Models.Configuration;
-using {{ model.names.namespace }}.Services.Tenancy;
+using {{ model.names.namespace }}.Platform.Tenancy.Services;
 using Xunit;
 
 namespace {{ model.names.test_project_name }};
