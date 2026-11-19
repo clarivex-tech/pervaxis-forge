@@ -1,0 +1,96 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { Injectable, Provider, computed, inject{{ if !model.angular_cognito_enabled }}, signal{{ end }} } from '@angular/core';
+import { CanActivateFn, Routes, Router, UrlTree } from '@angular/router';
+import { DOMAIN_HTTP, DOMAIN_IDENTITY, DOMAIN_OPTIONS, DOMAIN_REGISTRATIONS, DOMAIN_SESSION_STATE,
+  DomainHttpV1, DomainSessionStateV1, UiDomainManifestV1, UiDomainRegistrationV1 } from '@forge/ui-contracts/v1';
+import { ApiService } from '../core/services/api.service';
+{{ if model.angular_cognito_enabled }}
+import { AuthService } from '../core/auth/auth.service';
+import { TenantContextService } from '../core/auth/tenant-context.service';
+import { SessionStateRegistry } from '../core/auth/session-state';
+{{ end }}
+
+/** The same policy protects lazy loading, child activation and visible navigation. API enforcement remains authoritative. */
+async function checkAccess(manifest: UiDomainManifestV1, url: string): Promise<boolean | UrlTree> {
+{{ if model.angular_cognito_enabled }}
+  const auth = inject(AuthService);
+  const tenant = inject(TenantContextService);
+  const router = inject(Router);
+  if (!(await auth.ensureSession())) return router.createUrlTree(['/login'], { queryParams: { returnUrl: url } });
+  if (tenant.claimStatus() !== 'valid') return router.createUrlTree(['/access-denied'], { queryParams: { reason: 'no-tenant' } });
+  if (!manifest.permissions.every(permission => auth.hasPermission(permission))) {
+    return router.createUrlTree(['/access-denied'], { queryParams: { reason: 'permission' } });
+  }
+{{ end }}
+  return true;
+}
+
+export function domainAccess(manifest: UiDomainManifestV1): CanActivateFn {
+  return (_route, state) => checkAccess(manifest, state.url);
+}
+
+export function createDomainRoutes(registrations: readonly UiDomainRegistrationV1[]): Routes {
+  return registrations.map(registration => {
+    const guard = domainAccess(registration.manifest);
+    return {
+      path: registration.manifest.id,
+      canMatch: [(_route, segments) => {
+        const router = inject(Router);
+        const url = router.currentNavigation()?.extractedUrl.toString() ?? '/' + segments.map(segment => segment.toString()).join('/');
+        return checkAccess(registration.manifest, url);
+      }],
+      canActivate: [guard], canActivateChild: [guard],
+      providers: [{ provide: DOMAIN_OPTIONS, useValue: registration.options }],
+      loadChildren: registration.loadRoutes,
+      data: { domainId: registration.manifest.id, title: registration.manifest.displayName },
+    };
+  });
+}
+
+export function domainProviders(registrations: readonly UiDomainRegistrationV1[]): Provider[] {
+  return [
+    { provide: DOMAIN_REGISTRATIONS, useValue: registrations },
+    { provide: DOMAIN_HTTP, useFactory: (): DomainHttpV1 => inject(ApiService) },
+{{ if model.angular_cognito_enabled }}
+    { provide: DOMAIN_SESSION_STATE, useFactory: (): DomainSessionStateV1 => inject(SessionStateRegistry) },
+    { provide: DOMAIN_IDENTITY, useFactory: () => {
+      const auth = inject(AuthService); const tenant = inject(TenantContextService);
+      return { isAuthenticated: auth.isAuthenticated, roles: auth.roles, tenantId: tenant.currentTenantId };
+    } },
+{{ else }}
+    { provide: DOMAIN_SESSION_STATE, useValue: { registerUntilDestroyed: () => undefined } },
+    { provide: DOMAIN_IDENTITY, useFactory: () => ({ isAuthenticated: signal(false).asReadonly(), roles: signal<readonly string[]>([]).asReadonly(), tenantId: signal<string | null>(null).asReadonly() }) },
+{{ end }}
+  ];
+}
+
+@Injectable({ providedIn: 'root' })
+export class DomainNavigationService {
+  private readonly registrations = inject(DOMAIN_REGISTRATIONS);
+{{ if model.angular_cognito_enabled }}
+  private readonly auth = inject(AuthService);
+  private readonly tenant = inject(TenantContextService);
+{{ end }}
+  readonly items = computed(() => this.registrations
+{{ if model.angular_cognito_enabled }}
+    .filter(({ manifest }) => this.auth.isAuthenticated() && this.tenant.claimStatus() === 'valid'
+      && manifest.permissions.every(permission => this.auth.hasPermission(permission)))
+{{ end }}
+    .map(({ manifest }) => ({ label: manifest.displayName, icon: manifest.icon, routerLink: '/' + manifest.id })));
+}

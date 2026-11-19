@@ -63,7 +63,7 @@ public sealed class ProvisioningGenerationTests
         }
         else
         {
-            var routes = File("/app.routes.ts");
+            var routes = File("/platform.routes.ts");
             Assert.Contains("path: 'admin/tenants'", routes);
             Assert.Contains("permissionGuard('PlatformAdmin')", routes);
             Assert.Contains("resend-invitation", File("/administration.service.ts"));

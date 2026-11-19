@@ -1,0 +1,53 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+// Explicit local integration proof. Install both prints' declared packages before invoking this tool.
+import fs from 'node:fs';
+import path from 'node:path';
+import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
+import assert from 'node:assert/strict';
+import { prepareDomains } from './domain-tool.mjs';
+const [sourceArg, destinationArg, domainId] = process.argv.slice(2);
+if (!sourceArg || !destinationArg || !/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(domainId ?? '')) throw new Error('Usage: node scripts/verify-copy.mjs <source-print> <fresh-print> <domain-id>');
+const source = fs.realpathSync(sourceArg), destination = fs.realpathSync(destinationArg);
+if (source === destination) throw new Error('Use two separate generated prints');
+const readHost = root => JSON.parse(fs.readFileSync(path.join(root, 'ui-platform.json'), 'utf8').replace(/^\uFEFF/, ''));
+const sourceHost = readHost(source), destinationHost = readHost(destination);
+if (sourceHost.contractVersion !== destinationHost.contractVersion || sourceHost.security !== destinationHost.security) throw new Error('Incompatible contract majors or security modes');
+const app = (root, host) => { const value = path.resolve(root, host.appRoot); if (!value.startsWith(root + path.sep)) throw new Error('Invalid appRoot'); return value; };
+const sourceApp = app(source, sourceHost), destinationApp = app(destination, destinationHost);
+const from = path.join(sourceApp, 'domains', domainId), to = path.join(destinationApp, 'domains', domainId);
+if (fs.existsSync(to)) throw new Error('Destination domain already exists; refusing to overwrite it');
+const inventory = dir => Object.fromEntries(fs.readdirSync(dir, { recursive: true, withFileTypes: true }).filter(entry => entry.isFile()).map(entry => {
+  const file = path.join(entry.parentPath, entry.name);
+  return [path.relative(dir, file), createHash('sha256').update(fs.readFileSync(file)).digest('hex')];
+}).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0));
+const platformBefore = inventory(path.join(destinationApp, 'platform'));
+prepareDomains(source);
+const build = root => {
+  const result = spawnSync(process.execPath, [path.join(root, 'node_modules/@angular/cli/bin/ng.js'), 'build', '--configuration', 'production'], { cwd: root, stdio: 'inherit' });
+  if (result.status !== 0) throw new Error('Angular build failed: ' + root);
+};
+build(source);
+fs.mkdirSync(path.dirname(to), { recursive: true }); fs.cpSync(from, to, { recursive: true, errorOnExist: true });
+assert.deepEqual(inventory(to), inventory(from), 'Copied domain contents must be unchanged');
+const registrations = prepareDomains(destination);
+assert.ok(registrations.some(domain => domain.manifest.id === domainId), 'Receiving print must discover copied domain');
+build(destination);
+assert.deepEqual(inventory(path.join(destinationApp, 'platform')), platformBefore, 'Portability must not edit platform sources');
+console.log('PASS: copied domain unchanged, both production builds succeeded, receiving platform files unchanged. Run the receiving Angular tests for route/navigation and guard behavior.');

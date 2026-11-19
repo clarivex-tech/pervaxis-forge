@@ -1,0 +1,39 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { ChangeDetectionStrategy, Component, OnInit, inject } from '@angular/core';
+import { ButtonModule } from 'primeng/button';
+import { WorkItemsService } from '../services/work-items.service';
+
+@Component({
+  selector: 'domain-work-items', standalone: true, imports: [ButtonModule],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  template: `
+    <section aria-labelledby="work-items-title" [attr.aria-busy]="state.busy()">
+      <h1 id="work-items-title">Work items</h1>
+      <p>This business domain owns its routes, models, services and tests.</p>
+      <p-button label="Refresh work items" (onClick)="state.load()" [disabled]="state.busy()" />
+      @if (state.error()) { <p role="alert" [textContent]="state.error()"></p> }
+      @if (state.busy()) { <p role="status">Loading work items...</p> }
+      <ul>@for (item of state.items(); track item.id) { <li [textContent]="item.title"></li> }</ul>
+    </section>
+  `,
+})
+export class WorkItemsComponent implements OnInit {
+  readonly state = inject(WorkItemsService);
+  ngOnInit(): void { void this.state.load(); }
+}

@@ -1,0 +1,28 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { spawn } from 'node:child_process';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { prepareDomains } from './domain-tool.mjs';
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+prepareDomains(root);
+const child = spawn(process.execPath, [path.join(root, 'node_modules/@angular/cli/bin/ng.js'), 'serve', ...process.argv.slice(2)], { cwd: root, stdio: 'inherit' });
+// Angular watches source changes. Poll folder membership/options too, writing the registry only when it changes.
+const timer = setInterval(() => { try { prepareDomains(root); } catch (error) { console.error(error.message); child.kill(); process.exitCode = 1; clearInterval(timer); } }, 1000);
+child.on('exit', code => { clearInterval(timer); process.exitCode = code ?? 1; });
+for (const event of ['SIGINT', 'SIGTERM']) process.on(event, () => { clearInterval(timer); child.kill(); });

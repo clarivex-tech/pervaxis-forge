@@ -256,7 +256,7 @@ public sealed class GenerationServiceTests
         using var metadataReader = new StreamReader(zip.GetEntry("manifest.json")!.Open());
         using var metadata = System.Text.Json.JsonDocument.Parse(await metadataReader.ReadToEndAsync());
         metadata.RootElement.GetProperty("uiTargets").EnumerateArray().Select(t => t.GetString()).Should().Equal("web");
-        using var shellReader = new StreamReader(zip.GetEntry("apps/claims-web/src/app/app.component.html")!.Open());
+        using var shellReader = new StreamReader(zip.GetEntry("apps/claims-web/src/app/platform/shell/app.component.html")!.Open());
         (await shellReader.ReadToEndAsync()).Should().Contain("<p-drawer");
     }
 
@@ -289,7 +289,7 @@ public sealed class GenerationServiceTests
         var (zip, _) = await service.RegenerateAsync("clarivolt", stored.Id);
         using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(zip));
         archive.GetEntry("apps/claims-web/src/assets/app-config.json").Should().NotBeNull();
-        (archive.GetEntry("apps/claims-web/src/app/core/auth/cognito-client.ts") is not null).Should().Be(provider == "Cognito");
+        (archive.GetEntry("apps/claims-web/src/app/platform/core/auth/cognito-client.ts") is not null).Should().Be(provider == "Cognito");
     }
 
     [Fact]

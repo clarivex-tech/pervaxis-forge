@@ -32,6 +32,14 @@ export default tseslint.config(
     },
   },
   {
+    // Portable business selectors must not depend on the receiving host prefix.
+    files: ['apps/*/src/app/domains/**/*.ts'],
+    rules: {
+      '@angular-eslint/component-selector': ['error', { type: 'element', prefix: 'domain', style: 'kebab-case' }],
+      '@angular-eslint/directive-selector': ['error', { type: 'attribute', prefix: 'domain', style: 'camelCase' }],
+    },
+  },
+  {
     files: ['**/*.html'],
     extends: [
       ...angular.configs.templateRecommended,

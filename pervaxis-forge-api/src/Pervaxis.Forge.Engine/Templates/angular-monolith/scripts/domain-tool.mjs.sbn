@@ -1,0 +1,167 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+// Deterministic build-time source registration. No domain code is executed while discovering modules.
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import ts from 'typescript';
+import semver from 'semver';
+
+const inside = (root, target) => target === root || target.startsWith(root + path.sep);
+const readJson = file => JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+const fail = message => { throw new Error('UI domain contract: ' + message); };
+const record = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const strings = value => Array.isArray(value) && value.every(item => typeof item === 'string' && item.length > 0);
+const identifier = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+const reserved = new Set(['login', 'auth', 'access-denied', 'dashboard', 'admin', 'not-found', 'settings', 'platform']);
+const listFiles = directory => fs.existsSync(directory) ? fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0).flatMap(entry => {
+  const target = path.join(directory, entry.name);
+  if (entry.isSymbolicLink()) fail('symlinks are not supported: ' + target);
+  return entry.isDirectory() ? listFiles(target) : [target];
+}) : [];
+const pkgName = name => name.startsWith('@') ? name.split('/').slice(0, 2).join('/') : name.split('/')[0];
+
+function inspectManifest(root, folder, manifest, host, packages) {
+  if (manifest.contractVersion !== host.contractVersion || manifest.contractVersion !== 1) fail('incompatible contract major in ' + folder);
+  if (manifest.security !== host.security || (manifest.security === 'public' && manifest.permissions?.length)) fail('incompatible security mode for ' + folder);
+  if (!identifier.test(manifest.id) || manifest.id !== path.basename(folder) || reserved.has(manifest.id)) fail('invalid, reserved or mismatched domain id in ' + folder);
+  if (typeof manifest.displayName !== 'string' || !manifest.displayName.trim()) fail('displayName is required for ' + manifest.id);
+  if (typeof manifest.icon !== 'string' || !/^pi pi-[a-z0-9-]+$/.test(manifest.icon)) fail('use a PrimeIcon class for ' + manifest.id);
+  if (!strings(manifest.supportedTargets) || host.targets.some(target => !manifest.supportedTargets.includes(target))) fail('unsupported host target for ' + manifest.id);
+  if (!Array.isArray(manifest.permissions) || !manifest.permissions.every(item => typeof item === 'string' && item.trim())) fail('permissions must be explicit for ' + manifest.id);
+  if (!record(manifest.requirements) || !record(manifest.requirements.packages) || !Array.isArray(manifest.requirements.configuration)
+      || !manifest.requirements.configuration.every(key => typeof key === 'string' && key.length)) fail('declare package/configuration requirements for ' + manifest.id);
+  if (!fs.existsSync(path.join(folder, 'routes.ts'))) fail('routes.ts exporting DOMAIN_ROUTES is required for ' + manifest.id);
+  const optionsPath = path.join(folder, 'domain.config.json');
+  if (!fs.existsSync(optionsPath)) fail('missing public domain.config.json for ' + manifest.id + '; supply the declared public options, never secrets');
+  const options = readJson(optionsPath);
+  if (!record(options)) fail('domain.config.json must be a public options object for ' + manifest.id);
+  for (const key of manifest.requirements.configuration) {
+    if (!Object.hasOwn(options, key) || options[key] === null || options[key] === '') fail('missing configuration ' + manifest.id + ':' + key);
+  }
+  for (const [name, range] of Object.entries(manifest.requirements.packages)) {
+    if (typeof range !== 'string' || !semver.validRange(range)) fail('invalid package range for ' + name);
+    if (!Object.hasOwn(packages, name)) fail('declare ' + name + ' in the receiving package.json for ' + manifest.id);
+    const installedPath = path.join(root, 'node_modules', name, 'package.json');
+    if (!fs.existsSync(installedPath)) fail('missing installed package ' + name + ' for ' + manifest.id + '; install the declared receiving package.json dependencies with npm install or npm ci');
+    const installed = readJson(installedPath);
+    if (!semver.satisfies(installed.version, range)) fail('incompatible installed package ' + name + '@' + installed.version + ' for ' + manifest.id + '; needs ' + range);
+  }
+  return { folder, manifest, options };
+}
+
+/** Source dependency boundaries, not a sandbox for hostile code. */
+export function checkBoundaries(root, appRoot, domains) {
+  const configPath = path.join(root, 'tsconfig.json');
+  const raw = ts.readConfigFile(configPath, ts.sys.readFile);
+  if (raw.error) fail(ts.flattenDiagnosticMessageText(raw.error.messageText, '\n'));
+  const config = ts.parseJsonConfigFileContent(raw.config, ts.sys, root);
+  const platform = path.join(appRoot, 'platform');
+  const domainRoot = path.join(appRoot, 'domains');
+  const generated = path.join(appRoot, '.generated');
+  const sourceFiles = listFiles(appRoot).filter(file => /\.(?:ts|html|scss|css)$/.test(file));
+  for (const file of sourceFiles) {
+    const owner = domains.find(domain => inside(domain.folder, file));
+    if (inside(domainRoot, file) && !owner) fail('business source must belong to a declared domain folder: ' + file);
+    const text = fs.readFileSync(file, 'utf8');
+    if (!file.endsWith('.ts')) {
+      if (owner) {
+        for (const match of text.matchAll(/(?:@use|@import|url\()\s*['"]([^'"]+)['"]/g)) {
+          if (match[1].startsWith('.') && !inside(owner.folder, path.resolve(path.dirname(file), match[1]))) fail('resource escapes domain: ' + file);
+        }
+      }
+      continue;
+    }
+    const ast = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+    if (owner && ast.referencedFiles.length) fail('triple-slash path references are not supported in domains: ' + file);
+    const inspect = specifier => {
+      if (!ts.isStringLiteralLike(specifier)) { if (owner || inside(platform, file)) fail('module imports must be literal: ' + file); return; }
+      const name = specifier.text;
+      if (owner && !name.startsWith('.')) {
+        if (name !== '@forge/ui-contracts/v1' && !Object.hasOwn(owner.manifest.requirements.packages, pkgName(name))) fail('undeclared or private import ' + name + ' in ' + file);
+        if (name.startsWith('@forge/') && name !== '@forge/ui-contracts/v1') fail('private platform import ' + name + ' in ' + file);
+      }
+      const resolved = ts.resolveModuleName(name, file, config.options, ts.sys).resolvedModule?.resolvedFileName;
+      if (owner && !name.startsWith('.') && name !== '@forge/ui-contracts/v1' && resolved && !path.resolve(resolved).split(path.sep).includes('node_modules')) fail('external package import resolves to host source: ' + file);
+      if (owner && name.startsWith('.')) {
+        if (!resolved || !inside(owner.folder, path.resolve(resolved))) fail('domain import escapes its folder or is unresolved: ' + file + ' -> ' + name);
+      }
+      if (inside(platform, file) && resolved && inside(domainRoot, path.resolve(resolved))) fail('platform must not import a domain: ' + file);
+      if (inside(platform, file) && resolved && inside(generated, path.resolve(resolved))
+          && !['platform.config.ts', 'platform.routes.ts'].includes(path.basename(file))) fail('only composition roots may import generated registrations: ' + file);
+    };
+    const visit = node => {
+      if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier) inspect(node.moduleSpecifier);
+      if (ts.isImportTypeNode(node) && ts.isLiteralTypeNode(node.argument)) inspect(node.argument.literal);
+      if (ts.isImportEqualsDeclaration(node)) fail('import-equals is not supported: ' + file);
+      if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || (ts.isIdentifier(node.expression) && node.expression.text === 'require'))) {
+        if (!node.arguments[0]) fail('missing module specifier: ' + file);
+        inspect(node.arguments[0]);
+      }
+      if (owner && ts.isPropertyAssignment(node) && ['templateUrl', 'styleUrl', 'styleUrls'].includes(node.name.getText(ast))) {
+        const values = ts.isArrayLiteralExpression(node.initializer) ? [...node.initializer.elements] : [node.initializer];
+        for (const value of values) if (!ts.isStringLiteralLike(value) || !inside(owner.folder, path.resolve(path.dirname(file), value.text))) fail('component resources must belong to the domain: ' + file);
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(ast);
+  }
+}
+
+export function prepareDomains(root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')) {
+  root = path.resolve(root);
+  const host = readJson(path.join(root, 'ui-platform.json'));
+  if (host.contractVersion !== 1 || host.angularMajor !== 21 || !['cognito-tenant', 'public'].includes(host.security) || !strings(host.targets)) fail('unsupported ui-platform.json');
+  const appRoot = path.resolve(root, host.appRoot);
+  if (!inside(root, appRoot)) fail('appRoot must stay inside the print');
+  const packageJson = readJson(path.join(root, 'package.json'));
+  const packages = { ...packageJson.dependencies, ...packageJson.devDependencies };
+  const angular = readJson(path.join(root, 'node_modules/@angular/core/package.json'));
+  if (semver.major(angular.version) !== host.angularMajor) fail('Angular major does not match UI contracts');
+  const domainRoot = path.join(appRoot, 'domains');
+  fs.mkdirSync(domainRoot, { recursive: true });
+  const ids = new Map();
+  const candidates = fs.readdirSync(domainRoot, { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)
+    .filter(entry => { if (entry.isSymbolicLink()) fail('domain symlinks are not supported'); return entry.isDirectory(); })
+    .map(entry => {
+      const folder = path.join(domainRoot, entry.name);
+      const file = path.join(folder, 'domain.json');
+      if (!fs.existsSync(file)) fail('missing domain.json in ' + folder);
+      const manifest = readJson(file);
+      if (!record(manifest) || typeof manifest.id !== 'string') fail('domain.json must declare a string id in ' + folder);
+      if (ids.has(manifest.id)) fail('duplicate domain id ' + manifest.id + ' in ' + ids.get(manifest.id) + ' and ' + folder);
+      ids.set(manifest.id, folder);
+      return { folder, manifest };
+    });
+  const domains = candidates.map(({ folder, manifest }) => inspectManifest(root, folder, manifest, host, packages));
+  checkBoundaries(root, appRoot, domains);
+  const entries = domains.map(({ manifest, options }) => '  { manifest: ' + JSON.stringify(manifest) + ', options: ' + JSON.stringify(options)
+    + ", loadRoutes: () => import('../domains/" + manifest.id + "/routes').then(module => module.DOMAIN_ROUTES) }");
+  const content = "// AUTO-GENERATED by scripts/domain-tool.mjs. Never hand-edit; run npm run domains:prepare.\n"
+    + "import type { UiDomainRegistrationV1 } from '@forge/ui-contracts/v1';\n"
+    + 'export const GENERATED_DOMAINS: readonly UiDomainRegistrationV1[] = [\n' + entries.join(',\n') + '\n];\n';
+  const output = path.join(appRoot, '.generated/domain-registry.ts');
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  if (!fs.existsSync(output) || fs.readFileSync(output, 'utf8') !== content) fs.writeFileSync(output, content);
+  return domains;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { const domains = prepareDomains(); console.log('UI contract v1: ' + domains.length + ' domain(s) registered.'); }
+  catch (error) { console.error(error.message); process.exitCode = 1; }
+}

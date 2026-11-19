@@ -7,7 +7,7 @@
 | Service Name | `{{ model.manifest.service_name }}` |
 | Service Type | Monolithic Angular Application |
 | Component Prefix | `{{ model.manifest.component_prefix }}` |
-| Target Platforms | {{ for target in model.manifest.ui_targets }}{{ target }}{{ if !for.last }}, {{ end }}{{ end }} |
+| Target Platforms | {{ for target in model.effective_ui_targets }}{{ target }}{{ if !for.last }}, {{ end }}{{ end }} |
 | Product | {{ model.manifest.product }} |
 | Vertical | {{ model.manifest.vertical_slug }} |
 
@@ -19,9 +19,12 @@ This project uses Angular 21 standalone components — no NgModules. All compone
 
 ### Folder Structure
 
-- `core/` — Singleton services, guards, interceptors, and handlers. Provided at root level.
-- `features/` — Lazy-loaded feature areas. Each feature is a self-contained folder with its own routes, components, and services.
-- `shared/` — Reusable components, directives, and pipes used across multiple features.
+- `platform/` owns shell, authentication, administration, shared infrastructure and public contracts.
+- `domains/<id>/` owns portable business routes, services, models and tests.
+- `.generated/` holds deterministic lazy registration outside the platform.
+- Root app files forward to platform composition roots for Angular tooling.
+
+See [DomainPortability.md](DeveloperReference/DomainPortability.md) for the V1 contract and compatibility prerequisites.
 
 ### Routing Strategy
 

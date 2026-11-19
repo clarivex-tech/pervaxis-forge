@@ -1,0 +1,120 @@
+{{ if !model.web_admin_layout }}
+import { TestBed } from '@angular/core/testing';
+import { AppComponent } from './app.component';
+import { provideRouter } from '@angular/router';
+
+describe('AppComponent', () => {
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [AppComponent],
+      providers: [provideRouter([])],
+    }).compileComponents();
+  });
+
+  it('should create the app', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    expect(app).toBeTruthy();
+  });
+
+  it(`should have the title '{{ model.manifest.service_name }}'`, () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    expect(app.title).toEqual('{{ model.manifest.service_name }}');
+  });
+
+  it('should render the app root element', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled).toBeTruthy();
+  });
+});
+
+{{ else }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { AppComponent } from './app.component';
+import { LoadingService } from '../core/services/loading.service';
+import { NotificationService } from '../core/services/notification.service';
+import { RouteLoadingService } from '../core/services/route-loading.service';
+import { ConfirmDialogService } from '../shared/services/confirm-dialog.service';
+{{ if model.angular_cognito_enabled }}
+import { AuthService } from '../core/auth/auth.service';
+import { TenantContextService } from '../core/auth/tenant-context.service';
+import { InactivityService } from '../core/services/inactivity.service';
+import { SessionStateRegistry } from '../core/auth/session-state';
+{{ end }}
+
+describe('Web application shell', () => {
+  const roles = signal<readonly string[]>([]);
+  const dismiss = jasmine.createSpy('dismiss');
+  beforeEach(async () => {
+    roles.set([]);
+    await TestBed.configureTestingModule({
+      imports: [AppComponent], providers: [provideRouter([]), provideNoopAnimations(),
+        { provide: LoadingService, useValue: { isLoading: signal(false) } },
+        { provide: NotificationService, useValue: { notifications: signal([]), dismiss } },
+        { provide: RouteLoadingService, useValue: { init: () => undefined } },
+        { provide: ConfirmDialogService, useValue: { activeDialog: signal(null), resolve: () => undefined } },
+{{ if model.angular_cognito_enabled }}
+        { provide: AuthService, useValue: { roles, isAuthenticated: signal(true), profile: signal({displayName: 'Admin'}), logout: jasmine.createSpy('logout') } },
+        { provide: TenantContextService, useValue: { currentTenantId: signal(null) } },
+        { provide: InactivityService, useValue: { start: () => undefined } },
+{{ end }}
+      ],
+    }).compileComponents();
+  });
+
+  it('provides a skip link and a keyboard-focusable main landmark', () => {
+    const fixture = TestBed.createComponent(AppComponent); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.skip-link').getAttribute('href')).toBe('#main-content');
+    expect(fixture.nativeElement.querySelector('main').getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('opens narrow-screen navigation and closes it on navigation', async () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const shell = fixture.componentInstance;
+    shell.narrowScreen.set(true); shell.toggleSidebar(); expect(shell.mobileNavigationOpen()).toBeTrue();
+    await TestBed.inject(Router).navigateByUrl('/');
+    expect(shell.mobileNavigationOpen()).toBeFalse();
+  });
+
+  it('dismisses notifications outside the injection context', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.componentInstance.dismissNotification(7); expect(dismiss).toHaveBeenCalledWith(7);
+  });
+{{ if model.angular_cognito_enabled }}
+  it('only shows tenant administration for PlatformAdmin and clears an open panel on reset', () => {
+    const fixture = TestBed.createComponent(AppComponent); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('a[href="/admin/tenants"]')).toBeNull();
+    roles.set(['PlatformAdmin']); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('a[href="/admin/tenants"]')).not.toBeNull();
+    fixture.componentInstance.mobileNavigationOpen.set(true);
+    TestBed.inject(SessionStateRegistry).reset('signed-out');
+    expect(fixture.componentInstance.mobileNavigationOpen()).toBeFalse();
+  });
+{{ end }}
+});
+{{ end }}

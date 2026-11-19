@@ -25,11 +25,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Prepare domain registry
+        run: npm run domains:prepare
+
+      - name: Domain architecture tests
+        run: npm run test:architecture
+
       - name: Lint
         run: npm run lint
 
       - name: Test
-        run: npm test -- --no-watch --code-coverage
+        run: npm test -- --watch=false --browsers=ChromeHeadless --code-coverage
 
       - name: Build (production)
         run: npm run build:prod

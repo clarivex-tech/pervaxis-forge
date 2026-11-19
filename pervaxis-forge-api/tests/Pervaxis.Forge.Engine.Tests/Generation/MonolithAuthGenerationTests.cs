@@ -36,28 +36,28 @@ public class MonolithAuthGenerationTests
         var entries = archive.Entries.Select(e => e.FullName).ToHashSet();
 
         // Auth files must exist
-        Assert.Contains("apps/claims-web/src/app/core/auth/auth.models.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/auth/auth.service.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/auth/cognito-client.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/auth/auth-sync.service.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/auth/session-state.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/auth/auth.service.spec.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/auth.models.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/auth.service.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/cognito-client.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/auth-sync.service.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/session-state.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/auth.service.spec.ts", entries);
 
         // Config files
-        Assert.Contains("apps/claims-web/src/app/core/config/app-config.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/config/app-config.service.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/config/app-config.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/config/app-config.service.ts", entries);
         Assert.Contains("apps/claims-web/src/assets/app-config.example.json", entries);
 
         // Cognito configuration is populated at generation.
         Assert.Contains("apps/claims-web/src/assets/app-config.json", entries);
 
         // Guards and interceptors
-        Assert.Contains("apps/claims-web/src/app/core/guards/auth.guard.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/interceptors/auth.interceptor.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/guards/auth.guard.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/interceptors/auth.interceptor.ts", entries);
 
         // Auth feature
-        Assert.Contains("apps/claims-web/src/app/features/auth/auth-callback.component.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/features/login/login.component.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/features/auth/auth-callback.component.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/features/login/login.component.ts", entries);
 
         // Documentation
         Assert.Contains("AUTHENTICATION.md", entries);
@@ -98,13 +98,13 @@ public class MonolithAuthGenerationTests
         var entries = archive.Entries.Select(e => e.FullName).ToHashSet();
 
         // Auth files must exist (same as web - Cognito works via browser on mobile)
-        Assert.Contains("apps/claims-web/src/app/core/auth/auth.models.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/auth/auth.service.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/auth/cognito-client.ts", entries);
-        Assert.Contains("apps/claims-web/src/app/core/auth/auth-sync.service.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/auth.models.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/auth.service.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/cognito-client.ts", entries);
+        Assert.Contains("apps/claims-web/src/app/platform/core/auth/auth-sync.service.ts", entries);
 
         // Login component uses AuthService for both web and mobile
-        var loginEntry = archive.GetEntry("apps/claims-web/src/app/features/login/login.component.ts");
+        var loginEntry = archive.GetEntry("apps/claims-web/src/app/platform/features/login/login.component.ts");
         Assert.NotNull(loginEntry);
         using var loginStream = loginEntry!.Open();
         using var loginReader = new StreamReader(loginStream, Encoding.UTF8);

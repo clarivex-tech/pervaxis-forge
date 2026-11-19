@@ -1,0 +1,100 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { ApplicationConfig, ErrorHandler, inject, provideAppInitializer } from '@angular/core';
+import { provideRouter, withViewTransitions } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { providePrimeNG } from 'primeng/config';
+import Aura from '@primeng/themes/aura';
+{{ if model.web_admin_layout }}
+import { definePreset } from '@primeng/themes';
+
+// Use accessible primary text/button colors in each scheme; preserve the native baseline.
+const webTheme = definePreset(Aura, {
+  semantic: {
+    colorScheme: {
+      light: { primary: { color: '{indigo.700}', contrastColor: '#ffffff', hoverColor: '{indigo.800}', activeColor: '{indigo.900}' } },
+      dark: { primary: { color: '{indigo.300}', contrastColor: '{indigo.950}', hoverColor: '{indigo.200}', activeColor: '{indigo.100}' } },
+    },
+  },
+});
+{{ end }}
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+import { provideIonicAngular } from '@ionic/angular/standalone';
+{{ end }}
+
+import { appRoutes } from './platform.routes';
+import { GENERATED_DOMAINS } from '@forge/generated-domains';
+import { domainProviders } from './domains/domain-runtime';
+{{ if model.angular_cognito_enabled }}
+import { AuthService } from './core/auth/auth.service';
+{{ end }}
+import { AppConfigService } from './core/config/app-config.service';
+import { GlobalErrorHandler } from './core/handlers/global-error-handler';
+{{ if model.angular_cognito_enabled }}
+import { authInterceptor } from './core/interceptors/auth.interceptor';
+{{ end }}
+import { correlationInterceptor } from './core/interceptors/correlation.interceptor';
+import { errorInterceptor } from './core/interceptors/error.interceptor';
+import { loadingInterceptor } from './core/interceptors/loading.interceptor';
+import { retryInterceptor } from './core/interceptors/retry.interceptor';
+
+/**
+ * Application-wide configuration.
+ *
+ * HORIZONTAL (do not modify):
+ *   - Error handling, HTTP interceptors, animations, routing strategy
+ *
+ * Business providers belong in domain routes; the generated registry composes them.
+ */
+export const appConfig: ApplicationConfig = {
+  providers: [
+    ...domainProviders(GENERATED_DOMAINS),
+    // --- Horizontal providers (managed by platform team) ---
+    // Startup: load and validate assets/app-config.json, then restore the session (one shared
+    // refresh). Invalid configuration fails closed: the app starts with sign-in unavailable.
+    provideAppInitializer(async () => {
+      const config = inject(AppConfigService);
+{{ if model.angular_cognito_enabled }}
+      const auth = inject(AuthService);
+{{ end }}
+      await config.load();
+{{ if model.angular_cognito_enabled }}
+      await auth.initialize();
+{{ end }}
+    }),
+    provideRouter(appRoutes, withViewTransitions()),
+    provideHttpClient(
+      withInterceptors([correlationInterceptor, {{ if model.angular_cognito_enabled }}authInterceptor, {{ end }}retryInterceptor, loadingInterceptor, errorInterceptor])
+    ),
+    provideAnimationsAsync(),
+    providePrimeNG({
+      theme: {
+        preset: {{ if model.web_admin_layout }}webTheme{{ else }}Aura{{ end }},
+        options: { darkModeSelector: '.dark-mode' }
+      }
+    }),
+{{ if model.manifest.ui_targets | array.contains "mobile" }}
+    provideIonicAngular(),
+{{ end }}
+    { provide: ErrorHandler, useClass: GlobalErrorHandler },
+
+    // Business providers are route-scoped inside domains; no platform edits required.
+  ],
+};

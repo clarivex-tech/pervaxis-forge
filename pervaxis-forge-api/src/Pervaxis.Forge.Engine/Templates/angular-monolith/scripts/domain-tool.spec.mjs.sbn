@@ -1,0 +1,113 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { prepareDomains } from './domain-tool.mjs';
+const print = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const json = (file, value) => fs.writeFileSync(file, JSON.stringify(value));
+function fixture(t) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'forge-ui-domains-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.symlinkSync(path.join(print, 'node_modules'), path.join(root, 'node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
+  const app = path.join(root, 'src/app'); const folder = path.join(app, 'domains/work-items');
+  fs.mkdirSync(folder, { recursive: true });
+  fs.cpSync(path.join(print, 'DeveloperReference/DomainExample'), folder, { recursive: true });
+  fs.mkdirSync(path.join(app, 'platform/contracts/v1'), { recursive: true });
+  fs.writeFileSync(path.join(app, 'platform/contracts/v1/index.ts'), 'export {};');
+  json(path.join(root, 'ui-platform.json'), { contractVersion: 1, angularMajor: 21, security: 'cognito-tenant', appRoot: 'src/app', targets: ['web'] });
+  json(path.join(root, 'package.json'), JSON.parse(fs.readFileSync(path.join(print, 'package.json'), 'utf8')));
+  json(path.join(root, 'tsconfig.json'), { compilerOptions: { baseUrl: '.', module: 'es2022', moduleResolution: 'bundler',
+    paths: { '@forge/ui-contracts/v1': ['src/app/platform/contracts/v1/index.ts'] } } });
+  return { root, app, folder, manifest: path.join(folder, 'domain.json'), registry: path.join(app, '.generated/domain-registry.ts') };
+}
+function update(file, mutate) { const data = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '')); mutate(data); json(file, data); }
+
+test('copy-only discovery is deterministic and removes stale entries', t => {
+  const f = fixture(t); assert.equal(prepareDomains(f.root).length, 1);
+  const first = fs.readFileSync(f.registry, 'utf8'); const modified = fs.statSync(f.registry).mtimeMs;
+  prepareDomains(f.root); assert.equal(fs.readFileSync(f.registry, 'utf8'), first); assert.equal(fs.statSync(f.registry).mtimeMs, modified);
+  assert.match(first, /import\('\.\.\/domains\/work-items\/routes'\)/);
+  fs.rmSync(f.folder, { recursive: true }); prepareDomains(f.root); assert.doesNotMatch(fs.readFileSync(f.registry, 'utf8'), /work-items/);
+});
+test('rejects incompatible contract majors', t => { const f = fixture(t); update(f.manifest, m => m.contractVersion = 2); assert.throws(() => prepareDomains(f.root), /contract major/); });
+test('rejects undeclared packages', t => { const f = fixture(t); update(f.manifest, m => m.requirements.packages['missing-package'] = '^1.0.0'); assert.throws(() => prepareDomains(f.root), /receiving package.json/); });
+test('rejects incompatible package versions', t => { const f = fixture(t); update(f.manifest, m => m.requirements.packages.rxjs = '^99.0.0'); assert.throws(() => prepareDomains(f.root), /incompatible installed package/); });
+test('rejects missing public configuration', t => { const f = fixture(t); json(path.join(f.folder, 'domain.config.json'), {}); assert.throws(() => prepareDomains(f.root), /missing configuration/); });
+test('rejects incompatible targets', t => { const f = fixture(t); update(path.join(f.root, 'ui-platform.json'), m => m.targets = ['web', 'mobile']); assert.throws(() => prepareDomains(f.root), /unsupported host target/); });
+test('rejects reserved route roots', t => { const f = fixture(t); update(f.manifest, m => m.id = 'admin'); assert.throws(() => prepareDomains(f.root), /reserved/); });
+test('rejects a relative private platform import', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), "import '../../platform/contracts/v1/index';"); assert.throws(() => prepareDomains(f.root), /escapes its folder/); });
+test('rejects an alias to a private platform service', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), "import '@core/auth/auth.service';"); assert.throws(() => prepareDomains(f.root), /undeclared or private import/); });
+test('rejects platform dependencies on business implementations', t => { const f = fixture(t); fs.writeFileSync(path.join(f.app, 'platform/violation.ts'), "import '../domains/work-items/routes';"); assert.throws(() => prepareDomains(f.root), /platform must not import/); });
+test('rejects non-literal runtime discovery', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), "const file = './routes'; import(file);"); assert.throws(() => prepareDomains(f.root), /imports must be literal/); });
+test('rejects cross-domain implementation imports', t => {
+  const f = fixture(t); const other = path.join(f.app, 'domains/other'); fs.cpSync(f.folder, other, { recursive: true }); update(path.join(other, 'domain.json'), m => m.id = 'other');
+  fs.writeFileSync(path.join(f.folder, 'violation.ts'), "export * from '../other/models/work-item';"); assert.throws(() => prepareDomains(f.root), /escapes its folder/);
+});
+
+test('rejects unowned source at domains root', t => { const f = fixture(t); fs.writeFileSync(path.join(f.app, 'domains/loose.ts'), 'export {};'); assert.throws(() => prepareDomains(f.root), /declared domain folder/); });
+
+test('rejects mismatched security modes', t => { const f = fixture(t); update(path.join(f.root, 'ui-platform.json'), m => m.security = 'public'); assert.throws(() => prepareDomains(f.root), /incompatible security mode/); });
+
+test('rejects private platform type imports', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), "type Private = import('../../platform/contracts/v1/index').Private;"); assert.throws(() => prepareDomains(f.root), /escapes its folder/); });
+test('rejects triple-slash path escapes', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), '/// <reference path="../../platform/contracts/v1/index.ts" />'); assert.throws(() => prepareDomains(f.root), /triple-slash/); });
+test('rejects escaping component resources', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), "const component = { templateUrl: '../../platform/private.html' };"); assert.throws(() => prepareDomains(f.root), /component resources/); });
+
+
+test('rejects duplicate ids regardless of folder sort order', t => {
+  const f = fixture(t); fs.cpSync(f.folder, path.join(f.app, 'domains/aaa-copy'), { recursive: true });
+  assert.throws(() => prepareDomains(f.root), /duplicate domain id work-items/);
+});
+
+test('rejects all reserved platform route roots and conflicting path syntax', t => {
+  for (const id of ['login', 'auth', 'dashboard', 'admin', 'settings', 'not-found', 'access-denied', 'platform', 'admin/tenants', '**']) {
+    const f = fixture(t); update(f.manifest, m => m.id = id);
+    assert.throws(() => prepareDomains(f.root), /invalid, reserved or mismatched/);
+  }
+});
+
+test('recreates an absent generated registry without host edits', t => {
+  const f = fixture(t); prepareDomains(f.root); const first = fs.readFileSync(f.registry, 'utf8');
+  fs.rmSync(path.dirname(f.registry), { recursive: true }); prepareDomains(f.root);
+  assert.equal(fs.readFileSync(f.registry, 'utf8'), first);
+  assert.doesNotMatch(first, /^import .*from .*domains/m);
+});
+
+test('does not mutate package/options files or collect environment secrets', t => {
+  const f = fixture(t), packages = path.join(f.root, 'package.json'), options = path.join(f.folder, 'domain.config.json');
+  const beforePackages = fs.readFileSync(packages, 'utf8'), beforeOptions = fs.readFileSync(options, 'utf8');
+  fs.writeFileSync(path.join(f.root, '.env'), 'PRIVATE_TOKEN=do-not-bundle-this-value');
+  prepareDomains(f.root);
+  assert.equal(fs.readFileSync(packages, 'utf8'), beforePackages); assert.equal(fs.readFileSync(options, 'utf8'), beforeOptions);
+  assert.doesNotMatch(fs.readFileSync(f.registry, 'utf8'), /PRIVATE_TOKEN|do-not-bundle-this-value/);
+});
+
+test('explains missing declared installed packages', t => {
+  const f = fixture(t); update(path.join(f.root, 'package.json'), p => p.dependencies['not-installed'] = '^1.0.0');
+  update(f.manifest, m => m.requirements.packages['not-installed'] = '^1.0.0');
+  assert.throws(() => prepareDomains(f.root), /missing installed package not-installed.*npm install or npm ci/);
+});
+
+test('explains a domain folder with no manifest', t => {
+  const f = fixture(t); fs.rmSync(f.manifest); assert.throws(() => prepareDomains(f.root), /missing domain.json/);
+});
+
+test('explains missing public options files', t => { const f = fixture(t); fs.rmSync(path.join(f.folder, 'domain.config.json')); assert.throws(() => prepareDomains(f.root), /missing public domain.config.json/); });

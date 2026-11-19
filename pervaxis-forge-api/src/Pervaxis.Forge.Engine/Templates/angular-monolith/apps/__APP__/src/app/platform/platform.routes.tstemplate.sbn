@@ -1,0 +1,107 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { Routes } from '@angular/router';
+import { GENERATED_DOMAINS } from '@forge/generated-domains';
+import { createDomainRoutes } from './domains/domain-runtime';
+{{ if model.angular_cognito_enabled }}
+import { authGuard } from './core/guards/auth.guard';
+{{ end }}
+{{ if model.angular_cognito_enabled }}
+import { tenantGuard } from './core/guards/tenant.guard';
+import { permissionGuard } from './core/guards/permission.guard';
+{{ end }}
+
+/**
+ * Application routes.
+ *
+ * HORIZONTAL (do not modify):
+ *   - Public routes: login, auth/callback (Cognito redirect target), access-denied, not-found
+ *   - Auth and tenant guard enforcement, wildcard catch-all
+ *
+ * BUSINESS DOMAINS (copy folders under domains/):
+ *   - Run npm run domains:prepare (automatic in npm build/start/test)
+ *   - Use lazy loading: loadComponent / loadChildren
+{{ if model.angular_cognito_enabled }}
+ *   - Protected routes: canActivate: [authGuard]; routes showing tenant data: [authGuard, tenantGuard]
+ *   - Role-restricted routes: add permissionGuard('<group>')
+{{ end }}
+ */
+export const appRoutes: Routes = [
+{{ if model.angular_cognito_enabled }}
+  {
+    path: 'login',
+    loadComponent: () =>
+      import('./features/login/login.component').then(
+        (m) => m.LoginComponent
+      ),
+  },
+  {
+    path: 'auth/callback',
+    loadComponent: () =>
+      import('./features/auth/auth-callback.component').then(
+        (m) => m.AuthCallbackComponent
+      ),
+  },
+  {
+    path: 'access-denied',
+    loadComponent: () =>
+      import('./features/auth/access-denied.component').then(
+        (m) => m.AccessDeniedComponent
+      ),
+  },
+
+{{ end }}
+  {
+    path: '',
+    redirectTo: 'dashboard',
+    pathMatch: 'full',
+  },
+  {
+    path: 'dashboard',
+{{ if model.angular_cognito_enabled }}
+    canActivate: [authGuard, tenantGuard],
+{{ end }}
+    loadComponent: () =>
+      import('./features/dashboard/dashboard.component').then(
+        (m) => m.DashboardComponent
+      ),
+  },
+
+{{ if model.angular_cognito_enabled }}
+  {
+    path: 'admin/tenants',
+    canActivate: [authGuard, permissionGuard('PlatformAdmin')],
+    loadComponent: () => import('./features/administration/administration.component').then(m => m.AdministrationComponent),
+  },
+{{ end }}
+  // Generated domain registration: no handwritten platform route edits.
+  ...createDomainRoutes(GENERATED_DOMAINS),
+
+  {
+    path: 'not-found',
+    loadComponent: () =>
+      import('./features/not-found/not-found.component').then(
+        (m) => m.NotFoundComponent
+      ),
+  },
+  {
+    path: '**',
+    redirectTo: 'not-found',
+  },
+];

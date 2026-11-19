@@ -1,0 +1,88 @@
+{{ if model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { Component, inject, signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { provideRouter, Router } from '@angular/router';
+import { RouterTestingHarness } from '@angular/router/testing';
+import { DOMAIN_OPTIONS, DOMAIN_REGISTRATIONS, UiDomainRegistrationV1 } from '@forge/ui-contracts/v1';
+import { AuthService } from '../core/auth/auth.service';
+import { TenantContextService } from '../core/auth/tenant-context.service';
+import { createDomainRoutes, DomainNavigationService } from './domain-runtime';
+
+@Component({ standalone: true, template: '<p [textContent]="options[\'label\']"></p>' })
+class DomainPage { readonly options = inject(DOMAIN_OPTIONS); }
+@Component({ standalone: true, template: '<p>Access boundary</p>' })
+class BoundaryPage {}
+
+describe('V1 domain registration', () => {
+  const roles = signal<readonly string[]>([]);
+  const tenantStatus = signal('valid');
+  let signedIn = true;
+  let registration: UiDomainRegistrationV1;
+  let loadRoutes: jasmine.Spy;
+
+  beforeEach(() => {
+    signedIn = true; roles.set(['Editor']); tenantStatus.set('valid');
+    loadRoutes = jasmine.createSpy('lazy domain routes').and.resolveTo([
+      { path: '', children: [{ path: '', component: DomainPage }, { path: 'detail', component: DomainPage }] },
+    ]);
+    registration = {
+      manifest: { contractVersion: 1, security: 'cognito-tenant', id: 'work-items', displayName: 'Work items', icon: 'pi pi-list',
+        permissions: ['Editor'], supportedTargets: ['web'], requirements: { packages: {}, configuration: [] } },
+      options: { label: 'Copied domain route' }, loadRoutes,
+    };
+    TestBed.configureTestingModule({ providers: [
+      provideRouter([...createDomainRoutes([registration]), { path: 'login', component: BoundaryPage }, { path: 'access-denied', component: BoundaryPage }]),
+      { provide: DOMAIN_REGISTRATIONS, useValue: [registration] },
+      { provide: AuthService, useValue: { ensureSession: async () => signedIn, isAuthenticated: () => signedIn,
+        hasPermission: (permission: string) => roles().includes(permission) } },
+      { provide: TenantContextService, useValue: { claimStatus: tenantStatus } },
+    ] });
+  });
+
+  it('registers lazy routes, route-scoped options and navigation from the same manifest', async () => {
+    const harness = await RouterTestingHarness.create('/work-items');
+    expect(harness.routeNativeElement?.textContent).toContain('Copied domain route');
+    expect(loadRoutes).toHaveBeenCalledTimes(1);
+    expect(TestBed.inject(DomainNavigationService).items()[0].routerLink).toBe('/work-items');
+  });
+
+  it('blocks lazy loading until authenticated', async () => {
+    signedIn = false; await RouterTestingHarness.create('/work-items?filter=open#top');
+    expect(TestBed.inject(Router).parseUrl(TestBed.inject(Router).url).queryParams['returnUrl']).toBe('/work-items?filter=open#top');
+    expect(TestBed.inject(Router).url).toContain('/login'); expect(loadRoutes).not.toHaveBeenCalled();
+    expect(TestBed.inject(DomainNavigationService).items()).toEqual([]);
+  });
+
+  it('blocks tenant-less sessions before loading business code', async () => {
+    tenantStatus.set('absent'); await RouterTestingHarness.create('/work-items');
+    expect(TestBed.inject(Router).url).toContain('/access-denied'); expect(loadRoutes).not.toHaveBeenCalled();
+    expect(TestBed.inject(DomainNavigationService).items()).toEqual([]);
+  });
+
+  it('reacts to permission changes and rechecks child navigation', async () => {
+    await RouterTestingHarness.create('/work-items');
+    const nav = TestBed.inject(DomainNavigationService);
+    expect(nav.items().length).toBe(1); roles.set([]); expect(nav.items()).toEqual([]);
+    await TestBed.inject(Router).navigateByUrl('/work-items/detail');
+    expect(TestBed.inject(Router).url).toContain('/access-denied');
+  });
+});
+
+{{ end }}

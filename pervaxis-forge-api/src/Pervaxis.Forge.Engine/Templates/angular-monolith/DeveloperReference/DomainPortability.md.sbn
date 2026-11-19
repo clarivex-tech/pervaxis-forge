@@ -1,0 +1,54 @@
+﻿# Angular business domain portability (contract V1)
+
+## Ownership
+
+- `apps/<app>/src/app/platform/` is print-owned: shell, core authentication/tenant/session/HTTP infrastructure, administration and system pages, shared controls, domain adapters and versioned public contracts. Preserve fresh platform files on upgrades.
+- `apps/<app>/src/app/domains/<id>/` is application-owned business code only: manifest, public options, routes, components, models, services and tests travel together. No business feature is generated there by default.
+- `app.component.ts`, `app.config.ts` and `app.routes.ts` are minimal Angular tooling entry points forwarding to the platform implementation. `main.ts`, environment files and public runtime assets retain their tooling roles.
+- `.generated/domain-registry.ts` is a disposable composition artifact outside platform, created deterministically from domain manifests. Never hand-edit or copy it during upgrades.
+
+## Copy-only workflow for compatible prints
+
+1. Compare `ui-platform.json`, Angular/package versions, authentication/tenancy assumptions and the domain's declared requirements. V1 preserves the public `@forge/ui-contracts/v1` source facade; breaking changes need a new major alias and explicit migration. This is source portability, not a runtime plugin protocol or arbitrary old-print compatibility promise.
+2. Copy the entire `domains/<id>` folder unchanged into a compatible fresh print. Use the stable domain- component selector / domain camelCase directive prefix required by lint. Keep IDs, selectors and API routes independent of the host name and component prefix. The opt-in reference is `DeveloperReference/DomainExample`: copy it as `domains/work-items` to try it.
+3. Reconcile explicitly declared packages and environment-specific public options. Compatible means required package APIs are installed, required public values are supplied and all host targets are supported. Additional package installation/configuration is an explicit prerequisite, not hidden platform registration. Never copy old host auth settings or secrets wholesale.
+4. Run `npm run build` / `npm run build:prod`, `npm test -- --watch=false`, and `npm run test:architecture`. `npm start` performs preparation and watches folder membership/options in addition to Angular's source watch. Copy before starting, or restart after replacing a domain folder.
+
+No handwritten edit to platform, bootstrap, route lists or navigation lists is needed. Builds scan immediate domain folders, validate their JSON, check dependency boundaries and generate literal lazy `import()` registrations. Raw `ng build/serve/test` bypass preparation and are low-level commands only; normal build/test/start scripts (including Docker) run it. This uses the Angular application builder, not Vite-specific import.meta.glob or runtime reflection. Literal imports keep routes in separate lazy chunks and allow Angular AOT to analyze them.
+
+If a raw Angular command reports a missing `@forge/generated-domains` module or `.generated/domain-registry.ts`, run `npm run domains:prepare` (or use `npm run build`, `npm test` or `npm start`) from the print root. Supported npm commands recreate a missing registry automatically. Raw Angular compile errors cannot be customized by the preparation tool because those commands bypass it. CI explicitly runs preparation and architecture tests before lint/test/build.
+
+## Domain V1 format
+
+Every folder is named with its stable kebab-case id and contains:
+
+- `domain.json`: `contractVersion: 1`, `security` matching the host (`cognito-tenant` or `public`), matching `id`, `displayName`, PrimeIcon `icon`, `supportedTargets`, explicit `permissions`, `requirements.packages` (npm names/semver ranges) and `requirements.configuration` (required top-level public option keys).
+- `domain.config.json`: public, JSON-serializable option values. They are compiled into the browser bundle; never use secrets. Missing/null/empty required values fail preparation. Feature-specific value validation belongs to the feature as well.
+- `routes.ts`: exports `DOMAIN_ROUTES: Routes`. Use relative child routes, lazy components and route-scoped services/providers; do not assume a host slug. The host mounts at `/<id>` and reserves platform roots (`login`, `auth`, `dashboard`, `admin`, `settings`, etc.).
+- Co-located services/models/pages/tests. Use local relative imports or explicitly declared external packages. The only platform source import available to domains is `@forge/ui-contracts/v1`.
+
+The public facade supplies typed HTTP, identity (signals), session reset and route-scoped options through injection tokens. The host owns their adapters. Use `DOMAIN_SESSION_STATE.registerUntilDestroyed()` to clear user/tenant data on sign-out, expiry and tenant changes; prevent late requests from restoring data by invalidating an epoch or cancelling subscriptions. Route-provided services must also clear on destruction. The reference demonstrates both protections.
+
+In Cognito/tenant prints, all domain routes require authentication and a valid tenant. The public template branch retains public routing and expose an anonymous identity with no session reset events; their domains must explicitly declare public security and no permissions. The current monolith manifest validator requires Cognito; public is reserved for compatible template hosts. Security modes must match when copying, so moving protected business code into a public host fails preparation. Declared permissions apply to lazy matching and every child activation, and filter the same navigation registration. These are UI boundaries; the backend must enforce the same authorization and tenant isolation. There is no tenant-switch control or TenantAdmin delegation. Admin/tenants remains a separate PlatformAdmin route. Settings/profile/security features are not implemented by this change.
+
+Cross-domain calls must use separately owned versioned contract packages declared as requirements. Do not import another domain implementation, private platform services, bootstrap files, generated registry or host environments. Do not duplicate the platform contracts inside a copied domain. Shared UI belongs in an explicitly versioned reusable package or the public facade in a future compatible contract revision.
+
+## Enforcement and proof
+
+Preparation uses the TypeScript parser/resolver to inspect import/export/dynamic-import/require edges and component resource ownership. It rejects incompatible majors/targets/packages/configuration, reserved or mismatched IDs, cross-domain/private imports, platform-to-domain imports outside generated composition, and nonliteral module discovery. These are maintainability boundaries, not a sandbox for malicious JavaScript. Standard type checking and tests remain required.
+
+`npm run test:architecture` exercises positive and deliberately invalid source fixtures. The platform Angular tests prove lazy loading, route options, navigation registration, permission updates and authentication/tenant/child-route guards. Tests copied inside a domain run with the receiving print's unit tests.
+
+To repeat the two-print build proof, generate differently named source and fresh prints, install their dependencies, copy the example into the source domain folder, then run:
+
+```sh
+node scripts/verify-copy.mjs /absolute/source-print /absolute/fresh-print work-items
+```
+
+The script refuses to overwrite a destination domain, builds the source, copies only the domain folder unchanged, prepares/builds the destination and checks destination platform file hashes. Run receiving Angular tests and browser routing/navigation checks too. No backend endpoint, AWS resource or database operation is created by this tooling.
+
+The conceptual contract-major and declared dependency/configuration rules follow the REST print portability pattern. Angular registration differs deliberately: build-time literal imports replace backend assembly discovery so the AOT builder can statically analyze lazy routes.
+
+## Existing mobile / combined targets
+
+The ownership reorganization does not redesign native UI. The same target-specific shell/config branches and auth/session logic are retained. Domain manifests must support every receiving target; the web example is deliberately rejected by a combined host. Existing legacy native-target selection behavior is not broadened by enabling previously unmapped template members. The separate Ionic print templates are unchanged.

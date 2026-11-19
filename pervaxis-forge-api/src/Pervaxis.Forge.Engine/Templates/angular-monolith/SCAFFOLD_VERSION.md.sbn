@@ -30,14 +30,10 @@ None
 
 ## Migration Guide
 
-1. Generate a new app from the same `manifest.json` using the new Forge version.
-2. Compare `SCAFFOLD_VERSION.md` files.
-3. Copy your feature code (`features/`) into the new scaffold.
-4. Keep the new scaffold's `core/`, `shared/`, `app.config.ts`, and `app.routes.ts`.
-5. Run `npm install` and `ng build` to verify.
+1. Generate a fresh print and compare scaffold metadata and ui-platform.json.
+2. Check the domain's V1 contract, Angular/package, target and public configuration requirements.
+3. Copy only your complete apps/<app>/src/app/domains/<id> folders into the fresh print.
+4. Keep the fresh platform, root wiring, public contracts and generated registry tooling.
+5. Install compatible dependencies, run npm run build:prod, npm test and npm run test:architecture.
 
-**Domain folders (yours — copy on migration):**
-- `features/` — Your business feature components
-
-**Scaffold infrastructure (take from new print):**
-- `core/`, `shared/`, `app.config.ts`, `app.component.*`, `styles.scss`
+See [DomainPortability.md](DeveloperReference/DomainPortability.md) for precise compatibility and copy proof instructions. A pre-V1 feature requires a one-time conversion; copying old features or private platform imports is not supported.
