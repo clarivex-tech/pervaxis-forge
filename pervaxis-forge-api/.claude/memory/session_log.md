@@ -18,6 +18,16 @@ The new API regression reproduced the defect before the fix (mixed-case missing,
 
 ---
 
+## 2026-11-19 — Generated REST local startup documentation
+
+**Branch:** `feature/api-local-startup-docs`, isolated from fetched `origin/develop` at `867cae6`. No commit/push requested.
+
+Added a generated PowerShell local development guide and README links. It renders exact project paths, Development/AWS settings, PostgreSQL runtime SecretId and CA configuration, opt-in Cognito provisioning prerequisites, CORS/readiness/UI port pairing, and separate runtime versus migration credentials. It distinguishes generator LocalMode from generated API startup and preserves existing application migration history without baseline resets. Corrected the database guide's EF-tool assumptions and clarified that the design-time factory does not resolve runtime Secrets Manager credentials or the root-certificate option.
+
+Verification completed on 2026-11-20: all 162 Engine tests passed, no failures/skips. Documentation checks cover supported default/minimal REST variants, local links, configuration keys and actual restore/build commands in disposable rendered prints; the full suite includes rendered tests, copy-module portability, architecture and migration-model checks. No credentialed API startup, AWS/DB operations, UI implementation or Downloads changes. Current generator rejects legacy/no-database REST manifests; verification follows its supported tenant-ready contract. The provider-casing correction is isolated on feature/api-workspace-provider-casing.
+
+---
+
 ## 2026-05-14 — Phase 3: generation endpoints + GitHub integration
 
 **Branch:** `feature/phase3-generation-github` → PR targeting `develop`

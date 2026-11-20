@@ -1,0 +1,117 @@
+# Run this generated API locally (PowerShell)
+
+Run these commands from the **extracted print's solution root**, containing `src/{{ model.names.namespace }}/{{ model.names.namespace }}.csproj`. Replace every `<...>` placeholder with your own approved development values. These instructions start this API; they do not provision AWS resources or a database.
+
+## Prerequisites and boundaries
+
+- Install the .NET 10 SDK and restore access to the package feeds in this print's `NuGet.config`. Docker is optional for building the container, not required for `dotnet run`.
+- Use an approved development AWS profile, authenticated through your organization's normal process (for example, complete an SSO login separately if the profile requires it). Do not paste access keys or database passwords into source files or command history. Remove stale credential/environment overrides from the terminal before selecting a profile.
+- **Forge generator LocalMode is separate.** `Forge:LocalMode` belongs to the Forge generator/control-plane API and selects its local database behavior. The generated REST API has no LocalMode switch: do not set `Forge__LocalMode` here. Development environment settings do not bypass authentication, tenancy, AWS access or database requirements.
+- Review selected Genesis modules before starting. Development settings contain `UseLocalStack`/localhost defaults for several providers; they do not configure real AWS endpoints. For each selected provider, replace those defaults with its documented development-AWS configuration (including disabling its emulator option where supported). This guide does not launch emulators. Unused configuration sections do not enable modules. Configure any selected OTLP exporter/collector separately.
+
+## Configure this terminal
+
+Use the same terminal for the settings and `dotnet run`. Environment overrides take precedence over JSON files. `--no-launch-profile` prevents a launch profile from silently changing the URL/environment.
+
+```powershell
+$env:DOTNET_ENVIRONMENT = 'Development'
+$env:ASPNETCORE_ENVIRONMENT = 'Development'
+$env:AWS_PROFILE = '<development-profile>'
+$env:AWS_REGION = '<aws-region>'
+$env:AWS__Region = $env:AWS_REGION
+$env:Forge__Cors__AllowedOrigins__0 = 'http://localhost:4200'
+{{ if model.manifest.tenant_ready }}
+$env:Forge__Provisioning__Enabled = 'false'
+{{ end }}
+```
+
+`AWS_PROFILE` selects SDK credentials; `AWS_REGION` selects the SDK region, and `AWS__Region` explicitly binds the host's AWS options to the same region. Align the profile region and remove conflicting `AWS` configuration overrides. Use placeholders for your customer/account resources; nothing here supplies credentials. See AWS [profile resolution](https://docs.aws.amazon.com/sdk-for-net/v4/developer-guide/creds-assign.html) and [region selection](https://docs.aws.amazon.com/sdk-for-net/v4/developer-guide/net-dg-region-selection.html).
+
+{{ if model.manifest.database != null }}
+## PostgreSQL runtime connection
+
+Have an existing development database, network access (VPN/tunnel/security-group rules as appropriate), and an approved CA certificate file available. The following uses runtime credentials from Secrets Manager and validates the database hostname and certificate:
+
+```powershell
+$env:ConnectionStrings__Default = 'Host=<postgres-endpoint>;Port=5432;Database=<database-name>;SSL Mode=VerifyFull'
+$env:Forge__Database__SecretId = 'arn:aws:secretsmanager:<aws-region>:<account-id>:secret:<runtime-db-secret-name>'
+$env:Forge__Database__RootCertificate = 'C:/certificates/<postgres-ca-bundle>.pem'
+```
+
+The secret must contain JSON `username` and `password`; host/database keys in the secret are ignored. Runtime SecretId replaces any username/password in the connection string. `Forge:Database:SecretId` is distinct from `Forge:Secrets:SecretId` (the optional API-key secret). You do not need to enable `Forge:Secrets:UseSecretsManager` for database credentials. For an independently managed local database, leave the database SecretId empty and supply credentials through your approved local secret mechanism; do not reuse the checked-in localhost sample credentials against a shared server.
+
+The AWS principal needs `secretsmanager:GetSecretValue` on the specific runtime secret and, for a customer-managed KMS key, `kms:Decrypt` with an appropriate key policy. Cross-account access also needs a secret resource policy. See [AWS GetSecretValue permissions](https://docs.aws.amazon.com/secretsmanager/latest/apireference/API_GetSecretValue.html). PostgreSQL grants are separate: runtime credentials should have only the application data/schema access required, not ownership/DDL or superuser privileges. See [Database.md](Database.md) for rotation and certificate details.
+
+## Prepare schema separately
+
+Startup never applies migrations. A successful readiness query does not prove that tables or tenant seed rows exist.
+
+- **Genuinely empty database:** use this application's one chosen migration chain, reviewed by its owner, to initialize it before using data endpoints.
+- **Existing database:** retain the complete deployed `Data/Migrations` chain, designers and latest snapshot. Preserve applied IDs and seed identity; append reviewed changes after the real tip. Never replace history with a fresh print, generate a fresh baseline over existing tables, delete applied migrations or reset the database to make startup work. Follow [Portability.md](Portability.md) before changing an existing deployment.
+- Use separately authorized migration credentials with the necessary DDL permissions through the deployment process. Never grant those privileges to the running API merely to fix a schema error.
+
+The design-time EF factory reads `ConnectionStrings__Default` directly. It **does not** read Secrets Manager credentials or apply `Forge__Database__RootCertificate`. Therefore a runtime connection string with only a SecretId is insufficient for `dotnet ef database update`. In a separate migration terminal/process, obtain approved migration credentials through a secure mechanism, set the full migration connection string including `Root Certificate=<ca-path>`, and review the target and migration inventory before any update. Do not put passwords in command arguments, examples or version control. Do not leave migration credentials in the API terminal.
+
+These commands only inspect the model and produce SQL; they do not apply it. Install a local EF tool matching this print's EF version (currently 10.0.8), then run from the solution root:
+
+```powershell
+dotnet ef migrations has-pending-model-changes --project './src/{{ model.names.namespace }}/{{ model.names.namespace }}.csproj'
+dotnet ef migrations script --idempotent --project './src/{{ model.names.namespace }}/{{ model.names.namespace }}.csproj' --output './migration-review.sql'
+```
+
+Review the script and validate against a restored development copy before an authorized application. SQL output is a local review artifact, not a startup step.
+{{ end }}
+
+{{ if model.manifest.tenant_ready }}
+## Cognito and provisioning (explicit opt-in)
+
+Normal bearer authentication does not require user-provisioning permissions. Keep `Forge__Provisioning__Enabled = 'false'` for ordinary API/UI startup. Generated OIDC settings must identify the approved pool and allowed app clients. If overriding them, use `Forge__Oidc__Authority = 'https://cognito-idp.<aws-region>.amazonaws.com/<user-pool-id>'` and indexed `Forge__Oidc__ClientIds__0 = '<app-client-id>'`. Never use an ID token as the API bearer token.
+
+Tenant access requires an active tenant row, trusted user assignment and a fresh access token with the validated `tenant_id` claim. The separate Cognito pre-token-generation trigger must already be installed/configured; starting this print does not create it. Keep app clients unable to write `custom:tenant_id`; never disable directory checks to work around a rejected request.
+
+Only if you intend to exercise trusted invitations/user administration, deliberately opt in after reviewing [TrustedProvisioning.md](TrustedProvisioning.md):
+
+```powershell
+# Optional; omit this block for normal API startup.
+$env:Forge__Provisioning__UserPoolId = '<user-pool-id>'
+$env:Forge__Provisioning__Region = '<aws-region>'
+$env:Forge__Provisioning__Enabled = 'true'
+```
+
+The pool/region must match token-validation Authority. The AWS principal needs pool-scoped `cognito-idp:ListUsers`, `cognito-idp:AdminGetUser`, and `cognito-idp:AdminCreateUser` permissions for the implemented list/invite/resend operations. The pool schema, trusted attribute assignment, email delivery and first PlatformAdmin bootstrap must already be configured. Endpoint caller authorization is also required; IAM alone does not grant API access. Enabling this flag authorizes real Cognito mutations when those endpoints are called; it is not a local mock. No provisioning action is needed for readiness.
+{{ end }}
+
+## Build and start
+
+```powershell
+dotnet restore './src/{{ model.names.namespace }}/{{ model.names.namespace }}.csproj'
+dotnet build './src/{{ model.names.namespace }}/{{ model.names.namespace }}.csproj' --no-restore
+dotnet run --project './src/{{ model.names.namespace }}/{{ model.names.namespace }}.csproj' --no-launch-profile --urls 'http://localhost:5080'
+```
+
+The server stays in the foreground; use Ctrl+C to stop. HTTP on loopback is a local development example. The host includes HTTPS redirection: this HTTP-only example assumes no inherited `ASPNETCORE_HTTPS_PORT`/`HTTPS_PORTS` setting. If a stale setting redirects to another port, clear that override in your development terminal or configure an actual HTTPS listener and pair the UI with it. Use HTTPS and suitable certificates for other environments. Do not share the sample Development API key; use the authentication scheme generated for this service (see [Authentication.md](Authentication.md)).
+
+From another PowerShell terminal:
+
+```powershell
+Invoke-WebRequest -Uri 'http://localhost:5080/health'
+Invoke-WebRequest -Uri 'http://localhost:5080/health/ready'
+```
+
+Liveness `/health` does not touch the database. Readiness `/health/ready`{{ if model.manifest.database != null }} runs the PostgreSQL connectivity check (`SELECT 1`); a 503 can indicate network, certificate, credentials or database problems{{ else }} has no PostgreSQL check in this print{{ end }}. Neither endpoint verifies all Cognito/module dependencies or tenant schema/data. Check the local console for errors without sharing secrets or tokens.
+
+## Pair with a UI
+
+For a UI served at `http://localhost:4200`, keep the CORS origin above and set its runtime `apiUrl` to `http://localhost:5080` (the API origin, without an extra `/api/v1` suffix). If the UI or API port changes, update the corresponding CORS origin or `apiUrl` too. Origin includes scheme, hostname and port, with no path/trailing slash. Configure any additional allowed origins deliberately; .NET configuration arrays can retain other indexed entries from JSON. CORS does not replace API authentication.{{ if model.manifest.tenant_ready }} Align the UI's Cognito pool/client with the API's allowed clients; see [TrustedProvisioning.md](TrustedProvisioning.md).{{ end }}
+
+## Common startup failures
+
+| Symptom | Check |
+|---|---|
+| Wrong project/URL or unexpected environment | Run from the extracted solution root with the exact project path above and `--no-launch-profile`; inspect inherited environment variables |
+| Missing AWS credentials/region or AccessDenied | Profile login, region alignment, explicit stale credentials and secret/KMS policies; do not broaden to administrator permissions |
+| TLS/database readiness failure | Endpoint reachability, matching hostname, readable CA path, runtime secret shape and database grants |
+| Liveness works but tenant requests fail | Correct schema/history, active tenant, fresh access token and trusted claim enrichment; readiness is connectivity only |
+| Browser fails while PowerShell works | UI origin/CORS entry, API `apiUrl`/port, bearer token and allowed Cognito client |
+
+Settings affect this terminal and its child process. Stop the API and close the development terminal when finished; do not copy its environment, secrets or local paths into a shared configuration file.

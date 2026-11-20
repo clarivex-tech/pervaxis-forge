@@ -8,6 +8,8 @@ This folder holds **copy-and-adapt examples** for the platform features this ser
 
 ## Examples in this service
 
+- [Local startup (PowerShell)](LocalDevelopment.md): exact project commands, AWS/database configuration, provisioning opt-in, readiness and UI pairing
+
 {{ if model.workspace_tasks_enabled }}
 - [Workspace tasks](WorkspaceTasks.md): reference CRUD module, ownership, ETags and safe database upgrades
 {{ end }}
