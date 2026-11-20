@@ -90,6 +90,13 @@ export const appRoutes: Routes = [
     loadComponent: () => import('./features/administration/administration.component').then(m => m.AdministrationComponent),
   },
 {{ end }}
+{{ if model.web_admin_layout && model.angular_cognito_enabled }}
+  {
+    path: 'settings',
+    canActivate: [authGuard],
+    loadComponent: () => import('./features/settings/settings.component').then(m => m.SettingsComponent),
+  },
+{{ end }}
   // Generated domain registration: no handwritten platform route edits.
   ...createDomainRoutes(GENERATED_DOMAINS),
 

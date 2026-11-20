@@ -91,6 +91,8 @@ describe('Web application shell', () => {
     const fixture = TestBed.createComponent(AppComponent); fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('.skip-link').getAttribute('href')).toBe('#main-content');
     expect(fixture.nativeElement.querySelector('main').getAttribute('tabindex')).toBe('-1');
+    const event = new Event('click', { cancelable: true }); fixture.componentInstance.skipToContent(event);
+    expect(event.defaultPrevented).toBeTrue(); expect(document.activeElement).toBe(fixture.nativeElement.querySelector('main'));
   });
 
   it('opens narrow-screen navigation and closes it on navigation', async () => {
@@ -106,6 +108,18 @@ describe('Web application shell', () => {
     fixture.componentInstance.dismissNotification(7); expect(dismiss).toHaveBeenCalledWith(7);
   });
 {{ if model.angular_cognito_enabled }}
+  it('offers Settings and direct sign-out in the user menu, separate from administration', async () => {
+    const fixture = TestBed.createComponent(AppComponent); fixture.detectChanges();
+    expect(fixture.componentInstance.userMenuItems.map(item => item.label).filter(Boolean)).toEqual(['Settings', 'Sign out']);
+    expect(fixture.componentInstance.userMenuItems[0].routerLink).toBe('/settings');
+    fixture.componentInstance.userMenuItems[2].command?.({});
+    expect(TestBed.inject(AuthService).logout).toHaveBeenCalled();
+    const trigger: HTMLButtonElement = fixture.nativeElement.querySelector('#user-menu-toggle');
+    expect(trigger.getAttribute('aria-haspopup')).toBe('menu'); expect(trigger.getAttribute('aria-expanded')).toBe('false');
+    trigger.click(); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    expect(document.querySelectorAll('#user-account-menu').length).toBe(1);
+  });
   it('only shows tenant administration for PlatformAdmin and clears an open panel on reset', () => {
     const fixture = TestBed.createComponent(AppComponent); fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('a[href="/admin/tenants"]')).toBeNull();

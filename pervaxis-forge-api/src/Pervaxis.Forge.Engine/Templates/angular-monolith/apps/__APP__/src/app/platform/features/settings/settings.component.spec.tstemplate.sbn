@@ -1,0 +1,77 @@
+{{ if model.web_admin_layout && model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { of, throwError } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { AuthService } from '../../core/auth/auth.service';
+import { TenantContextService } from '../../core/auth/tenant-context.service';
+import { SessionStateRegistry } from '../../core/auth/session-state';
+import { ApiService } from '../../core/services/api.service';
+import { ThemeService } from '../../core/services/theme.service';
+import { SettingsComponent } from './settings.component';
+
+describe('Settings page', () => {
+  const profile = signal({ subject: 'user-a', name: 'Identity name', email: 'identity@example.test', displayName: 'A display fallback' });
+  const get = jasmine.createSpy('get');
+  beforeEach(() => {
+    localStorage.removeItem('pervaxis.appearance');
+    profile.set({ subject: 'user-a', name: 'Identity name', email: 'identity@example.test', displayName: 'A display fallback' });
+    get.calls.reset(); get.and.returnValue(of({ subject: 'user-a', tenant: { id: 'tenant-api', name: 'Philosophy' }, roles: [], name: 'Wrong API name', email: 'wrong-api@example.test' }));
+    TestBed.configureTestingModule({ imports: [SettingsComponent], providers: [
+      { provide: AuthService, useValue: { profile, isAuthenticated: signal(true), roles: signal(['PlatformAdmin']) } },
+      { provide: TenantContextService, useValue: { currentTenantId: signal('tenant-token') } },
+      { provide: ApiService, useValue: { get } },
+    ] });
+  });
+  afterEach(() => { localStorage.removeItem('pervaxis.appearance'); document.documentElement.classList.remove('dark-mode'); document.documentElement.style.removeProperty('color-scheme'); });
+  it('renders identity attributes separately from API application context without edit/password fields', async () => {
+    const fixture = TestBed.createComponent(SettingsComponent); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    const element: HTMLElement = fixture.nativeElement;
+    expect(element.querySelector('[data-testid="profile-name"]')?.textContent).toBe('Identity name');
+    expect(element.querySelector('[data-testid="profile-email"]')?.textContent).toBe('identity@example.test');
+    expect(element.querySelector('[data-testid="context-tenant"]')?.textContent).toBe('Philosophy');
+    expect(element.textContent).toContain('No application roles assigned.'); expect(element.textContent).not.toContain('PlatformAdmin');
+    expect(element.querySelector('input, textarea, form')).toBeNull();
+    const select = element.querySelector<HTMLSelectElement>('#settings-appearance')!;
+    select.value = 'dark'; select.dispatchEvent(new Event('change')); fixture.detectChanges();
+    expect(TestBed.inject(ThemeService).preference()).toBe('dark'); expect(document.documentElement.classList.contains('dark-mode')).toBeTrue();
+  });
+  it('preserves missing attributes instead of treating displayName as the real name or email', async () => {
+    profile.set({ subject: 'user-a', name: '', email: '', displayName: 'A display fallback' });
+    const fixture = TestBed.createComponent(SettingsComponent); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="profile-name"]').textContent).toBe('Not provided');
+    expect(fixture.nativeElement.querySelector('[data-testid="profile-email"]').textContent).toBe('Not provided');
+  });
+  it('keeps identity and appearance available when tenant admission denies /me and offers retry', async () => {
+    get.and.returnValue(throwError(() => new HttpErrorResponse({ status: 403, error: 'Core denial' })));
+    const fixture = TestBed.createComponent(SettingsComponent); fixture.detectChanges(); await fixture.whenStable(); fixture.detectChanges();
+    const element: HTMLElement = fixture.nativeElement;
+    expect(element.querySelector('[role="alert"]')?.textContent).toContain('does not currently have access');
+    expect(element.querySelector('[data-testid="profile-name"]')?.textContent).toBe('Identity name');
+    expect(element.querySelector('#settings-appearance')).not.toBeNull(); expect(element.textContent).not.toContain('PlatformAdmin');
+    get.and.returnValue(of({ subject: 'user-a', tenant: { id: 'tenant-api', name: 'clv' }, roles: ['PlatformAdmin'] }));
+    element.querySelector<HTMLButtonElement>('p-button button')!.click(); await fixture.whenStable(); fixture.detectChanges();
+    expect(element.querySelector('[data-testid="context-tenant"]')?.textContent).toBe('clv');
+    TestBed.inject(SessionStateRegistry).reset('signed-out'); fixture.detectChanges(); expect(element.querySelector('[data-testid="context-tenant"]')).toBeNull();
+  });
+});
+
+{{ end }}

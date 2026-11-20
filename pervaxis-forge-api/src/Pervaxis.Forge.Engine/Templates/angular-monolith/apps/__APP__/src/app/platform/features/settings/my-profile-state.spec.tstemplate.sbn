@@ -1,0 +1,103 @@
+{{ if model.web_admin_layout && model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { Subject, of, throwError } from 'rxjs';
+import { AuthService } from '../../core/auth/auth.service';
+import { SessionStateRegistry, SessionResetReason } from '../../core/auth/session-state';
+import { TenantContextService } from '../../core/auth/tenant-context.service';
+import { ApiService } from '../../core/services/api.service';
+import { MyProfileState } from './my-profile-state';
+
+describe('Read-only My Profile context', () => {
+  const subject = 'user-a';
+  const profile = signal<{ subject: string } | null>({ subject });
+  const signedIn = signal(true), tenant = signal<string | null>('tenant-a');
+  const body = { subject, tenant: { id: 'admitted-tenant', name: 'Philosophy' }, roles: [] as string[] };
+  let get: jasmine.Spy;
+  beforeEach(() => {
+    profile.set({ subject }); signedIn.set(true); tenant.set('tenant-a');
+    get = jasmine.createSpy('get').and.returnValue(of(body));
+    TestBed.configureTestingModule({ providers: [MyProfileState,
+      { provide: ApiService, useValue: { get } },
+      { provide: AuthService, useValue: { profile, isAuthenticated: signedIn, roles: signal(['PlatformAdmin']) } },
+      { provide: TenantContextService, useValue: { currentTenantId: tenant } },
+    ] });
+  });
+  it('uses only /me for admitted tenant and application roles, preserving an empty roles array', async () => {
+    const state = TestBed.inject(MyProfileState); await state.load();
+    expect(get).toHaveBeenCalledOnceWith('/api/v1/me'); expect(state.status()).toBe('ready');
+    expect(state.context()).toEqual(body); expect(state.context()?.roles).toEqual([]);
+  });
+  it('preserves API role case/order rather than substituting identity token roles', async () => {
+    get.and.returnValue(of({ ...body, roles: ['Editor', 'editor'] }));
+    const state = TestBed.inject(MyProfileState); await state.load(); expect(state.context()?.roles).toEqual(['Editor', 'editor']);
+  });
+  for (const invalid of [null, {}, { ...body, subject: 'another-user' }, { ...body, tenant: null }, { ...body, roles: 'PlatformAdmin' }, { ...body, roles: [42] }]) {
+    it('fails closed for an invalid or mismatched subject/context: ' + JSON.stringify(invalid), async () => {
+      get.and.returnValue(of(invalid)); const state = TestBed.inject(MyProfileState); await state.load();
+      expect(state.context()).toBeNull(); expect(state.failure()).toBe('response'); expect(state.status()).toBe('error');
+    });
+  }
+  for (const [status, failure] of [[401, 'unauthorized'], [403, 'forbidden'], [0, 'unavailable'], [503, 'unavailable']] as const) {
+    it('handles status ' + status + ' without assuming an MVC error body or using token context', async () => {
+      get.and.returnValue(throwError(() => new HttpErrorResponse({ status, error: '<html>private upstream details</html>' })));
+      const state = TestBed.inject(MyProfileState); await state.load(); expect(state.failure()).toBe(failure);
+      expect(state.context()).toBeNull(); expect(state.message()).not.toContain('private upstream');
+    });
+  }
+  it('clears previously displayed context while refreshing, and retries after a network error', async () => {
+    const state = TestBed.inject(MyProfileState); await state.load(); const response = new Subject<unknown>();
+    get.and.returnValue(response); const pending = state.load(); expect(state.status()).toBe('loading'); expect(state.context()).toBeNull();
+    response.error(new HttpErrorResponse({ status: 0 })); await pending;
+    get.and.returnValue(of(body)); await state.load(); expect(state.context()).toEqual(body); expect(state.failure()).toBeNull();
+  });
+  for (const reason of ['signed-out', 'session-ended', 'tenant-changed'] as SessionResetReason[]) {
+    it('clears data and ignores a late response on ' + reason, async () => {
+      const response = new Subject<unknown>(); get.and.returnValue(response);
+      const state = TestBed.inject(MyProfileState); const pending = state.load();
+      TestBed.inject(SessionStateRegistry).reset(reason); response.next(body); response.complete(); await pending;
+      expect(state.context()).toBeNull(); expect(state.status()).toBe('idle'); expect(state.failure()).toBeNull();
+    });
+  }
+  it('does not allow an older request to replace a superseding request', async () => {
+    const old = new Subject<unknown>(); get.and.returnValue(old); const state = TestBed.inject(MyProfileState); const pending = state.load();
+    get.and.returnValue(of(body)); await state.load(); old.next({ ...body, tenant: { id: 'old', name: 'Old tenant' } }); old.complete(); await pending;
+    expect(state.context()?.tenant.name).toBe('Philosophy');
+  });
+  it('checks subject ownership even before a reset event arrives', async () => {
+    const response = new Subject<unknown>(); get.and.returnValue(response); const state = TestBed.inject(MyProfileState); const pending = state.load();
+    profile.set({ subject: 'user-b' }); response.next(body); response.complete(); await pending; expect(state.context()).toBeNull();
+  });
+  it('hides a ready result immediately when its tenant changes', async () => {
+    const state = TestBed.inject(MyProfileState); await state.load(); tenant.set('tenant-b'); expect(state.context()).toBeNull();
+  });
+  it('ignores a response after component state destruction', async () => {
+    const response = new Subject<unknown>(); get.and.returnValue(response); const state = TestBed.inject(MyProfileState); const pending = state.load();
+    TestBed.resetTestingModule(); response.next(body); response.complete(); await pending; expect(state.context()).toBeNull(); expect(state.status()).toBe('idle');
+  });
+  it('does not call /me without a signed-in subject', async () => {
+    profile.set(null); const state = TestBed.inject(MyProfileState); await state.load(); expect(state.failure()).toBe('identity'); expect(get).not.toHaveBeenCalled();
+    profile.set({ subject }); signedIn.set(false); await state.load(); expect(get).not.toHaveBeenCalled();
+  });
+});
+
+{{ end }}

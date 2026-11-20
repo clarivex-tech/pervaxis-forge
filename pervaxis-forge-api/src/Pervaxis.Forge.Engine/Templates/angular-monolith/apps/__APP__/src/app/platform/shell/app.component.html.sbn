@@ -174,7 +174,7 @@
 }
 
 <!-- Web shell: platform-owned layout, feature routes remain lazy and independently guarded. -->
-<a class="skip-link" href="#main-content">Skip to main content</a>
+<a class="skip-link" href="#main-content" (click)="skipToContent($event)">Skip to main content</a>
 <ng-template #navigation>
   <nav class="app-sidebar__nav" aria-label="Main navigation">
     <span class="navigation-heading">WORKSPACE</span>
@@ -213,11 +213,6 @@
         <span class="app-header__brand" [textContent]="title"></span>
       </ng-template>
       <ng-template #end>
-        <label class="theme-control"><span class="sr-only">Appearance</span>
-          <select #appearance aria-label="Appearance" [value]="theme.preference()" (change)="theme.setPreference(appearance.value)">
-            <option value="system">System theme</option><option value="light">Light theme</option><option value="dark">Dark theme</option>
-          </select>
-        </label>
 {{ if model.angular_cognito_enabled }}
         @if (auth.isAuthenticated()) {
           <div class="app-header__identity">
@@ -226,7 +221,11 @@
               <span class="app-header__tenant" [title]="'Tenant ' + tenantId" [textContent]="'Tenant ' + tenantId.slice(0, 8)"></span>
             }
           </div>
-          <p-button label="Sign out" icon="pi pi-sign-out" [text]="true" severity="secondary" (onClick)="signOut()" />
+          <p-menu #accountMenu [id]="'user-account-menu'" [model]="userMenuItems" [popup]="true" appendTo="body" ariaLabel="User menu" />
+          <button id="user-menu-toggle" type="button" class="navigation-toggle" title="Account" aria-label="Open user menu" aria-haspopup="menu"
+                  aria-controls="user-account-menu" [attr.aria-expanded]="accountMenu.visible === true" (click)="accountMenu.toggle($event)">
+            <i class="pi pi-user" aria-hidden="true"></i>
+          </button>
         }
 {{ end }}
       </ng-template>

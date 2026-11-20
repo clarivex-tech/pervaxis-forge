@@ -1,0 +1,24 @@
+{{ if model.web_admin_layout && model.angular_cognito_enabled }}
+# Settings and read-only My Profile
+
+Open the header Account menu and choose Settings. Sign out is directly available in that menu. Tenant/user administration stays in its separate, role-protected navigation area.
+
+The /settings route requires an authenticated session. It deliberately does not use tenantGuard: identity and Appearance remain available when the API rejects tenant admission. Application access details still require the API's admission and bearer policy.
+
+## Sources and limits
+
+- Name/email come only from the existing AuthService sign-in profile (ID-token claims). Missing attributes show Not provided; display-name/email/username fallbacks are not treated as the actual name. These are session-time details, not a live identity-provider lookup.
+- Application context uses the authenticated ApiService GET /api/v1/me with the existing configured apiUrl/base-prefix convention. The expected response is { subject, tenant: { id, name }, roles: string[] }. Its subject must match the signed-in profile. Tenant and roles are never filled from token claims when the request fails. Empty API roles remain empty and case is preserved.
+- API roles reflect the token accepted by the application, plus admitted tenant context. This is not a live group-membership or revocation check, and displaying roles never grants access. The backend continues enforcing authorization for each action.
+- Loading, refresh/retry, unavailable responses, 401 and 403 have explicit states. Status handling does not depend on an MVC error body. Existing HTTP refresh/retry/interceptor rules are reused; backend error bodies are not displayed by this page.
+- Context stays in component-scoped memory. Every new read clears old results, and session reset/destruction invalidates pending responses. Subject/tenant ownership and request epochs prevent stale responses from restoring another session's data. Nothing is written to identity/tenant storage.
+- Appearance reuses ThemeService: System, Light and Dark choices are browser-local preferences and use the same PrimeNG/custom-token dark selector. Storage unavailability remains supported by the existing service.
+
+There is no profile editing, password/security form, tenant/user selector or new identity-provider request. No new OAuth scope, GetUser call, IAM permission, backend write API or browser-configurable editing capability is introduced. Self-service editing remains a separate operator-reviewed design.
+
+## Ownership and verification
+
+Code and focused tests live under apps/{{ model.manifest.service_name }}/src/app/platform/features/settings/. The shell and lazy route stay platform-owned; domains/ and V1 registration are unchanged. The combined/native shell is preserved; this page belongs to the web admin-shell print.
+
+Use the supported npm scripts (which prepare domain registrations): npm run build:prod, npm run lint, npm test -- --watch=false --browsers=ChromeHeadless and npm run test:architecture. Configure production API and callback/logout URLs for the deployed app before real sign-in. Local mocks and browser tests cannot prove live Cognito app-client permissions or deployment connectivity.
+{{ end }}

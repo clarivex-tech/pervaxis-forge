@@ -30,7 +30,11 @@
           },
           "configurations": {
             "production": {
+{{ if model.web_admin_layout }}
+              "optimization": { "scripts": true, "styles": { "minify": true, "inlineCritical": false } },
+{{ else }}
               "optimization": true,
+{{ end }}
               "extractLicenses": true,
               "sourceMap": false,
               "outputHashing": "all",
