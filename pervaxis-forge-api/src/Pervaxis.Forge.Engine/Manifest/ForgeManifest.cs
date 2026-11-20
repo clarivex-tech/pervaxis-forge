@@ -48,6 +48,9 @@ public sealed record ForgeManifest
 
     public bool MultiTenancy { get; init; } = false;
 
+    /// <summary>Includes the portable Workspace Tasks reference domain in applicable REST prints.</summary>
+    public bool? IncludeWorkspaceTasks { get; init; }
+
     /// <summary>Initial tenant identity shared by related REST services. Never used as a request fallback.</summary>
     public Guid? InitialTenantId { get; init; }
 

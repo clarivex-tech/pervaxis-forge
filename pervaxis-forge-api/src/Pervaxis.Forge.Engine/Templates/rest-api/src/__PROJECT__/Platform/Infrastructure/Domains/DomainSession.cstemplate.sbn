@@ -1,0 +1,31 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Forge.Contracts.V1;
+using {{ model.names.namespace }}.Platform.Data;
+
+namespace {{ model.names.namespace }}.Platform.Infrastructure.Domains;
+
+/// <summary>Adapts tracked operations without exposing the generated context type to a business slice.</summary>
+public sealed class DomainSession({{ model.names.dot_net_class_name }}DbContext db) : IDomainSession
+{
+    public IQueryable<TEntity> Query<TEntity>() where TEntity : class => db.Set<TEntity>();
+    public void Add<TEntity>(TEntity entity) where TEntity : class => db.Set<TEntity>().Add(entity);
+    public void Remove<TEntity>(TEntity entity) where TEntity : class => db.Set<TEntity>().Remove(entity);
+    public Task<int> SaveChangesAsync(CancellationToken cancellationToken = default) => db.SaveChangesAsync(cancellationToken);
+}

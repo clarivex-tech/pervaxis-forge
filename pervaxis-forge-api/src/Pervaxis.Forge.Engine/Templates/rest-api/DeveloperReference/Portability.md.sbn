@@ -12,6 +12,8 @@ Compatibility means the same contract major version, database provider, tenancy 
 
 ## A feature owns its registration
 
+New tenant-ready hosts also supply additive V1 `IDomainSession` (tracked queries, add/remove and save through the shared tenant-aware context) and `IUserContext` (validated human bearer subject). Check that these capabilities exist in a receiving print; the V1 namespace alone does not establish that an older print supplies them. Subjects are scoped to the configured issuer. Workspace tasks explicitly register and execute their validators, independent of the global validation toggle. Its module README lists exact prerequisites and API behavior.
+
 Create `Domains/Billing/BillingModule.cs`:
 
 ```csharp

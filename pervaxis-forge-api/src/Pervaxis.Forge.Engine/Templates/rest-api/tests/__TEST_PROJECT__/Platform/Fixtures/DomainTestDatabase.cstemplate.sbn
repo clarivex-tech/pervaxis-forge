@@ -1,0 +1,126 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+using Amazon.SecretsManager;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.IdentityModel.Protocols;
+using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using Microsoft.IdentityModel.Tokens;
+using Moq;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Core.MultiTenancy;
+using Pervaxis.Core.Data.EntityFrameworkCore;
+using Pervaxis.Forge.Contracts.V1;
+using {{ model.names.namespace }}.Platform.Data;
+using {{ model.names.namespace }}.Platform.Extensions;
+using {{ model.names.namespace }}.Platform.Infrastructure.Domains;
+using {{ model.names.namespace }}.Platform.Infrastructure.Extensions;
+using {{ model.names.namespace }}.Platform.Infrastructure.Middleware;
+using {{ model.names.namespace }}.Platform.Models.Configuration;
+
+namespace Pervaxis.Forge.Testing.V1;
+
+/// <summary>Stable test fixture boundary for copied domain tests, backed by the real shared host context.</summary>
+public sealed class DomainTestDatabase : IDisposable
+{
+    public const string TenantA = "{{ model.default_tenant_id }}";
+    public const string TenantB = "8c9bfd10-1d4a-4a3c-bd5b-0a1b2c3d4e5f";
+    public const string Suspended = "8c9bfd10-1d4a-4a3c-bd5b-0a1b2c3d4e60";
+    public const string Issuer = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_TestPool";
+    public const string ClientId = "workspacewebclient";
+
+    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    private readonly DbContextOptions<{{ model.names.dot_net_class_name }}DbContext> _options;
+    private readonly Mock<IAmazonSecretsManager> _secrets = new(MockBehavior.Strict);
+    public DomainSqlCapture Sql { get; } = new();
+
+    public DomainTestDatabase()
+    {
+        _connection.Open();
+        _options = new DbContextOptionsBuilder<{{ model.names.dot_net_class_name }}DbContext>()
+            .UseSqlite(_connection).AddInterceptors(Sql).Options;
+        using var db = CreateContext(DesignTimeTenantContext.Instance);
+        db.Database.EnsureCreated();
+    }
+
+    public DbContext CreateContext(ITenantContext tenant) => new {{ model.names.dot_net_class_name }}DbContext(_options, tenant);
+    /// <summary>PostgreSQL model/migration services only. Tests never open this connection.</summary>
+    public DbContext CreatePostgresModelContext() => new {{ model.names.dot_net_class_name }}DbContext(
+        new DbContextOptionsBuilder<{{ model.names.dot_net_class_name }}DbContext>()
+            .UseNpgsql("Host=127.0.0.1;Port=1;Database=model_only;Username=unused;Password=unused").Options,
+        DesignTimeTenantContext.Instance);
+    public IDomainSession WrapSession(DbContext db) => new DomainSession(({{ model.names.dot_net_class_name }}DbContext)db);
+
+    public WebApplication CreateApplication(SecurityKey signingKey, bool validation = true)
+    {
+        var builder = WebApplication.CreateBuilder();
+        builder.Configuration.Sources.Clear();
+        builder.WebHost.UseTestServer();
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Forge:Authentication:Scheme"] = "Both",
+            ["Forge:Authentication:ApiKey"] = "workspace-local-test-key",
+            ["Forge:Oidc:Provider"] = "Cognito",
+            ["Forge:Oidc:Authority"] = Issuer,
+            ["Forge:Oidc:ClientIds:0"] = ClientId,
+        });
+        builder.Services.Configure<ForgeAuthenticationOptions>(builder.Configuration.GetSection(ForgeAuthenticationOptions.SectionName));
+        builder.Services.Configure<ForgeOidcOptions>(builder.Configuration.GetSection(ForgeOidcOptions.SectionName));
+        builder.Services.AddSingleton(_secrets.Object);
+        builder.Services.AddForgeAuthentication(builder.Configuration);
+        builder.Services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
+        {
+            var metadata = new OpenIdConnectConfiguration { Issuer = Issuer };
+            metadata.SigningKeys.Add(signingKey);
+            options.ConfigurationManager = new StaticConfigurationManager<OpenIdConnectConfiguration>(metadata);
+        });
+        builder.Services.AddPervaxisClaimsMultiTenancy(options => options.EnableDirectoryChecks = true);
+        var directory = new Mock<ITenantDirectory>(MockBehavior.Strict);
+        directory.Setup(item => item.FindAsync(It.IsAny<TenantId>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((TenantId id, CancellationToken _) => new TenantDirectoryEntry(id, "Directory tenant", id.Value == Suspended ? TenantStatus.Suspended : TenantStatus.Active));
+        builder.Services.AddSingleton(directory.Object);
+        builder.Services.AddScoped(provider => new {{ model.names.dot_net_class_name }}DbContext(_options, provider.GetRequiredService<ITenantContext>()));
+        builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
+        builder.Services.AddControllers().AddApplicationPart(typeof({{ model.names.namespace }}.Platform.Hosting.ForgeHost).Assembly);
+{{- if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
+        if (validation) builder.Services.AddForgeValidation();
+{{- end }}
+        var app = builder.Build();
+        app.UseMiddleware<ExceptionHandlerMiddleware>();
+        app.UseRouting();
+        app.UseAuthentication();
+        app.UsePervaxisClaimsTenancy();
+        app.UseAuthorization();
+        app.MapControllers();
+        return app;
+    }
+
+    public void Dispose()
+    {
+        _secrets.VerifyNoOtherCalls();
+        _connection.Dispose();
+    }
+}
+{{ end }}

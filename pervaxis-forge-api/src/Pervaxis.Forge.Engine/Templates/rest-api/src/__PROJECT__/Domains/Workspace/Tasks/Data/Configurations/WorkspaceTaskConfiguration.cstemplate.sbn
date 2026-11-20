@@ -1,0 +1,44 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Constants;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Configurations;
+
+public sealed class WorkspaceTaskConfiguration : IEntityTypeConfiguration<WorkspaceTask>
+{
+    public void Configure(EntityTypeBuilder<WorkspaceTask> builder)
+    {
+        builder.ToTable("workspace_tasks");
+        builder.Property(task => task.Id).ValueGeneratedNever();
+        builder.Property(task => task.OwnerSubject).IsRequired().HasMaxLength(128).IsConcurrencyToken()
+            .Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Property(task => task.Title).IsRequired().HasMaxLength(WorkspaceTaskConstants.TitleLength);
+        builder.Property(task => task.Description).HasMaxLength(WorkspaceTaskConstants.DescriptionLength);
+        builder.Property(task => task.CreatedAt).Metadata.SetAfterSaveBehavior(PropertySaveBehavior.Throw);
+        builder.Property(task => task.Version).IsConcurrencyToken();
+        builder.HasIndex("TenantId", nameof(WorkspaceTask.OwnerSubject), nameof(WorkspaceTask.CreatedAt), nameof(WorkspaceTask.Id))
+            .HasDatabaseName("IX_workspace_tasks_tenant_owner_created_id");
+    }
+}
+{{ end }}

@@ -159,6 +159,7 @@ public static class ForgeHost
             options.AddPolicy(ForgeUiCorsPolicy, policy => policy
                 .WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
+                .WithExposedHeaders("ETag")
                 .AllowAnyMethod());
         });
         // -- Authentication (API Key + optional JWT/OIDC) ------------------------------------

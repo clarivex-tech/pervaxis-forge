@@ -1,0 +1,47 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Extensions.Options;
+using Pervaxis.Forge.Contracts.V1;
+using {{ model.names.namespace }}.Platform.Models.Configuration;
+
+namespace {{ model.names.namespace }}.Platform.Auth;
+
+/// <summary>Reads only the bearer identity accepted by the configured Cognito JWT handler.</summary>
+public sealed class ValidatedUserContext(
+    IHttpContextAccessor accessor,
+    IAuthenticationSchemeProvider schemes,
+    IOptions<ForgeOidcOptions> options) : IUserContext
+{
+    public async Task<string?> GetSubjectAsync(CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var context = accessor.HttpContext;
+        if (context is null || !string.Equals(options.Value.Provider?.Trim(), "Cognito", StringComparison.OrdinalIgnoreCase)
+            || await schemes.GetSchemeAsync(JwtBearerDefaults.AuthenticationScheme) is null)
+            return null;
+
+        var result = await context.AuthenticateAsync(JwtBearerDefaults.AuthenticationScheme);
+        if (!result.Succeeded)
+            return null;
+        return CognitoUserSubject.Read(result.Principal, result.Properties?.GetTokenValue("access_token"));
+    }
+}
+{{ end }}

@@ -79,6 +79,10 @@ public sealed class ManifestValidator
             errors.Add("REST API prints require a non-empty InitialTenantId GUID shared by related services.");
         if (manifest.MultiTenancy)
             ValidateMultiTenancy(manifest, errors);
+        if (manifest.IncludeWorkspaceTasks == true &&
+            !(manifest.ServiceType == ServiceType.RestApi && manifest.MultiTenancy
+              && manifest.Database?.Engine == "postgresql" && manifest.Cognito is not null))
+            errors.Add("IncludeWorkspaceTasks=true requires a PostgreSQL, tenant-ready REST print with Cognito bearer authentication.");
         if (manifest.ServiceType == ServiceType.Monolithic && manifest.AngularAuth is null)
             errors.Add("Angular monolith prints require AngularAuth with Cognito settings.");
 

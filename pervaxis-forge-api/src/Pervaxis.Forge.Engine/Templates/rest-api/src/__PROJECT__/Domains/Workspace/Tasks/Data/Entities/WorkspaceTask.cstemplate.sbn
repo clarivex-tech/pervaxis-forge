@@ -1,0 +1,57 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Pervaxis.Core.Data.EntityFrameworkCore;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities;
+
+/// <summary>Private task data owned by an immutable tenant and human subject.</summary>
+public sealed class WorkspaceTask : TenantEntity<Guid>
+{
+    private WorkspaceTask() { }
+    internal WorkspaceTask(string ownerSubject, string title, string? description, bool isCompleted, DateTime now)
+    {
+        Id = Guid.NewGuid();
+        OwnerSubject = ownerSubject;
+        Title = title;
+        Description = description;
+        IsCompleted = isCompleted;
+        CreatedAt = now;
+        UpdatedAt = now;
+        Version = Guid.NewGuid();
+    }
+
+    public string OwnerSubject { get; private set; } = string.Empty;
+    public string Title { get; private set; } = string.Empty;
+    public string? Description { get; private set; }
+    public bool IsCompleted { get; private set; }
+    public DateTime CreatedAt { get; private set; }
+    public DateTime UpdatedAt { get; private set; }
+    public Guid Version { get; private set; }
+
+    internal void Edit(string title, string? description, bool isCompleted, DateTime now)
+    {
+        Title = title;
+        Description = description;
+        IsCompleted = isCompleted;
+        UpdatedAt = now;
+        Version = Guid.NewGuid();
+    }
+}
+{{ end }}

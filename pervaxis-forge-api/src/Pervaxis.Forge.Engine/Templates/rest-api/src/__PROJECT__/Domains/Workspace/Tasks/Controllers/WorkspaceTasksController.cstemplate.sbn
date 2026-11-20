@@ -1,0 +1,118 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Constants;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts.Requests;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts.Responses;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Services;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Controllers;
+
+[ApiController]
+[Route(WorkspaceTaskConstants.Route)]
+[Authorize]
+[ServiceFilter(typeof(WorkspaceTaskUserFilter))]
+[ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+public sealed class WorkspaceTasksController(IWorkspaceTaskService service) : ControllerBase
+{
+    [HttpPost]
+    [ProducesResponseType(typeof(WorkspaceTaskResponse), StatusCodes.Status201Created)]
+    public async Task<IActionResult> CreateAsync([FromBody] CreateWorkspaceTaskRequest request, CancellationToken cancellationToken)
+    {
+        if (Request.Query.Count != 0) return InvalidQuery();
+        var result = await service.CreateAsync(request, cancellationToken);
+        SetEtag(result);
+        return Created("/" + WorkspaceTaskConstants.Route + "/" + result.Id.ToString("D"), result);
+    }
+
+    [HttpGet]
+    [ProducesResponseType(typeof(WorkspaceTaskPageResponse), StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListAsync([FromQuery] ListWorkspaceTasksRequest request, CancellationToken cancellationToken)
+    {
+        if (Request.Query.Any(pair => pair.Key is not ("page" or "pageSize") || pair.Value.Count != 1)) return InvalidQuery();
+        return Ok(await service.ListAsync(request, cancellationToken));
+    }
+
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(WorkspaceTaskResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> GetAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (Request.Query.Count != 0) return InvalidQuery();
+        var result = await service.GetAsync(id, cancellationToken);
+        if (result is null) return Missing();
+        SetEtag(result);
+        return Ok(result);
+    }
+
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(typeof(WorkspaceTaskResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status412PreconditionFailed)]
+    [ProducesResponseType(428)]
+    public async Task<IActionResult> UpdateAsync(Guid id, [FromBody] UpdateWorkspaceTaskRequest request, CancellationToken cancellationToken)
+    {
+        if (Request.Query.Count != 0) return InvalidQuery();
+        var error = ReadVersion(out var version);
+        if (error is not null) return error;
+        try
+        {
+            var result = await service.UpdateAsync(id, version, request, cancellationToken);
+            if (result is null) return Missing();
+            SetEtag(result);
+            return Ok(result);
+        }
+        catch (WorkspaceTaskPreconditionException) { return Stale(); }
+    }
+
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status412PreconditionFailed)]
+    [ProducesResponseType(428)]
+    public async Task<IActionResult> DeleteAsync(Guid id, CancellationToken cancellationToken)
+    {
+        if (Request.Query.Count != 0) return InvalidQuery();
+        var error = ReadVersion(out var version);
+        if (error is not null) return error;
+        try { return await service.DeleteAsync(id, version, cancellationToken) ? NoContent() : Missing(); }
+        catch (WorkspaceTaskPreconditionException) { return Stale(); }
+    }
+
+    private ObjectResult? ReadVersion(out Guid version)
+    {
+        version = default;
+        if (!Request.Headers.TryGetValue("If-Match", out var headers))
+            return Problem(statusCode: 428, title: "If-Match is required.");
+        var value = headers.Count == 1 ? headers[0] : null;
+        if (value is null || value.Length != 38 || value[0] != '"' || value[^1] != '"'
+            || !Guid.TryParseExact(value[1..^1], "D", out version) || version == Guid.Empty)
+            return Problem(statusCode: 400, title: "If-Match must contain one strong version ETag.");
+        return null;
+    }
+
+    private void SetEtag(WorkspaceTaskResponse result) => Response.Headers.ETag = "\"" + result.Version.ToString("D") + "\"";
+    private ObjectResult Missing() => Problem(statusCode: 404, title: "Not Found", detail: "The requested task was not found.");
+    private ObjectResult Stale() => Problem(statusCode: 412, title: "Precondition Failed", detail: "The task changed. Reload it before retrying.");
+    private ObjectResult InvalidQuery() => Problem(statusCode: 400, title: "Unsupported query parameters.");
+}
+{{ end }}

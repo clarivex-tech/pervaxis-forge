@@ -1,0 +1,45 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.AspNetCore.Mvc;
+using FluentValidation;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Pervaxis.Forge.Contracts.V1;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Controllers;
+
+/// <summary>API keys and machine principals never establish task ownership.</summary>
+public sealed class WorkspaceTaskUserFilter(IUserContext user) : IAsyncAuthorizationFilter, IExceptionFilter
+{
+    public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
+    {
+        if (await user.GetSubjectAsync(context.HttpContext.RequestAborted) is null)
+            context.Result = new UnauthorizedResult();
+    }
+
+    public void OnException(ExceptionContext context)
+    {
+        if (context.Exception is not ValidationException validation) return;
+        // The feature keeps validation/error semantics even when the host's global filter is disabled.
+        context.Result = new BadRequestObjectResult(new ValidationProblemDetails(validation.Errors
+            .GroupBy(error => error.PropertyName).ToDictionary(group => group.Key, group => group.Select(error => error.ErrorMessage).ToArray())));
+        context.ExceptionHandled = true;
+    }
+}
+{{ end }}

@@ -92,6 +92,11 @@ public static class AuthenticationExtensions
             options.DefaultChallengeScheme = options.DefaultAuthenticateScheme;
         });
 
+{{- if model.manifest.tenant_ready }}
+        services.AddHttpContextAccessor();
+        services.AddScoped<Pervaxis.Forge.Contracts.V1.IUserContext, ValidatedUserContext>();
+{{- end }}
+
         // Always register ForgeApiKey scheme
         authBuilder.AddScheme<AuthenticationSchemeOptions, ForgeApiKeyAuthenticationHandler>(
             "ForgeApiKey", _ => { });

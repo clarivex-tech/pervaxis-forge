@@ -1,0 +1,140 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Forge.Contracts.V1;
+using Pervaxis.Forge.Testing.V1;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Repositories;
+using Xunit;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tests;
+
+public sealed class WorkspaceTaskRepositoryTests
+{
+    private static readonly DateTime Now = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private sealed class User(string? subject) : IUserContext
+    {
+        public Task<string?> GetSubjectAsync(CancellationToken cancellationToken = default) => Task.FromResult(subject);
+    }
+    private sealed class Tenant(string id) : ITenantContext
+    {
+        public TenantId TenantId => new(id);
+        public string TenantName => "Repository test";
+        public TenantStatus Status => TenantStatus.Active;
+        public bool IsResolved => true;
+    }
+
+    [Fact]
+    public async Task QueriesAndWrites_IncludeTenantOwnerAndConcurrencyPredicates()
+    {
+        using var database = new DomainTestDatabase();
+        var tenant = new Tenant(DomainTestDatabase.TenantA);
+        using var db = database.CreateContext(tenant);
+        var repository = new WorkspaceTaskRepository(database.WrapSession(db), new User("owner"), tenant);
+        var task = await repository.CreateAsync("Private", null, false, Now, default);
+        database.Sql.Commands.Clear();
+        Assert.NotNull(await repository.GetAsync(task.Id, default));
+        var select = database.Sql.Commands.Last(sql => sql.StartsWith("SELECT", StringComparison.Ordinal));
+        Assert.Contains("OwnerSubject", select[(select.IndexOf("WHERE", StringComparison.Ordinal))..]);
+        Assert.Contains("TenantId", select[(select.IndexOf("WHERE", StringComparison.Ordinal))..]);
+        var edited = (await repository.UpdateAsync(task.Id, task.Version, "Changed", null, true, Now.AddSeconds(1), default))!;
+        var update = database.Sql.Commands.Last(sql => sql.StartsWith("UPDATE", StringComparison.Ordinal));
+        AssertWritePredicate(update);
+        Assert.True(await repository.DeleteAsync(task.Id, edited.Version, default));
+        AssertWritePredicate(database.Sql.Commands.Last(sql => sql.StartsWith("DELETE", StringComparison.Ordinal)));
+    }
+
+    private static void AssertWritePredicate(string sql)
+    {
+        var predicate = sql[(sql.IndexOf("WHERE", StringComparison.Ordinal))..];
+        Assert.Contains("TenantId", predicate);
+        Assert.Contains("OwnerSubject", predicate);
+        Assert.Contains("Version", predicate);
+    }
+
+    [Fact]
+    public async Task OwnerAndCreatedAt_CannotBeReassignedEvenThroughEfState()
+    {
+        using var database = new DomainTestDatabase();
+        var tenant = new Tenant(DomainTestDatabase.TenantA);
+        using var db = database.CreateContext(tenant);
+        var repository = new WorkspaceTaskRepository(database.WrapSession(db), new User("owner"), tenant);
+        var task = await repository.CreateAsync("Private", null, false, Now, default);
+        db.Entry(task).Property(nameof(WorkspaceTask.OwnerSubject)).CurrentValue = "intruder";
+        await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
+        db.Entry(task).Property(nameof(WorkspaceTask.OwnerSubject)).CurrentValue = "owner";
+        db.Entry(task).Property(nameof(WorkspaceTask.OwnerSubject)).IsModified = false;
+        db.Entry(task).Property(nameof(WorkspaceTask.CreatedAt)).CurrentValue = Now.AddDays(1);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SaveRace_IsAPreconditionFailure_ForUpdateAndDelete(bool delete)
+    {
+        using var database = new DomainTestDatabase();
+        var tenant = new Tenant(DomainTestDatabase.TenantA);
+        using var first = database.CreateContext(tenant);
+        using var second = database.CreateContext(tenant);
+        var writer = new WorkspaceTaskRepository(database.WrapSession(first), new User("owner"), tenant);
+        var loser = new WorkspaceTaskRepository(database.WrapSession(second), new User("owner"), tenant);
+        var task = await writer.CreateAsync("Original", null, false, Now, default);
+        var version = task.Version;
+        Assert.NotNull(await loser.GetAsync(task.Id, default)); // Retain this original row version.
+        await writer.UpdateAsync(task.Id, version, "Winner", null, false, Now.AddSeconds(1), default);
+        if (delete)
+            await Assert.ThrowsAsync<WorkspaceTaskPreconditionException>(() => loser.DeleteAsync(task.Id, version, default));
+        else
+            await Assert.ThrowsAsync<WorkspaceTaskPreconditionException>(() => loser.UpdateAsync(task.Id, version, "Lost", null, false, Now.AddSeconds(2), default));
+    }
+
+    [Fact]
+    public async Task SameTimestamp_PagingHasStableIdTieBreakAndNoOwnerLeak()
+    {
+        using var database = new DomainTestDatabase();
+        var tenant = new Tenant(DomainTestDatabase.TenantA);
+        using var db = database.CreateContext(tenant);
+        var repository = new WorkspaceTaskRepository(database.WrapSession(db), new User("owner"), tenant);
+        for (var i = 0; i < 5; i++) await repository.CreateAsync("Task", null, false, Now, default);
+        using var otherDb = database.CreateContext(tenant);
+        var other = new WorkspaceTaskRepository(database.WrapSession(otherDb), new User("other"), tenant);
+        await other.CreateAsync("Hidden", null, false, Now, default);
+        var first = await repository.ListAsync(1, 2, default);
+        var repeat = await repository.ListAsync(1, 2, default);
+        var second = await repository.ListAsync(2, 2, default);
+        Assert.Equal(first.Select(task => task.Id), repeat.Select(task => task.Id));
+        Assert.Equal(first[2].Id, second[0].Id); // Repository reads one extra row to determine hasMore.
+        Assert.All(first.Concat(second), task => Assert.Equal("owner", task.OwnerSubject));
+    }
+
+    [Fact]
+    public async Task RepositoryRejectsMissingHumanAndBoundsWithoutHttp()
+    {
+        using var database = new DomainTestDatabase();
+        var tenant = new Tenant(DomainTestDatabase.TenantA);
+        using var db = database.CreateContext(tenant);
+        var repository = new WorkspaceTaskRepository(database.WrapSession(db), new User(null), tenant);
+        await Assert.ThrowsAsync<UnauthorizedAccessException>(() => repository.CreateAsync("No owner", null, false, Now, default));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => repository.ListAsync(1, 101, default));
+    }
+}
+{{ end }}

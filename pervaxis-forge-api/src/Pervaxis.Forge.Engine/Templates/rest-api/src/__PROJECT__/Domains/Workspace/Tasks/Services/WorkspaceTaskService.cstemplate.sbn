@@ -1,0 +1,67 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using FluentValidation;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts.Requests;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts.Responses;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Repositories;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Mappings;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Validators;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Services;
+
+public sealed class WorkspaceTaskService(
+    IWorkspaceTaskRepository repository, TimeProvider clock,
+    CreateWorkspaceTaskValidator createValidator, UpdateWorkspaceTaskValidator updateValidator,
+    ListWorkspaceTasksValidator listValidator) : IWorkspaceTaskService
+{
+    public async Task<WorkspaceTaskResponse> CreateAsync(CreateWorkspaceTaskRequest request, CancellationToken cancellationToken)
+    {
+        await createValidator.ValidateAndThrowAsync(request, cancellationToken);
+        return (await repository.CreateAsync(request.Title.Trim(), Normalize(request.Description), request.IsCompleted,
+            clock.GetUtcNow().UtcDateTime, cancellationToken)).ToResponse();
+    }
+
+    public async Task<WorkspaceTaskPageResponse> ListAsync(ListWorkspaceTasksRequest request, CancellationToken cancellationToken)
+    {
+        await listValidator.ValidateAndThrowAsync(request, cancellationToken);
+        var rows = await repository.ListAsync(request.Page, request.PageSize, cancellationToken);
+        return new WorkspaceTaskPageResponse
+        {
+            Items = rows.Take(request.PageSize).Select(row => row.ToResponse()).ToArray(),
+            Page = request.Page, PageSize = request.PageSize, HasMore = rows.Count > request.PageSize,
+        };
+    }
+
+    public async Task<WorkspaceTaskResponse?> GetAsync(Guid id, CancellationToken cancellationToken)
+        => (await repository.GetAsync(id, cancellationToken))?.ToResponse();
+
+    public async Task<WorkspaceTaskResponse?> UpdateAsync(Guid id, Guid expectedVersion, UpdateWorkspaceTaskRequest request, CancellationToken cancellationToken)
+    {
+        await updateValidator.ValidateAndThrowAsync(request, cancellationToken);
+        return (await repository.UpdateAsync(id, expectedVersion, request.Title.Trim(), Normalize(request.Description),
+            request.IsCompleted, clock.GetUtcNow().UtcDateTime, cancellationToken))?.ToResponse();
+    }
+
+    public Task<bool> DeleteAsync(Guid id, Guid expectedVersion, CancellationToken cancellationToken)
+        => repository.DeleteAsync(id, expectedVersion, cancellationToken);
+
+    private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}
+{{ end }}

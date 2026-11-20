@@ -1,0 +1,31 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+namespace Pervaxis.Forge.Contracts.V1;
+
+/// <summary>Tracked EF operations through the host's one tenant-aware context. Never disable tenant filters.</summary>
+public interface IDomainSession
+{
+    /// <summary>Returns a tracked query; scope every user-owned operation by the validated owner as well.</summary>
+    IQueryable<TEntity> Query<TEntity>() where TEntity : class;
+    /// <summary>Tracks an insertion. The host stamps the tenant on save.</summary>
+    void Add<TEntity>(TEntity entity) where TEntity : class;
+    /// <summary>Tracks deletion of an entity selected with the required tenant and owner predicates.</summary>
+    void Remove<TEntity>(TEntity entity) where TEntity : class;
+    /// <summary>Saves through the shared context and its tenant-write protections.</summary>
+    Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+}
