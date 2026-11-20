@@ -81,7 +81,8 @@ public sealed class ManifestValidator
             ValidateMultiTenancy(manifest, errors);
         if (manifest.IncludeWorkspaceTasks == true &&
             !(manifest.ServiceType == ServiceType.RestApi && manifest.MultiTenancy
-              && manifest.Database?.Engine == "postgresql" && manifest.Cognito is not null))
+              && string.Equals(manifest.Database?.Engine, "postgresql", StringComparison.OrdinalIgnoreCase)
+              && manifest.Cognito is not null))
             errors.Add("IncludeWorkspaceTasks=true requires a PostgreSQL, tenant-ready REST print with Cognito bearer authentication.");
         if (manifest.ServiceType == ServiceType.Monolithic && manifest.AngularAuth is null)
             errors.Add("Angular monolith prints require AngularAuth with Cognito settings.");

@@ -8,6 +8,16 @@
 
 ---
 
+## 2026-11-20 — Workspace PostgreSQL provider casing
+
+**Branch:** `feature/api-workspace-provider-casing`, isolated from fetched develop `867cae6`. Documentation work remains on its separate branch. No commit/push authorized.
+
+Corrected the Workspace eligibility gate and explicit-selection validation to compare PostgreSQL provider names ordinally without case sensitivity. Existing API mapping retains its input and the print's manifest/provenance format is unchanged. Added a production GenerationRequest -> GenerationService -> ZIP regression for wizard `PostgreSQL` and lowercase input, verifying module, migration/designer, model snapshot and domain tests. Engine tests cover default inclusion, explicit inclusion and opt-out for lowercase/mixed/uppercase providers; rendered build/copy tests now use wizard casing.
+
+The new API regression reproduced the defect before the fix (mixed-case missing, lowercase present). Final full solution verification passed: 167 Engine tests and 95 API tests, no failures/skips. This includes rendered source/copy tests using wizard casing, explicit opt-out, migration-model checks and architecture boundaries. Downloaded-print repair remains stopped; this task makes no Downloads, live DB, cloud or UI changes.
+
+---
+
 ## 2026-11-19 — Generated REST local startup documentation
 
 **Branch:** `feature/api-local-startup-docs`, isolated from fetched `origin/develop` at `867cae6`. No commit/push requested.
