@@ -21,7 +21,7 @@ using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities;
 
 namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Repositories;
 
-/// <summary>Every operation enforces both current tenant and current human owner inside the database query.</summary>
+/// <summary>Queries enforce tenant and human owner. Mutations stage changes; the caller owns the unit-of-work commit.</summary>
 public interface IWorkspaceTaskRepository
 {
     Task<WorkspaceTask> CreateAsync(string title, string? description, bool isCompleted, DateTime now, CancellationToken cancellationToken);

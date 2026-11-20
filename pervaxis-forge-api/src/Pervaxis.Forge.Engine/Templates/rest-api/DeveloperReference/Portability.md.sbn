@@ -41,6 +41,8 @@ Use explicit business routes such as `api/v1/billing/invoices`, independent of t
 
 ## Dependencies and configuration
 
+Repository mutations should stage only. A service (or a simple CRUD controller) orchestrates the operation and commits once through the existing public Core `IUnitOfWork`, registered against the same scoped tenant-aware context as `IDomainSession`. Roll back pending tracked changes on failure before recovery or reuse. V1 `IDomainSession.SaveChangesAsync` is retained for compatibility; it is not a reason for new repositories to save internally. Workspace demonstrates commit-boundary concurrency handling and relational rollback tests without a second context or unit-of-work implementation.
+
 Each feature should include an upgrade README listing required package IDs/version ranges, contract majors, manifest toggles/Genesis modules, configuration keys, permissions, migrations and tests. Add explicit package references and reconcile `Directory.Packages.props` with the fresh print; restore with locked versions in CI. These are declared upgrade steps, not handwritten host wiring. Merge feature options and environment/secret references into configuration; keep new platform defaults, never copy old settings wholesale or commit credentials. Do not change seed tenant IDs or seed timestamps on an existing deployment.
 
 ## Upgrade an existing deployment
