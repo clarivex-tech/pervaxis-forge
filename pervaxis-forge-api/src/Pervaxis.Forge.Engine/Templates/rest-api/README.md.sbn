@@ -43,7 +43,7 @@ Other documents:
 ## Prerequisites
 
 - .NET 10 SDK
-- Docker (for local development)
+- Docker (optional, for container builds)
 - AWS credentials configured (role: see vertical enrollment)
 
 ## Getting Started
@@ -56,25 +56,14 @@ dotnet test
 
 ## Running Locally
 
-{{- if model.manifest.database != null }}
+Follow the [PowerShell local startup guide](DeveloperReference/LocalDevelopment.md) for the exact generated project command, Development environment, AWS profile/region, database secret/certificate settings, CORS, readiness and UI port pairing. Provisioning is an explicit opt-in. The generator's LocalMode does not apply to this API.
 
-Create the database tables first{{ if model.manifest.tenant_ready }} (including the `tenants` table; without it, tenant-protected endpoints return 503){{ end }}:
-
-```bash
-dotnet ef database update --project src/{{ model.names.namespace }}
-```
-
-Then run the service:
-{{- end }}
-
-```bash
-dotnet run --project src/{{ model.names.namespace }}
-```
+For an existing database, preserve the deployed migration chain and snapshot; never reset its baseline to start a fresh print. Runtime credentials and migration credentials have separate responsibilities. See the guide before applying any schema changes.
 
 ## Configuration
 
 Configuration is loaded from `appsettings.json` and environment-specific overrides.
-Secrets are stored in AWS Secrets Manager at `{env}/{{ model.manifest.product }}/{{ model.manifest.service_name }}/config`.
+Secrets Manager integration is optional and must reference existing, explicitly configured secrets. Database credentials use `Forge:Database:SecretId`; the separate API-key integration uses `Forge:Secrets`. Startup does not create secrets. See the [local startup guide](DeveloperReference/LocalDevelopment.md) for environment overrides and permissions.
 
 
 Ownership: Platform contains print-owned runtime code; Domains contains business modules. Data/Migrations is application-owned upgrade history and snapshot state, excluded from Platform replacement. See [the ownership and upgrade policy](DeveloperReference/Ownership.md).

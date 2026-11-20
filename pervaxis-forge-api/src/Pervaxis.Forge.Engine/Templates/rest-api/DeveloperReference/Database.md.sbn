@@ -16,7 +16,7 @@ Platform code lives in `Platform/Infrastructure/Database/` and `Platform/Data/{{
 {{- else }}
 - `{{ model.names.dot_net_class_name }}DbContext`, with tenant filtering for entities that implement `ITenantEntity`.
 {{- end }}
-- The tooling for EF Core migrations (`dotnet ef` works out of the box).
+- An EF Core design-time factory for migrations (install a matching `dotnet-ef` tool separately).
 
 PostgreSQL is the only supported engine for now.
 
@@ -70,7 +70,7 @@ Put entities and IEntityTypeConfiguration classes inside Domains/<Feature>. Use 
 Data/Migrations is application-owned upgrade state, intentionally outside Platform and Domains. Preserve its entire history and latest snapshot across Platform refreshes. Starter migrations apply only to an empty new database; never overwrite existing history with a fresh print. See [Ownership.md](Ownership.md).
 
 
-Run these from the solution folder. Install the tool once with `dotnet tool install --global dotnet-ef`.
+Run these from the solution folder with an EF tool version matching the print (currently 10.0.8). See [LocalDevelopment.md](LocalDevelopment.md) for secure local startup and separate migration credentials. The design-time factory does not resolve Secrets Manager credentials or the runtime root-certificate option: migration connections need a complete `ConnectionStrings__Default`, including the certificate setting, obtained through your approved secure mechanism.
 
 ```powershell
 # 1. Preserve the existing migration chain and snapshot first (see Portability.md). Then append a migration for intentional changes.
@@ -79,7 +79,8 @@ dotnet ef migrations add AddInvoices --project src/{{ model.names.namespace }} -
 # 2. Produce the SQL the pipeline applies (safe to run more than once)
 dotnet ef migrations script --idempotent --project src/{{ model.names.namespace }} --output migrations.sql
 
-# 3. Local database only
+# 3. Only an explicitly authorized development database, using separate migration credentials.
+# Review the target and preserved migration inventory first; never reset an existing baseline.
 dotnet ef database update --project src/{{ model.names.namespace }}
 ```
 
