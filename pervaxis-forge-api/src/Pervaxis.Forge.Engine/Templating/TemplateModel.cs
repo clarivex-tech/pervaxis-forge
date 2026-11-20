@@ -33,7 +33,8 @@ public sealed record TemplateModel
     /// <summary>The reference domain is only emitted for PostgreSQL tenant-ready REST services.</summary>
     public bool WorkspaceTasksEnabled => Manifest.ServiceType == ServiceType.RestApi
         && Manifest.MultiTenancy && Manifest.Cognito is not null
-        && Manifest.Database?.Engine == "postgresql" && Manifest.IncludeWorkspaceTasks != false;
+        && string.Equals(Manifest.Database?.Engine, "postgresql", StringComparison.OrdinalIgnoreCase)
+        && Manifest.IncludeWorkspaceTasks != false;
 
     /// <summary>JSON-escaped public runtime settings for an explicit Cognito selection.</summary>
     public string AngularAppConfigJson => System.Text.Json.JsonSerializer.Serialize(new
