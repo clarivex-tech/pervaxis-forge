@@ -1,0 +1,39 @@
+{{ if model.web_admin_layout && model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
+import { ButtonModule } from 'primeng/button';
+import { AuthService } from '../../core/auth/auth.service';
+import { ThemeService } from '../../core/services/theme.service';
+import { MyProfileState } from './my-profile-state';
+
+@Component({
+  selector: '{{ model.manifest.component_prefix }}-settings', standalone: true, imports: [ButtonModule],
+  providers: [MyProfileState], changeDetection: ChangeDetectionStrategy.OnPush,
+  templateUrl: './settings.component.html', styleUrl: './settings.component.scss',
+})
+export class SettingsComponent implements OnInit {
+  protected readonly auth = inject(AuthService);
+  protected readonly theme = inject(ThemeService);
+  readonly state = inject(MyProfileState);
+  readonly identity = computed(() => this.auth.isAuthenticated() ? this.auth.profile() : null);
+  ngOnInit(): void { void this.state.load(); }
+}
+
+{{ end }}

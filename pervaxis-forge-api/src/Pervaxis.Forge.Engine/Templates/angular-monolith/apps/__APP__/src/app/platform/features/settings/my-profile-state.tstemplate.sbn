@@ -1,0 +1,102 @@
+{{ if model.web_admin_layout && model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { HttpErrorResponse } from '@angular/common/http';
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
+import { AuthService } from '../../core/auth/auth.service';
+import { TenantContextService } from '../../core/auth/tenant-context.service';
+import { SessionStateRegistry } from '../../core/auth/session-state';
+import { ApiService } from '../../core/services/api.service';
+
+export interface ApplicationContext {
+  readonly subject: string;
+  readonly tenant: { readonly id: string; readonly name: string };
+  readonly roles: readonly string[];
+}
+type Failure = 'identity' | 'response' | 'unauthorized' | 'forbidden' | 'unavailable';
+const messages: Record<Failure, string> = {
+  identity: 'Your sign-in identity is unavailable. Sign out and sign in again to load application context.',
+  response: 'The application returned an unexpected profile context. No application access details are shown. Retry or contact your administrator.',
+  unauthorized: 'The application could not accept your session. Sign out and sign in again, then retry.',
+  forbidden: 'Your account does not currently have access to this application context. Contact your administrator.',
+  unavailable: 'Application context could not be loaded. Check your connection and retry.',
+};
+
+/** Component-scoped state: no persistent profile cache and no token-claim fallback for application context. */
+@Injectable()
+export class MyProfileState {
+  private readonly auth = inject(AuthService);
+  private readonly tenant = inject(TenantContextService);
+  private readonly api = inject(ApiService);
+  private epoch = 0;
+  private readonly result = signal<{ context: ApplicationContext; tenantAtRead: string | null } | null>(null);
+  readonly status = signal<'idle' | 'loading' | 'ready' | 'error'>('idle');
+  readonly failure = signal<Failure | null>(null);
+  readonly message = computed(() => { const failure = this.failure(); return failure ? messages[failure] : ''; });
+  readonly context = computed(() => {
+    const result = this.result();
+    return result && this.auth.isAuthenticated() && result.context.subject === this.auth.profile()?.subject
+      && result.tenantAtRead === this.tenant.currentTenantId() ? result.context : null;
+  });
+
+  constructor() {
+    const destroyRef = inject(DestroyRef);
+    inject(SessionStateRegistry).registerUntilDestroyed(destroyRef, () => this.clear());
+    destroyRef.onDestroy(() => this.clear());
+  }
+
+  async load(): Promise<void> {
+    const epoch = ++this.epoch;
+    this.result.set(null); this.failure.set(null);
+    const subject = this.auth.profile()?.subject;
+    if (!this.auth.isAuthenticated() || !subject?.trim()) { this.fail('identity'); return; }
+    const tenantAtRead = this.tenant.currentTenantId();
+    const current = () => epoch === this.epoch && this.auth.isAuthenticated()
+      && this.auth.profile()?.subject === subject && this.tenant.currentTenantId() === tenantAtRead;
+    this.status.set('loading');
+    try {
+      const body = await firstValueFrom(this.api.get<unknown>('/api/v1/me'));
+      if (!current()) return;
+      const context = parseContext(body);
+      if (!context || context.subject !== subject) { this.fail('response'); return; }
+      this.result.set({ context, tenantAtRead }); this.status.set('ready');
+    } catch (error: unknown) {
+      if (!current()) return;
+      this.fail(error instanceof HttpErrorResponse && error.status === 401 ? 'unauthorized'
+        : error instanceof HttpErrorResponse && error.status === 403 ? 'forbidden' : 'unavailable');
+    }
+  }
+
+  private fail(failure: Failure): void { this.result.set(null); this.failure.set(failure); this.status.set('error'); }
+  private clear(): void { ++this.epoch; this.result.set(null); this.failure.set(null); this.status.set('idle'); }
+}
+
+function parseContext(body: unknown): ApplicationContext | null {
+  if (!body || typeof body !== 'object') return null;
+  const value = body as Record<string, unknown>;
+  if (typeof value['subject'] !== 'string' || !value['subject'].trim()
+    || !value['tenant'] || typeof value['tenant'] !== 'object' || !Array.isArray(value['roles'])) return null;
+  const tenant = value['tenant'] as Record<string, unknown>;
+  if (typeof tenant['id'] !== 'string' || !tenant['id'].trim() || typeof tenant['name'] !== 'string' || !tenant['name'].trim()
+    || !value['roles'].every((role: unknown) => typeof role === 'string' && role.trim())) return null;
+  return { subject: value['subject'], tenant: { id: tenant['id'], name: tenant['name'] }, roles: [...value['roles']] };
+}
+
+{{ end }}

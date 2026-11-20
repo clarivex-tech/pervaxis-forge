@@ -1,0 +1,49 @@
+{{ if model.web_admin_layout && model.angular_cognito_enabled }}
+
+<div class="settings-page">
+  <header class="settings-heading"><span class="eyebrow">YOUR ACCOUNT</span><h1>Settings</h1><p>View your profile and make this workspace feel right for you.</p></header>
+  <div class="settings-layout">
+    <nav class="settings-navigation" aria-label="Settings sections">
+      <a href="settings#my-profile"><i class="pi pi-user" aria-hidden="true"></i>My Profile</a>
+      <a href="settings#appearance"><i class="pi pi-palette" aria-hidden="true"></i>Appearance</a>
+    </nav>
+    <div class="settings-sections">
+      <section class="settings-card" aria-labelledby="my-profile">
+        <div class="section-heading"><span class="section-icon pi pi-user" aria-hidden="true"></span><div><h2 id="my-profile" tabindex="-1">My Profile</h2><p>Your profile is read-only. These details come from your sign-in session.</p></div></div>
+        <dl class="profile-details">
+          <div><dt>Name</dt><dd data-testid="profile-name" [textContent]="identity()?.name?.trim() || 'Not provided'"></dd></div>
+          <div><dt>Email</dt><dd data-testid="profile-email" [textContent]="identity()?.email?.trim() || 'Not provided'"></dd></div>
+        </dl>
+        <div class="application-context" [attr.aria-busy]="state.status() === 'loading'">
+          <h3>Application access</h3><p class="section-description">Your application checks access for each action.</p>
+          @if (state.status() === 'loading') { <p class="context-status" role="status">Loading application context...</p> }
+          @if (state.message()) { <p class="context-error" role="alert" [textContent]="state.message()"></p> }
+          @if (state.status() === 'idle') { <p role="status">Application context was cleared because your session changed. Load it again to continue.</p> }
+          @if (state.context(); as context) {
+            <dl class="profile-details context-details">
+              <div><dt>Tenant</dt><dd data-testid="context-tenant" [textContent]="context.tenant.name"></dd></div>
+              <div><dt>Tenant ID</dt><dd class="identifier" [textContent]="context.tenant.id"></dd></div>
+              <div><dt>Application roles</dt><dd>
+                @if (context.roles.length) { <ul class="role-list">@for (role of context.roles; track role) { <li [textContent]="role"></li> }</ul> }
+                @else { <span>No application roles assigned.</span> }
+              </dd></div>
+            </dl>
+          }
+          <p-button [label]="state.status() === 'loading' ? 'Loading application context' : state.status() === 'ready' ? 'Refresh application context' : state.status() === 'idle' ? 'Load application context' : 'Retry application context'"
+                    [ariaLabel]="state.status() === 'loading' ? 'Loading application context' : state.status() === 'ready' ? 'Refresh application context' : state.status() === 'idle' ? 'Load application context' : 'Retry application context'"
+                    icon="pi pi-refresh" [outlined]="true" [disabled]="state.status() === 'loading'" (onClick)="state.load()" />
+        </div>
+      </section>
+      <section class="settings-card" aria-labelledby="appearance">
+        <div class="section-heading"><span class="section-icon pi pi-palette" aria-hidden="true"></span><div><h2 id="appearance" tabindex="-1">Appearance</h2><p>Choose how this workspace looks on this browser.</p></div></div>
+        <div class="appearance-control"><label for="settings-appearance">Theme</label>
+          <select id="settings-appearance" #appearance aria-describedby="appearance-help" [value]="theme.preference()" (change)="theme.setPreference(appearance.value)">
+            <option value="system">System theme</option><option value="light">Light theme</option><option value="dark">Dark theme</option>
+          </select><p id="appearance-help">System theme follows your device's appearance. Your choice is saved on this browser.</p>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+
+{{ end }}

@@ -140,7 +140,7 @@ export class AppComponent {
  ************************************************************************
  */
 
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, computed, inject, signal, viewChild } from '@angular/core';
 import { RouterOutlet, RouterLink, RouterLinkActive } from '@angular/router';
 {{ if model.manifest.ui_targets | array.contains "mobile" }}
 import { IonApp, IonRouterOutlet, IonProgressBar, IonToast, IonAlert } from '@ionic/angular/standalone';
@@ -154,7 +154,8 @@ import { ThemeService } from '../core/services/theme.service';
 import { ToolbarModule } from 'primeng/toolbar';
 import { ButtonModule } from 'primeng/button';
 import { AvatarModule } from 'primeng/avatar';
-import { MenuModule } from 'primeng/menu';
+import { Menu, MenuModule } from 'primeng/menu';
+import { MenuItem } from 'primeng/api';
 import { RippleModule } from 'primeng/ripple';
 import { DomainNavigationService } from '../domains/domain-runtime';
 import { LoadingService } from '../core/services/loading.service';
@@ -233,7 +234,18 @@ export class AppComponent {
 {{ end }}
   }
 {{ if model.web_admin_layout }}
-  protected readonly theme = inject(ThemeService);
+  skipToContent(event: Event): void {
+    event.preventDefault();
+    this.document.getElementById('main-content')?.focus();
+  }
+{{ if model.angular_cognito_enabled }}
+  readonly accountMenu = viewChild<Menu>('accountMenu');
+  readonly userMenuItems: MenuItem[] = [
+    { label: 'Settings', icon: 'pi pi-cog', routerLink: '/settings' },
+    { separator: true },
+    { label: 'Sign out', icon: 'pi pi-sign-out', command: () => this.signOut() },
+  ];
+{{ end }}
   private readonly document = inject(DOCUMENT);
   readonly mobileNavigationOpen = signal(false);
   readonly narrowScreen = signal(this.document.defaultView?.matchMedia('(max-width: 1023px)').matches ?? false);
@@ -258,6 +270,7 @@ export class AppComponent {
   constructor() {
     this.routeLoading.init();
 {{ if model.web_admin_layout }}
+    inject(ThemeService);
     const destroyRef = inject(DestroyRef);
     const viewport = this.document.defaultView?.matchMedia('(max-width: 1023px)');
     const resize = (): void => {
@@ -271,7 +284,7 @@ export class AppComponent {
     });
     destroyRef.onDestroy(() => navigation.unsubscribe());
 {{ if model.angular_cognito_enabled }}
-    const unregister = inject(SessionStateRegistry).register(() => this.closeNavigation());
+    const unregister = inject(SessionStateRegistry).register(() => { this.closeNavigation(); this.accountMenu()?.hide(); });
     destroyRef.onDestroy(unregister);
 {{ end }}
 {{ end }}
