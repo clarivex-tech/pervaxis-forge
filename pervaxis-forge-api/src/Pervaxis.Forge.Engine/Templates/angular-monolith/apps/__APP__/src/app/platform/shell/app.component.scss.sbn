@@ -41,11 +41,6 @@
     color: var(--p-text-color);
   }
 
-  &__tenant {
-    margin-right: 0.5rem;
-    font-size: 0.85rem;
-    color: var(--p-text-muted-color);
-  }
 }
 
 .app-sidebar {
@@ -197,11 +192,11 @@
 
 :host { display: block; min-height: 100dvh; }
 .app-layout { display: grid; grid-template: "header header" auto "sidebar content" 1fr / 260px minmax(0, 1fr); min-height: 100dvh; }
+.app-layout--public { grid-template: "content" 1fr / minmax(0, 1fr); }
 .app-layout.sidebar-collapsed { grid-template-columns: 76px minmax(0, 1fr); }
 .app-header { grid-area: header; position: sticky; top: 0; z-index: 10; border-bottom: 1px solid var(--color-border); }
 .app-header__brand { font-weight: 700; margin-inline: .5rem; overflow-wrap: anywhere; }
 .app-header__identity { display: grid; margin-inline: 1rem; font-size: .875rem; }
-.app-header__tenant { color: var(--color-text-muted); font-size: .75rem; }
 .navigation-toggle { display: inline-grid; place-items: center; width: 44px; height: 44px; background: transparent; border: 0; border-radius: .5rem; color: var(--color-text); cursor: pointer; }
 .navigation-toggle:hover { background: var(--color-surface); }
 .app-sidebar { grid-area: sidebar; border-inline-end: 1px solid var(--color-border); background: var(--color-bg); padding: 1.25rem .75rem; }

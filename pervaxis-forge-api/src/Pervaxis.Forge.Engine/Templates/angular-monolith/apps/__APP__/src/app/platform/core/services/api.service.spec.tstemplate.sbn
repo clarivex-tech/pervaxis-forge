@@ -49,6 +49,85 @@ describe('Platform API response contract', () => {
     expect((await response).status).toBe(200);
   });
 
+  it('resolves Workspace paths for relative and absolute API bases without duplicating API segments', async () => {
+    const cases = [
+      { apiUrl: 'https://api.example.test', path: '/api/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api', path: '/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api/v1', path: '/api/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api/v1', path: '/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api/v1', path: '/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api', path: '/api/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test', path: '/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: '/api/v1', path: '/workspace/tasks', expected: '/api/v1/workspace/tasks' },
+    ];
+
+    for (const testCase of cases) {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          { provide: AppConfigService, useValue: { config: () => ({ apiUrl: testCase.apiUrl }) } },
+        ],
+      });
+      const configuredApi = TestBed.inject(ApiService);
+      const configuredHttp = TestBed.inject(HttpTestingController);
+      const response = firstValueFrom(configuredApi.getResponse<unknown>(testCase.path));
+      const request = configuredHttp.expectOne(testCase.expected);
+      expect(request.request.url).toBe(testCase.expected);
+      request.flush({ items: [], page: 1, pageSize: 20, hasMore: false });
+      await response;
+      configuredHttp.verify();
+    }
+  });
+
+  it('preserves non-Workspace endpoint paths', async () => {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AppConfigService, useValue: { config: () => ({ apiUrl: 'https://api.example.test/api/v1' }) } },
+      ],
+    });
+    const configuredApi = TestBed.inject(ApiService);
+    const configuredHttp = TestBed.inject(HttpTestingController);
+    const response = firstValueFrom(configuredApi.getResponse<unknown>('/admin/tenants'));
+    const request = configuredHttp.expectOne('https://api.example.test/api/v1/admin/tenants');
+    expect(request.request.url).toBe('https://api.example.test/api/v1/admin/tenants');
+    request.flush([]);
+    await response;
+    configuredHttp.verify();
+  });
+
+  it('preserves profile and tenant endpoints under configured API bases', async () => {
+    const cases = [
+      { apiUrl: 'https://api.example.test', path: '/api/v1/me', expected: 'https://api.example.test/api/v1/me' },
+      { apiUrl: 'https://api.example.test/api', path: '/v1/admin/tenants', expected: 'https://api.example.test/api/v1/admin/tenants' },
+      { apiUrl: 'https://api.example.test/api/v1', path: '/me', expected: 'https://api.example.test/api/v1/me' },
+      { apiUrl: '/api/v1', path: '/admin/tenants', expected: '/api/v1/admin/tenants' },
+    ];
+
+    for (const testCase of cases) {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          { provide: AppConfigService, useValue: { config: () => ({ apiUrl: testCase.apiUrl }) } },
+        ],
+      });
+      const configuredApi = TestBed.inject(ApiService);
+      const configuredHttp = TestBed.inject(HttpTestingController);
+      const response = firstValueFrom(configuredApi.getResponse<unknown>(testCase.path));
+      const request = configuredHttp.expectOne(testCase.expected);
+      expect(request.request.url).toBe(testCase.expected);
+      request.flush({});
+      await response;
+      configuredHttp.verify();
+    }
+  });
+
   it('preserves strong If-Match headers and response ETags on conditional writes', async () => {
     const version = '123e4567-e89b-12d3-a456-426614174000';
     const etag = '"' + version + '"';

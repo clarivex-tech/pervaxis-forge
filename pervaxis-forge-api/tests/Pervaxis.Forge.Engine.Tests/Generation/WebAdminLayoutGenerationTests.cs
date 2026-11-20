@@ -64,6 +64,28 @@ public sealed class WebAdminLayoutGenerationTests
         Assert.DoesNotContain("{{", shell);
     }
     [Fact]
+    public async Task RenderedShell_HidesPublicChromeAndKeepsSettingsInAuthenticatedShell()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "verify", VerticalSlug = "verify", ServiceName = "admin-web",
+            ComponentPrefix = "vfy", ServiceType = ServiceType.Monolithic, CloudProvider = "AWS",
+            AngularAuth = TestTenancy.AngularAuth,
+            UiTargets = ["web"],
+        };
+        using var zip = new ZipArchive(new MemoryStream(await new PrintGenerator().GenerateAsync(manifest, "AWS")));
+
+        var shell = new StreamReader(zip.Entries.Single(e => e.FullName.EndsWith("/shell/app.component.html", StringComparison.Ordinal)).Open()).ReadToEnd();
+        var component = new StreamReader(zip.Entries.Single(e => e.FullName.EndsWith("/shell/app.component.ts", StringComparison.Ordinal)).Open()).ReadToEnd();
+
+        Assert.Contains("!auth.isAuthenticated()", shell);
+        Assert.Contains("@if (auth.isAuthenticated())", shell);
+        Assert.DoesNotContain("tenant.currentTenantId", shell);
+        Assert.DoesNotContain("app-header__tenant", shell);
+        Assert.Contains("routerLink: '/settings'", component);
+    }
+
+    [Fact]
     public async Task DefaultAndExplicitWebRenderIdenticalApplicationSources()
     {
         var manifest = new ForgeManifest

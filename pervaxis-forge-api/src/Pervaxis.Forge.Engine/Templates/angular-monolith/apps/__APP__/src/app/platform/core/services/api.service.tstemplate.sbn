@@ -91,6 +91,27 @@ export class ApiService {
     if (!config) {
       throw new Error('The API is not configured (assets/app-config.json is missing or invalid).');
     }
-    return `${config.apiUrl}${path.startsWith('/') ? path : `/${path}`}`;
+
+    const base = config.apiUrl.replace(/\/+$/, '');
+    const requestedPath = path.startsWith('/') ? path : `/${path}`;
+
+    if (/\/workspace\/tasks(?:\/|$)/i.test(requestedPath)) {
+      const workspaceIndex = requestedPath.toLowerCase().indexOf('/workspace/tasks');
+      const workspaceSuffix = requestedPath.slice(workspaceIndex);
+      const lowerBase = base.toLowerCase();
+
+      if (lowerBase.endsWith('/api/v1')) {
+        return `${base}${workspaceSuffix}`;
+      }
+      if (lowerBase.endsWith('/api')) {
+        return `${base}/v1${workspaceSuffix}`;
+      }
+      if (lowerBase.endsWith('/v1')) {
+        return `${base}${workspaceSuffix}`;
+      }
+      return `${base}/api/v1${workspaceSuffix}`;
+    }
+
+    return `${base}${requestedPath}`;
   }
 }
