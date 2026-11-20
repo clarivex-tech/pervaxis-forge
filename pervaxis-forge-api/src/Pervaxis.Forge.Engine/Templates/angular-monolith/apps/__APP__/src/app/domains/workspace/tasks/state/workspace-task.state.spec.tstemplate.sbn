@@ -1,0 +1,166 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { DestroyRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { Observable, of, Subject, throwError } from 'rxjs';
+import { DOMAIN_SESSION_STATE, DomainSessionResetReasonV1 } from '@forge/ui-contracts/v1';
+import { WorkspaceTaskApi } from '../api/workspace-task.api';
+import { WorkspaceTask, WorkspaceTaskPage, VersionedWorkspaceTask } from '../contracts/workspace-task.model';
+import { WorkspaceTaskState } from './workspace-task.state';
+
+const taskId = '123e4567-e89b-12d3-a456-426614174000';
+const version = '223e4567-e89b-12d3-a456-426614174000';
+const task: WorkspaceTask = {
+  id: taskId, title: 'Review release', description: null, isCompleted: false,
+  createdAt: '2026-11-20T12:00:00Z', updatedAt: '2026-11-20T12:00:00Z', version,
+};
+const page = (items: readonly WorkspaceTask[], pageNumber = 1, hasMore = false): WorkspaceTaskPage => ({
+  items, page: pageNumber, pageSize: 20, hasMore,
+});
+
+describe('WorkspaceTaskState', () => {
+  let state: WorkspaceTaskState;
+  let api: jasmine.SpyObj<WorkspaceTaskApi>;
+  let reset: () => void;
+
+  beforeEach(() => {
+    api = jasmine.createSpyObj<WorkspaceTaskApi>('WorkspaceTaskApi', ['list', 'get', 'create', 'update', 'delete']);
+    api.list.and.returnValue(of(page([])));
+    api.get.and.returnValue(of({ task, etag: '"' + version + '"' } satisfies VersionedWorkspaceTask));
+    api.create.and.returnValue(of(task));
+    api.update.and.returnValue(of(task));
+    api.delete.and.returnValue(of(undefined));
+    reset = () => undefined;
+    TestBed.configureTestingModule({ providers: [
+      WorkspaceTaskState,
+      { provide: WorkspaceTaskApi, useValue: api },
+      { provide: DOMAIN_SESSION_STATE, useValue: {
+        registerUntilDestroyed: (_destroyRef: DestroyRef, listener: (reason: DomainSessionResetReasonV1) => void) => {
+          reset = () => listener('signed-out');
+        },
+      } },
+    ] });
+    state = TestBed.inject(WorkspaceTaskState);
+  });
+
+  it('uses server hasMore for next and previous pages without inventing totals', async () => {
+    api.list.and.returnValues(of(page([task], 1, true)), of(page([], 2, false)), of(page([task], 1, true)));
+    await state.load();
+    expect(state.page()).toBe(1);
+    expect(state.hasMore()).toBeTrue();
+    await state.nextPage();
+    expect(state.page()).toBe(2);
+    expect(state.hasMore()).toBeFalse();
+    await state.previousPage();
+    expect(state.page()).toBe(1);
+    expect(api.list.calls.allArgs()).toEqual([[1], [2], [1]]);
+  });
+
+  it('prevents duplicate submissions while a create is pending', async () => {
+    const response = new Subject<WorkspaceTask>();
+    api.create.and.returnValue(response);
+    state.openCreate();
+    const pending = state.saveDraft({ title: 'New task', description: null });
+    await state.saveDraft({ title: 'Duplicate', description: null });
+    expect(api.create).toHaveBeenCalledTimes(1);
+    response.next(task);
+    response.complete();
+    await pending;
+    expect(state.editorOpen()).toBeFalse();
+  });
+
+  it('preserves the edit and draft on 412 until the user explicitly reloads', async () => {
+    const latest = { ...task, title: 'Changed elsewhere', version: '323e4567-e89b-12d3-a456-426614174000' };
+    api.list.and.returnValue(of(page([task])));
+    await state.load();
+    api.update.and.returnValue(throwError(() => ({ status: 412 })));
+    api.get.and.returnValue(of({ task: latest, etag: '"' + latest.version + '"' }));
+    state.openEdit(task);
+    await state.saveDraft({ title: 'My unsaved draft', description: 'Keep this text' });
+    expect(state.editingTask()).toEqual(task);
+    expect(state.errorAction()).toBe('reload');
+    expect(state.errorMessage()).toContain('Your draft is preserved');
+
+    await state.reloadLatest();
+    expect(state.editingTask()).toEqual(latest);
+    expect(state.items()).toEqual([latest]);
+  });
+
+  it('retries network failures only after an explicit user action', async () => {
+    api.create.and.returnValues(throwError(() => ({ status: 503 })), of(task));
+    state.openCreate();
+    await state.saveDraft({ title: 'New task', description: null });
+    expect(api.create).toHaveBeenCalledTimes(1);
+    expect(state.errorAction()).toBe('retry');
+
+    await state.retry();
+    expect(api.create).toHaveBeenCalledTimes(2);
+    expect(state.errorMessage()).toBeNull();
+  });
+
+  it('preserves the edit and offers reload when the server requires a version token', async () => {
+    api.update.and.returnValue(throwError(() => ({ status: 428 })));
+    state.openEdit(task);
+    await state.saveDraft({ title: 'Unsaved title', description: null });
+
+    expect(state.editingTask()).toEqual(task);
+    expect(state.errorAction()).toBe('reload');
+    expect(state.errorMessage()).toContain('current task version');
+    expect(api.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers refresh but no automatic retry when a task is no longer available', async () => {
+    api.update.and.returnValue(throwError(() => ({ status: 404 })));
+    state.openEdit(task);
+    await state.saveDraft({ title: 'Unsaved title', description: null });
+
+    expect(state.editingTask()).toEqual(task);
+    expect(state.errorAction()).toBe('refresh');
+    expect(state.errorMessage()).toContain('no longer available');
+    expect(api.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('denies 403 without offering a retry', async () => {
+    api.create.and.returnValue(throwError(() => ({ status: 403 })));
+    state.openCreate();
+    await state.saveDraft({ title: 'New task', description: null });
+    expect(state.errorMessage()).toContain('permission');
+    expect(state.errorAction()).toBeNull();
+    expect(api.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('cancels a late list response and clears state on session reset', async () => {
+    const response = new Subject<WorkspaceTaskPage>();
+    let unsubscribed = false;
+    const pendingResponse = new Observable<WorkspaceTaskPage>(subscriber => {
+      const subscription = response.subscribe(subscriber);
+      return () => { unsubscribed = true; subscription.unsubscribe(); };
+    });
+    api.list.and.returnValue(pendingResponse);
+    const pending = state.load();
+    reset();
+    expect(unsubscribed).toBeTrue();
+    response.next(page([task]));
+    response.complete();
+    await pending;
+    expect(state.items()).toEqual([]);
+    expect(state.loading()).toBeFalse();
+  });
+});
+{{ end }}

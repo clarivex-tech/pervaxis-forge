@@ -1,0 +1,90 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+<section class="workspace" aria-labelledby="my-tasks-heading" [attr.aria-busy]="state.loading() || state.mutating()">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">MY WORKSPACE</p>
+      <h1 id="my-tasks-heading" tabindex="-1">My Tasks</h1>
+      <p class="intro">Create and manage your Workspace tasks.</p>
+    </div>
+    <p-button label="New task" icon="pi pi-plus" [disabled]="state.loading() || state.mutating()" (onClick)="state.openCreate()" />
+  </header>
+
+  @if (state.notice(); as notice) {
+    <p class="notice" role="status" [textContent]="notice"></p>
+  }
+
+  @if (state.errorMessage(); as message) {
+    <div class="error-panel" role="alert">
+      <p [textContent]="message"></p>
+      @if (state.errorAction() === 'retry') {
+        <p-button label="Retry" severity="secondary" [outlined]="true" [disabled]="state.loading() || state.mutating()" (onClick)="state.retry()" />
+      } @else if (state.errorAction() === 'refresh') {
+        <p-button label="Refresh tasks" severity="secondary" [outlined]="true" [disabled]="state.loading() || state.mutating()" (onClick)="state.refresh()" />
+      } @else if (state.errorAction() === 'reload') {
+        <p-button label="Reload latest task" severity="secondary" [outlined]="true" [disabled]="state.loading() || state.mutating()" (onClick)="state.reloadLatest()" />
+      }
+    </div>
+  }
+
+  @if (state.editorOpen()) {
+    <section class="editor-panel" aria-label="Task editor">
+      <domain-task-editor [task]="state.editingTask()" [busy]="state.mutating()"
+                          (saveDraft)="save($event.title, $event.description)" (cancelled)="state.cancelEdit()" />
+    </section>
+  }
+
+  @if (state.loading() && state.items().length === 0) {
+    <p class="status" role="status">Loading tasks...</p>
+  } @else if (state.items().length === 0 && !state.errorMessage()) {
+    <div class="empty-state">
+      <h2>No tasks yet</h2>
+      <p>Create a task to get started.</p>
+      <p-button label="Create your first task" icon="pi pi-plus" [disabled]="state.loading() || state.mutating()" (onClick)="state.openCreate()" />
+    </div>
+  } @else if (state.items().length > 0) {
+    <ul class="task-list" aria-label="Workspace tasks">
+      @for (task of state.items(); track task.id) {
+        <li class="task-card" [class.task-card--completed]="task.isCompleted">
+          <div class="task-content">
+            <h2 [textContent]="task.title"></h2>
+            @if (task.description) {
+              <p class="task-description" [textContent]="task.description"></p>
+            }
+            <p class="task-meta">
+              <span class="status-pill" [class.status-pill--completed]="task.isCompleted">
+                <span [textContent]="task.isCompleted ? 'Completed' : 'Open'"></span>
+              </span>
+              <time [attr.datetime]="task.createdAt" [textContent]="'Created ' + (task.createdAt | date:'mediumDate')"></time>
+            </p>
+          </div>
+          <div class="task-actions" [attr.aria-label]="'Actions for ' + task.title">
+            <p-button [label]="task.isCompleted ? 'Reopen' : 'Complete'" severity="secondary" [outlined]="true"
+                      [disabled]="state.loading() || state.mutating()" (onClick)="state.toggleCompletion(task)" />
+            <p-button label="Edit" severity="secondary" [outlined]="true" [disabled]="state.loading() || state.mutating()"
+                      [ariaLabel]="'Edit ' + task.title" (onClick)="edit(task)" />
+            @if (state.deleteConfirmationId() === task.id) {
+              <div #deleteConfirmation class="delete-confirmation" role="group" tabindex="-1"
+                   [attr.aria-label]="'Confirm deletion of ' + task.title">
+                <span>Delete this task?</span>
+                <p-button label="Confirm delete" severity="danger" [disabled]="state.loading() || state.mutating()" (onClick)="confirmDelete(task)" />
+                <p-button label="Cancel delete" severity="secondary" [outlined]="true" [disabled]="state.mutating()" (onClick)="cancelDelete()" />
+              </div>
+            } @else {
+              <p-button [attr.data-workspace-task-delete]="task.id" label="Delete" severity="danger" [outlined]="true" [disabled]="state.loading() || state.mutating()"
+                        [ariaLabel]="'Delete ' + task.title" (onClick)="requestDelete(task)" />
+            }
+          </div>
+        </li>
+      }
+    </ul>
+
+    <nav class="pagination" aria-label="Task pages">
+      <p-button label="Previous" icon="pi pi-arrow-left" severity="secondary" [outlined]="true"
+                [disabled]="state.page() <= 1 || state.loading() || state.mutating()" (onClick)="state.previousPage()" />
+      <span aria-live="polite" [textContent]="'Page ' + state.page()"></span>
+      <p-button label="Next" icon="pi pi-arrow-right" iconPos="right" severity="secondary" [outlined]="true"
+                [disabled]="!state.hasMore() || state.page() >= 10000 || state.loading() || state.mutating()" (onClick)="state.nextPage()" />
+    </nav>
+  }
+</section>
+{{ end }}

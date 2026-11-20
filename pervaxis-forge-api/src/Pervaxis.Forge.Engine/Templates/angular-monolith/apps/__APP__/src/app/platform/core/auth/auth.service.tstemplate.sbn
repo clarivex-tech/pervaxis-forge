@@ -278,11 +278,15 @@ export class AuthService {
   }
 
   private applyTokens(tokens: TokenSet, previousProfile: UserProfile | null): void {
+    const previousSubject = this.session()?.profile?.subject ?? previousProfile?.subject ?? null;
     const accessClaims = readJwtClaims(tokens.accessToken);
     const lifetime = tokens.expiresIn ?? secondsUntil(accessClaims['exp']) ?? FALLBACK_LIFETIME_SECONDS;
     const profile = tokens.idTokenClaims
       ? toProfile(tokens.idTokenClaims, accessClaims)
       : previousProfile ?? profileFromAccessToken(accessClaims);
+    if (previousSubject !== null && previousSubject !== profile?.subject) {
+      this.registry.reset('identity-changed');
+    }
 
     if (tokens.refreshToken) {
       this.writeRefreshToken(tokens.refreshToken);

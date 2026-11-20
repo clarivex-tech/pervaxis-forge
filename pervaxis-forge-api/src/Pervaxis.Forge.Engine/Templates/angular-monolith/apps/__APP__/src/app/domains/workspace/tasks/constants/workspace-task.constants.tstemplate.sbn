@@ -1,0 +1,23 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+export const WORKSPACE_TASK_PAGE_SIZE = 20;
+export const WORKSPACE_TASK_MAX_PAGE = 10_000;
+export const WORKSPACE_TASK_TITLE_MAX_LENGTH = 200;
+export const WORKSPACE_TASK_DESCRIPTION_MAX_LENGTH = 4_000;
+{{ end }}

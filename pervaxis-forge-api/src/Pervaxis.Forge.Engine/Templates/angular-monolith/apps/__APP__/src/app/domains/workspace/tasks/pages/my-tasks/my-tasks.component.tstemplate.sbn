@@ -1,0 +1,78 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import {
+  ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, afterNextRender, inject, viewChild,
+} from '@angular/core';
+import { DOCUMENT, DatePipe } from '@angular/common';
+import { ButtonModule } from 'primeng/button';
+import { TaskEditorComponent } from '../../components/task-editor/task-editor.component';
+import { WorkspaceTask } from '../../contracts/workspace-task.model';
+import { WorkspaceTaskState } from '../../state/workspace-task.state';
+
+@Component({
+  selector: 'domain-my-tasks',
+  standalone: true,
+  imports: [DatePipe, ButtonModule, TaskEditorComponent],
+  templateUrl: './my-tasks.component.html',
+  styleUrl: './my-tasks.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class MyTasksComponent implements OnInit {
+  readonly state = inject(WorkspaceTaskState);
+  private readonly injector = inject(Injector);
+  private readonly document = inject(DOCUMENT);
+  private readonly deleteConfirmation = viewChild<ElementRef<HTMLElement>>('deleteConfirmation');
+
+  ngOnInit(): void {
+    void this.state.load();
+  }
+
+  edit(task: WorkspaceTask): void {
+    this.state.openEdit(task);
+  }
+
+  save(title: string, description: string | null): void {
+    void this.state.saveDraft({ title, description });
+  }
+
+  requestDelete(task: WorkspaceTask): void {
+    this.state.requestDelete(task);
+    if (this.state.deleteConfirmationId() === task.id) {
+      afterNextRender(() => this.deleteConfirmation()?.nativeElement.focus(), { injector: this.injector });
+    }
+  }
+
+  cancelDelete(): void {
+    const taskId = this.state.deleteConfirmationId();
+    this.state.cancelDelete();
+    if (taskId) {
+      afterNextRender(() => {
+        this.document.querySelector<HTMLElement>(`[data-workspace-task-delete="${taskId}"] button`)?.focus();
+      }, { injector: this.injector });
+    }
+  }
+
+  async confirmDelete(task: WorkspaceTask): Promise<void> {
+    await this.state.confirmDelete(task);
+    if (this.state.notice() === 'Task deleted.') {
+      afterNextRender(() => this.document.getElementById('my-tasks-heading')?.focus(), { injector: this.injector });
+    }
+  }
+}
+{{ end }}

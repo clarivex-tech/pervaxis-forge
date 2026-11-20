@@ -1,0 +1,32 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+<form class="task-editor" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+  <h2 [textContent]="task ? 'Edit task' : 'Create a task'"></h2>
+  <div class="field">
+    <label for="workspace-task-title">Title</label>
+    <input id="workspace-task-title" type="text" formControlName="title" [maxlength]="titleMaxLength"
+           [attr.aria-invalid]="form.controls.title.invalid && form.controls.title.touched"
+           aria-describedby="workspace-task-title-help workspace-task-title-error" autocomplete="off" />
+    <small id="workspace-task-title-help">Required, up to {{ titleMaxLength }} characters.</small>
+    @if (form.controls.title.touched && form.controls.title.hasError('required')) {
+      <small id="workspace-task-title-error" class="field-error" role="alert">Enter a title containing at least one non-space character.</small>
+    } @else if (form.controls.title.touched && form.controls.title.hasError('maxlength')) {
+      <small id="workspace-task-title-error" class="field-error" role="alert">The title cannot exceed {{ titleMaxLength }} characters.</small>
+    }
+  </div>
+  <div class="field">
+    <label for="workspace-task-description">Description <span>(optional)</span></label>
+    <textarea id="workspace-task-description" rows="4" formControlName="description"
+              [maxlength]="descriptionMaxLength"
+              [attr.aria-invalid]="form.controls.description.invalid && form.controls.description.touched"
+              aria-describedby="workspace-task-description-help workspace-task-description-error"></textarea>
+    <small id="workspace-task-description-help">Up to {{ descriptionMaxLength }} characters.</small>
+    @if (form.controls.description.touched && form.controls.description.hasError('maxlength')) {
+      <small id="workspace-task-description-error" class="field-error" role="alert">The description cannot exceed {{ descriptionMaxLength }} characters.</small>
+    }
+  </div>
+  <div class="editor-actions">
+    <p-button type="submit" [label]="task ? 'Save changes' : 'Create task'" [disabled]="busy" />
+    <p-button type="button" label="Cancel" severity="secondary" [outlined]="true" [disabled]="busy" (onClick)="cancelled.emit()" />
+  </div>
+</form>
+{{ end }}

@@ -40,11 +40,11 @@ describe('V1 domain registration', () => {
   beforeEach(() => {
     signedIn = true; roles.set(['Editor']); tenantStatus.set('valid');
     loadRoutes = jasmine.createSpy('lazy domain routes').and.resolveTo([
-      { path: '', children: [{ path: '', component: DomainPage }, { path: 'detail', component: DomainPage }] },
+      { path: '', children: [{ path: '', component: DomainPage }, { path: 'tasks', component: DomainPage }, { path: 'detail', component: DomainPage }] },
     ]);
     registration = {
       manifest: { contractVersion: 1, security: 'cognito-tenant', id: 'work-items', displayName: 'Work items', icon: 'pi pi-list',
-        permissions: ['Editor'], supportedTargets: ['web'], requirements: { packages: {}, configuration: [] } },
+        navigationPath: 'tasks', permissions: ['Editor'], supportedTargets: ['web'], requirements: { packages: {}, configuration: [] } },
       options: { label: 'Copied domain route' }, loadRoutes,
     };
     TestBed.configureTestingModule({ providers: [
@@ -60,7 +60,7 @@ describe('V1 domain registration', () => {
     const harness = await RouterTestingHarness.create('/work-items');
     expect(harness.routeNativeElement?.textContent).toContain('Copied domain route');
     expect(loadRoutes).toHaveBeenCalledTimes(1);
-    expect(TestBed.inject(DomainNavigationService).items()[0].routerLink).toBe('/work-items');
+    expect(TestBed.inject(DomainNavigationService).items()[0].routerLink).toBe('/work-items/tasks');
   });
 
   it('blocks lazy loading until authenticated', async () => {

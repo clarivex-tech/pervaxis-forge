@@ -1,0 +1,53 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+export interface WorkspaceTask {
+  readonly id: string;
+  readonly title: string;
+  readonly description: string | null;
+  readonly isCompleted: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly version: string;
+}
+
+export interface WorkspaceTaskPage {
+  readonly items: readonly WorkspaceTask[];
+  readonly page: number;
+  readonly pageSize: number;
+  readonly hasMore: boolean;
+}
+
+export interface WorkspaceTaskDraft {
+  readonly title: string;
+  readonly description: string | null;
+}
+
+export interface CreateWorkspaceTaskRequest extends WorkspaceTaskDraft {
+  readonly isCompleted?: false;
+}
+
+export interface UpdateWorkspaceTaskRequest extends WorkspaceTaskDraft {
+  readonly isCompleted: boolean;
+}
+
+export interface VersionedWorkspaceTask {
+  readonly task: WorkspaceTask;
+  readonly etag: string;
+}
+{{ end }}

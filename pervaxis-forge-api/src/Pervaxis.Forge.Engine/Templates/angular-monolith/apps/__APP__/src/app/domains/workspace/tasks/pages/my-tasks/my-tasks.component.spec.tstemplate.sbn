@@ -1,0 +1,105 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { of } from 'rxjs';
+import { DOMAIN_SESSION_STATE } from '@forge/ui-contracts/v1';
+import { WorkspaceTaskApi } from '../../api/workspace-task.api';
+import { WorkspaceTask, WorkspaceTaskPage } from '../../contracts/workspace-task.model';
+import { WorkspaceTaskState } from '../../state/workspace-task.state';
+import { MyTasksComponent } from './my-tasks.component';
+
+const task: WorkspaceTask = {
+  id: '123e4567-e89b-12d3-a456-426614174000',
+  title: 'Focus test task',
+  description: null,
+  isCompleted: false,
+  createdAt: '2026-11-20T12:00:00Z',
+  updatedAt: '2026-11-20T12:00:00Z',
+  version: '223e4567-e89b-12d3-a456-426614174000',
+};
+const page = (items: readonly WorkspaceTask[]): WorkspaceTaskPage => ({
+  items, page: 1, pageSize: 20, hasMore: false,
+});
+
+describe('MyTasksComponent focus behavior', () => {
+  let fixture: ComponentFixture<MyTasksComponent>;
+  let api: jasmine.SpyObj<WorkspaceTaskApi>;
+
+  beforeEach(async () => {
+    api = jasmine.createSpyObj<WorkspaceTaskApi>('WorkspaceTaskApi', ['list', 'get', 'create', 'update', 'delete']);
+    api.list.and.returnValues(of(page([task])), of(page([])));
+    api.delete.and.returnValue(of(undefined));
+
+    await TestBed.configureTestingModule({
+      imports: [MyTasksComponent],
+      providers: [
+        { provide: WorkspaceTaskApi, useValue: api },
+        WorkspaceTaskState,
+        { provide: DOMAIN_SESSION_STATE, useValue: { registerUntilDestroyed: () => undefined } },
+      ],
+    }).compileComponents();
+
+    fixture = TestBed.createComponent(MyTasksComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  });
+
+  afterEach(() => TestBed.resetTestingModule());
+
+  it('moves focus to the confirmation group and restores it to Delete on cancel', async () => {
+    const trigger = fixture.nativeElement.querySelector('[data-workspace-task-delete] button') as HTMLButtonElement;
+    trigger.focus();
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const confirmation = fixture.nativeElement.querySelector('.delete-confirmation') as HTMLElement;
+    expect(confirmation.getAttribute('role')).toBe('group');
+    expect(document.activeElement).toBe(confirmation);
+
+    const cancel = [...fixture.nativeElement.querySelectorAll('button')].find((button: HTMLButtonElement) =>
+      button.innerText.trim() === 'Cancel delete') as HTMLButtonElement | undefined;
+    cancel?.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('[data-workspace-task-delete] button'));
+  });
+
+  it('moves focus to the page heading after a confirmed deletion', async () => {
+    const trigger = fixture.nativeElement.querySelector('[data-workspace-task-delete] button') as HTMLButtonElement;
+    trigger.focus();
+    trigger.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const confirm = [...fixture.nativeElement.querySelectorAll('button')].find((button: HTMLButtonElement) =>
+      button.innerText.trim() === 'Confirm delete') as HTMLButtonElement | undefined;
+    confirm?.click();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+    expect(api.delete).toHaveBeenCalledOnceWith(task);
+    expect(document.activeElement).toBe(fixture.nativeElement.querySelector('#my-tasks-heading'));
+  });
+});
+{{ end }}

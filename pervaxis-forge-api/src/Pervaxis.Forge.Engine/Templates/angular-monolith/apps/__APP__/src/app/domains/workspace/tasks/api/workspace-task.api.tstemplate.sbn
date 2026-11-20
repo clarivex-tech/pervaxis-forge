@@ -1,0 +1,186 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { Injectable, inject } from '@angular/core';
+import { map, Observable } from 'rxjs';
+import { DOMAIN_HTTP, DOMAIN_OPTIONS, DomainHttpResponseV1 } from '@forge/ui-contracts/v1';
+import {
+  WORKSPACE_TASK_DESCRIPTION_MAX_LENGTH, WORKSPACE_TASK_MAX_PAGE, WORKSPACE_TASK_PAGE_SIZE,
+  WORKSPACE_TASK_TITLE_MAX_LENGTH,
+} from '../constants/workspace-task.constants';
+import {
+  CreateWorkspaceTaskRequest, UpdateWorkspaceTaskRequest, VersionedWorkspaceTask, WorkspaceTask,
+  WorkspaceTaskDraft, WorkspaceTaskPage,
+} from '../contracts/workspace-task.model';
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const UTC_TIMESTAMP_PATTERN = /(?:Z|\+00:00)$/;
+
+export class WorkspaceTaskProtocolError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'WorkspaceTaskProtocolError';
+  }
+}
+
+@Injectable()
+export class WorkspaceTaskApi {
+  private readonly http = inject(DOMAIN_HTTP);
+  private readonly options = inject(DOMAIN_OPTIONS);
+  private readonly collectionPath = this.readCollectionPath();
+
+  list(page: number): Observable<WorkspaceTaskPage> {
+    if (!Number.isInteger(page) || page < 1 || page > WORKSPACE_TASK_MAX_PAGE) {
+      throw new WorkspaceTaskProtocolError('The requested task page is outside the supported range.');
+    }
+    return this.http.getResponse<unknown>(this.collectionPath, {
+      page: String(page),
+      pageSize: String(WORKSPACE_TASK_PAGE_SIZE),
+    }).pipe(map(response => {
+      if (response.status !== 200) {
+        throw new WorkspaceTaskProtocolError('The task API did not return the required page status.');
+      }
+      return readTaskPage(response.body, page);
+    }));
+  }
+
+  get(id: string): Observable<VersionedWorkspaceTask> {
+    return this.http.getResponse<unknown>(this.itemPath(id)).pipe(map(response => {
+      if (response.status !== 200) {
+        throw new WorkspaceTaskProtocolError('The task API did not return the required read status.');
+      }
+      const task = readTask(response.body);
+      const etag = readStrongEtag(response, task.version);
+      return { task, etag };
+    }));
+  }
+
+  create(draft: WorkspaceTaskDraft): Observable<WorkspaceTask> {
+    const request: CreateWorkspaceTaskRequest = {
+      title: draft.title.trim(),
+      description: draft.description === '' ? null : draft.description,
+    };
+    return this.http.postResponse<unknown>(this.collectionPath, request).pipe(map(response => {
+      if (response.status !== 201) {
+        throw new WorkspaceTaskProtocolError('The task API did not return the required creation status.');
+      }
+      const task = readTask(response.body);
+      readStrongEtag(response, task.version);
+      const location = response.header('Location');
+      if (!location || !location.endsWith('/' + task.id)) {
+        throw new WorkspaceTaskProtocolError('The task API returned an invalid Location header.');
+      }
+      return task;
+    }));
+  }
+
+  update(task: WorkspaceTask, request: UpdateWorkspaceTaskRequest): Observable<WorkspaceTask> {
+    return this.http.putResponse<unknown>(this.itemPath(task.id), request, {
+      'If-Match': etagFromVersion(task.version),
+    }).pipe(map(response => {
+      if (response.status !== 200) {
+        throw new WorkspaceTaskProtocolError('The task API did not return the required update status.');
+      }
+      const updated = readTask(response.body);
+      readStrongEtag(response, updated.version);
+      return updated;
+    }));
+  }
+
+  delete(task: WorkspaceTask): Observable<void> {
+    return this.http.deleteResponse<unknown>(this.itemPath(task.id), {
+      'If-Match': etagFromVersion(task.version),
+    }).pipe(map(response => {
+      if (response.status !== 204 || response.body !== null) {
+        throw new WorkspaceTaskProtocolError('The task API did not return the required deletion response.');
+      }
+      return undefined;
+    }));
+  }
+
+  private readCollectionPath(): string {
+    const path = this.options['apiPath'];
+    if (typeof path !== 'string' || !/^\/[a-zA-Z0-9/_-]+$/.test(path) || path.endsWith('/')) {
+      throw new WorkspaceTaskProtocolError('A relative Workspace Tasks API path is required.');
+    }
+    return path;
+  }
+
+  private itemPath(id: string): string {
+    if (!UUID_PATTERN.test(id)) {
+      throw new WorkspaceTaskProtocolError('The task identifier is not a UUID.');
+    }
+    return this.collectionPath + '/' + encodeURIComponent(id);
+  }
+}
+
+function readTaskPage(value: unknown, requestedPage: number): WorkspaceTaskPage {
+  if (!isRecord(value) || !Array.isArray(value['items']) || value['page'] !== requestedPage
+      || value['pageSize'] !== WORKSPACE_TASK_PAGE_SIZE || typeof value['hasMore'] !== 'boolean'
+      || value['items'].length > WORKSPACE_TASK_PAGE_SIZE) {
+    throw new WorkspaceTaskProtocolError('The task API returned an invalid page response.');
+  }
+  const items = value['items'].map(readTask);
+  return { items, page: requestedPage, pageSize: WORKSPACE_TASK_PAGE_SIZE, hasMore: value['hasMore'] };
+}
+
+function readTask(value: unknown): WorkspaceTask {
+  if (!isRecord(value) || typeof value['id'] !== 'string' || !UUID_PATTERN.test(value['id'])
+      || typeof value['title'] !== 'string' || value['title'].trim().length === 0
+      || value['title'].length > WORKSPACE_TASK_TITLE_MAX_LENGTH
+      || !(value['description'] === null || (typeof value['description'] === 'string'
+        && value['description'].length <= WORKSPACE_TASK_DESCRIPTION_MAX_LENGTH))
+      || typeof value['isCompleted'] !== 'boolean' || !isUtcTimestamp(value['createdAt'])
+      || !isUtcTimestamp(value['updatedAt']) || typeof value['version'] !== 'string' || !UUID_PATTERN.test(value['version'])) {
+    throw new WorkspaceTaskProtocolError('The task API returned an invalid task response.');
+  }
+  return {
+    id: value['id'],
+    title: value['title'],
+    description: value['description'],
+    isCompleted: value['isCompleted'],
+    createdAt: value['createdAt'],
+    updatedAt: value['updatedAt'],
+    version: value['version'],
+  };
+}
+
+function readStrongEtag(response: DomainHttpResponseV1<unknown>, version: string): string {
+  const etag = response.header('ETag');
+  if (!etag || !/^"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"$/i.test(etag)
+      || etag.slice(1, -1).toLowerCase() !== version.toLowerCase()) {
+    throw new WorkspaceTaskProtocolError('The task API returned an invalid or mismatched ETag.');
+  }
+  return etag;
+}
+
+function etagFromVersion(version: string): string {
+  if (!UUID_PATTERN.test(version)) {
+    throw new WorkspaceTaskProtocolError('A strong task version is required for this change.');
+  }
+  return '"' + version + '"';
+}
+
+function isUtcTimestamp(value: unknown): value is string {
+  return typeof value === 'string' && UTC_TIMESTAMP_PATTERN.test(value) && Number.isFinite(Date.parse(value));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+{{ end }}
