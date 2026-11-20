@@ -32,6 +32,33 @@ namespace Pervaxis.Forge.Api.Tests.Services;
 
 public sealed class GenerationServiceTests
 {
+    [Theory]
+    [InlineData("PostgreSQL")]
+    [InlineData("postgresql")]
+    public async Task GenerateZipAsync_DefaultWorkspaceSelectionIncludesModuleHistoryAndTests(string engine)
+    {
+        await using var fixture = await TestDb.CreateAsync();
+        // Exercise the real request -> BuildManifest -> PrintGenerator path, including wizard casing.
+        var request = CreateRequest("clarivolt", "billing-service") with
+        {
+            Database = new GenerationDatabaseConfig { Engine = engine, Schema = "billing" },
+        };
+        var service = CreateService(fixture.Db);
+        (await service.ValidateAsync(request)).IsValid.Should().BeTrue();
+        var zip = await service.GenerateZipAsync(request);
+        using var archive = new System.IO.Compression.ZipArchive(new MemoryStream(zip));
+        var paths = archive.Entries.Select(entry => entry.FullName).ToArray();
+        paths.Should().Contain("src/Pervaxis.Clv.Billing/Domains/Workspace/WorkspaceModule.cs");
+        paths.Should().Contain("src/Pervaxis.Clv.Billing/Data/Migrations/20261120000000_AddWorkspaceTasks.cs");
+        paths.Should().Contain("src/Pervaxis.Clv.Billing/Data/Migrations/20261120000000_AddWorkspaceTasks.Designer.cs");
+        paths.Should().Contain("tests/Pervaxis.Clv.Billing.Tests/Domains/Workspace/Tasks/WorkspaceTaskHttpTests.cs");
+        paths.Should().Contain("tests/Pervaxis.Clv.Billing.Tests/Domains/Workspace/Tasks/WorkspaceTaskRepositoryTests.cs");
+        using var snapshot = new StreamReader(archive.GetEntry("src/Pervaxis.Clv.Billing/Data/Migrations/BillingServiceDbContextModelSnapshot.cs")!.Open());
+        (await snapshot.ReadToEndAsync()).Should().Contain("workspace_tasks");
+        using var metadata = new StreamReader(archive.GetEntry("SCAFFOLD_VERSION.md")!.Open());
+        (await metadata.ReadToEndAsync()).Should().Contain("Workspace reference module enabled: `true`");
+    }
+
     [Fact]
     public async Task TokenEnrichment_RoundTripsThroughValidationGenerationAndRegeneration()
     {

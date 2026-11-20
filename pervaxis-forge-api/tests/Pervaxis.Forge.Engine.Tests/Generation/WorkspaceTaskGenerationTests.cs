@@ -33,7 +33,7 @@ public sealed class WorkspaceTaskGenerationTests
         Product = "clarivolt", VerticalSlug = "clarivolt", ServiceName = name + "-service",
         ServiceType = ServiceType.RestApi, ComponentPrefix = "clv", CloudProvider = "AWS",
         MultiTenancy = true, InitialTenantId = TestTenancy.InitialTenantId, Cognito = TestTenancy.Cognito,
-        Database = new DatabaseConfig { Engine = "postgresql", Name = "workspace" },
+        Database = new DatabaseConfig { Engine = "PostgreSQL", Name = "workspace" },
         IncludeWorkspaceTasks = include,
         Observability = minimal ? new ObservabilityConfig
         {
@@ -55,15 +55,23 @@ public sealed class WorkspaceTaskGenerationTests
     }
 
     [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public async Task DefaultAndOptOut_HaveMatchingReferenceHistory(bool include)
+    [InlineData("postgresql", null, true)]
+    [InlineData("PostgreSQL", null, true)]
+    [InlineData("POSTGRESQL", null, true)]
+    [InlineData("postgresql", true, true)]
+    [InlineData("PostgreSQL", true, true)]
+    [InlineData("POSTGRESQL", true, true)]
+    [InlineData("postgresql", false, false)]
+    [InlineData("PostgreSQL", false, false)]
+    [InlineData("POSTGRESQL", false, false)]
+    public async Task DefaultAndOptOut_HaveMatchingReferenceHistory(string engine, bool? include, bool expected)
     {
-        var files = await Files(Manifest("workspace", include));
-        Assert.Equal(include, files.Keys.Any(path => path.EndsWith("/Domains/Workspace/WorkspaceModule.cs", StringComparison.Ordinal)));
-        Assert.Equal(include, files.Keys.Any(path => path.EndsWith("/20261120000000_AddWorkspaceTasks.cs", StringComparison.Ordinal)));
+        var files = await Files(Manifest("workspace", include) with { Database = new DatabaseConfig { Engine = engine, Name = "workspace" } });
+        Assert.Equal(expected, files.Keys.Any(path => path.EndsWith("/Domains/Workspace/WorkspaceModule.cs", StringComparison.Ordinal)));
+        Assert.Equal(expected, files.Keys.Any(path => path.EndsWith("/20261120000000_AddWorkspaceTasks.cs", StringComparison.Ordinal)));
+        Assert.Equal(expected, files.Keys.Any(path => path.EndsWith("/Domains/Workspace/Tasks/WorkspaceTaskHttpTests.cs", StringComparison.Ordinal)));
         var snapshot = files.Single(file => file.Key.EndsWith("DbContextModelSnapshot.cs", StringComparison.Ordinal)).Value;
-        Assert.Equal(include, snapshot.Contains("workspace_tasks", StringComparison.Ordinal));
+        Assert.Equal(expected, snapshot.Contains("workspace_tasks", StringComparison.Ordinal));
         foreach (var file in files.Where(file => file.Key.Contains("/Domains/Workspace/", StringComparison.Ordinal)))
             Assert.DoesNotContain("Pervaxis.Clarivolt.Workspace", file.Value);
         Assert.Contains(files.Keys, path => path.EndsWith("/Platform/Contracts/V1/IDomainSession.cs", StringComparison.Ordinal));
@@ -77,6 +85,8 @@ public sealed class WorkspaceTaskGenerationTests
         Assert.Contains(new ManifestValidator().Validate(manifest).Errors, error => error.Contains("IncludeWorkspaceTasks=true", StringComparison.Ordinal));
         var otherPrint = manifest with { ServiceType = ServiceType.GraphQL };
         Assert.Contains(new ManifestValidator().Validate(otherPrint).Errors, error => error.Contains("IncludeWorkspaceTasks=true", StringComparison.Ordinal));
+        var otherProvider = Manifest("workspace", true) with { Database = new DatabaseConfig { Engine = "mysql" } };
+        Assert.Contains(new ManifestValidator().Validate(otherProvider).Errors, error => error.Contains("IncludeWorkspaceTasks=true", StringComparison.Ordinal));
     }
 
     [Theory]
