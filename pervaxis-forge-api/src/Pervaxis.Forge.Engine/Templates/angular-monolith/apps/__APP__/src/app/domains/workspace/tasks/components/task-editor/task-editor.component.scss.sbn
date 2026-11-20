@@ -1,0 +1,24 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+:host { display: block; }
+
+.task-editor { display: grid; gap: 1.25rem; }
+.task-editor h2 { margin: 0; font-size: 1.25rem; }
+.field { display: grid; gap: 0.4rem; }
+.field label { font-weight: 600; }
+.field label span, .field small { color: var(--p-text-muted-color, #64748b); }
+.field input, .field textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--p-content-border-color, #cbd5e1);
+  border-radius: 0.5rem;
+  color: var(--p-text-color, #1e293b);
+  background: var(--p-content-background, #fff);
+  font: inherit;
+}
+.field input:focus-visible, .field textarea:focus-visible,
+.editor-actions :focus-visible { outline: 3px solid var(--p-primary-color, #4f46e5); outline-offset: 2px; }
+.field textarea { resize: vertical; }
+.field-error { color: var(--p-red-600, #b91c1c) !important; }
+.editor-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+{{ end }}

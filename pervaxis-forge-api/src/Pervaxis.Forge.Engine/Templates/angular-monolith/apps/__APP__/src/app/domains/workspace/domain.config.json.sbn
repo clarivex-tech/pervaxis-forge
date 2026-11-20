@@ -1,0 +1,5 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+{
+  "apiPath": "/v1/workspace/tasks"
+}
+{{ end }}

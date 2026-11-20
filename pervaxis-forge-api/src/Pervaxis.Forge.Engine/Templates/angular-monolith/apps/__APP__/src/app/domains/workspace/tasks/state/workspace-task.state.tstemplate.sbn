@@ -1,0 +1,344 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { DestroyRef, Injectable, inject, signal } from '@angular/core';
+import { firstValueFrom, Observable, Subject, takeUntil } from 'rxjs';
+import { DOMAIN_SESSION_STATE } from '@forge/ui-contracts/v1';
+import {
+  WORKSPACE_TASK_MAX_PAGE, WORKSPACE_TASK_PAGE_SIZE,
+} from '../constants/workspace-task.constants';
+import { WorkspaceTaskApi } from '../api/workspace-task.api';
+import {
+  UpdateWorkspaceTaskRequest, WorkspaceTask, WorkspaceTaskDraft,
+} from '../contracts/workspace-task.model';
+
+type ErrorAction = 'retry' | 'refresh' | 'reload' | null;
+type Mutation =
+  | { readonly kind: 'create'; readonly draft: WorkspaceTaskDraft }
+  | { readonly kind: 'update'; readonly task: WorkspaceTask; readonly draft: WorkspaceTaskDraft; readonly isCompleted: boolean }
+  | { readonly kind: 'delete'; readonly task: WorkspaceTask };
+
+@Injectable()
+export class WorkspaceTaskState {
+  private readonly api = inject(WorkspaceTaskApi);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly sessionState = inject(DOMAIN_SESSION_STATE);
+  private generation = 0;
+  private loadSequence = 0;
+  private cancelled$ = new Subject<void>();
+  private retryOperation: (() => Promise<void>) | null = null;
+  private conflictTaskId: string | null = null;
+
+  readonly items = signal<readonly WorkspaceTask[]>([]);
+  readonly page = signal(1);
+  readonly pageSize = WORKSPACE_TASK_PAGE_SIZE;
+  readonly hasMore = signal(false);
+  readonly loading = signal(false);
+  readonly mutating = signal(false);
+  readonly editorOpen = signal(false);
+  readonly editingTask = signal<WorkspaceTask | null>(null);
+  readonly deleteConfirmationId = signal<string | null>(null);
+  readonly errorMessage = signal<string | null>(null);
+  readonly errorAction = signal<ErrorAction>(null);
+  readonly notice = signal<string | null>(null);
+
+  constructor() {
+    this.sessionState.registerUntilDestroyed(this.destroyRef, () => this.reset());
+    this.destroyRef.onDestroy(() => this.reset());
+  }
+
+  async load(page = this.page()): Promise<void> {
+    if (this.loading() || this.mutating() || !this.validPage(page)) return;
+    this.notice.set(null);
+    await this.fetchPage(page, this.generation);
+  }
+
+  nextPage(): Promise<void> {
+    return this.hasMore() && this.page() < WORKSPACE_TASK_MAX_PAGE
+      ? this.load(this.page() + 1)
+      : Promise.resolve();
+  }
+
+  previousPage(): Promise<void> {
+    return this.page() > 1 ? this.load(this.page() - 1) : Promise.resolve();
+  }
+
+  openCreate(): void {
+    if (this.loading() || this.mutating() || this.editorOpen()) return;
+    this.clearError();
+    this.notice.set(null);
+    this.editingTask.set(null);
+    this.deleteConfirmationId.set(null);
+    this.editorOpen.set(true);
+  }
+
+  openEdit(task: WorkspaceTask): void {
+    if (this.loading() || this.mutating() || this.editorOpen()) return;
+    this.clearError();
+    this.notice.set(null);
+    this.editingTask.set(task);
+    this.deleteConfirmationId.set(null);
+    this.editorOpen.set(true);
+  }
+
+  cancelEdit(): void {
+    if (this.mutating()) return;
+    this.editorOpen.set(false);
+    this.editingTask.set(null);
+    this.clearError();
+  }
+
+  saveDraft(draft: WorkspaceTaskDraft): Promise<void> {
+    const task = this.editingTask();
+    return this.executeMutation(task
+      ? { kind: 'update', task, draft, isCompleted: task.isCompleted }
+      : { kind: 'create', draft });
+  }
+
+  toggleCompletion(task: WorkspaceTask): Promise<void> {
+    if (this.editorOpen()) return Promise.resolve();
+    return this.executeMutation({
+      kind: 'update',
+      task,
+      draft: { title: task.title, description: task.description },
+      isCompleted: !task.isCompleted,
+    });
+  }
+
+  requestDelete(task: WorkspaceTask): void {
+    if (this.loading() || this.mutating() || this.editorOpen()) return;
+    this.clearError();
+    this.deleteConfirmationId.set(task.id);
+  }
+
+  cancelDelete(): void {
+    if (!this.mutating()) this.deleteConfirmationId.set(null);
+  }
+
+  confirmDelete(task: WorkspaceTask): Promise<void> {
+    if (this.deleteConfirmationId() !== task.id) return Promise.resolve();
+    return this.executeMutation({ kind: 'delete', task });
+  }
+
+  async retry(): Promise<void> {
+    if (this.mutating() || this.loading()) return;
+    const operation = this.retryOperation;
+    if (!operation) return;
+    this.clearError();
+    await operation();
+  }
+
+  refresh(): Promise<void> {
+    return this.load(this.page());
+  }
+
+  async reloadLatest(): Promise<void> {
+    const id = this.conflictTaskId;
+    if (!id || this.loading() || this.mutating()) return;
+    const generation = this.generation;
+    this.loading.set(true);
+    this.clearError();
+    try {
+      const latest = await this.request(this.api.get(id));
+      if (generation !== this.generation) return;
+      this.items.update(items => items.map(item => item.id === id ? latest.task : item));
+      if (this.editingTask()?.id === id) this.editingTask.set(latest.task);
+      this.conflictTaskId = null;
+      this.notice.set('The latest task version has been loaded. Review it before saving again.');
+    } catch (error: unknown) {
+      if (generation === this.generation) this.reportReadError(error, () => this.reloadLatest());
+    } finally {
+      if (generation === this.generation) this.loading.set(false);
+    }
+  }
+
+  private async executeMutation(mutation: Mutation): Promise<void> {
+    if (this.loading() || this.mutating()) return;
+    const generation = this.generation;
+    this.mutating.set(true);
+    this.clearError();
+    this.notice.set(null);
+    let updatedTask: WorkspaceTask | null = null;
+    try {
+      switch (mutation.kind) {
+        case 'create':
+          await this.request(this.api.create(mutation.draft));
+          break;
+        case 'update': {
+          const request: UpdateWorkspaceTaskRequest = {
+            title: mutation.draft.title.trim(),
+            description: mutation.draft.description === '' ? null : mutation.draft.description,
+            isCompleted: mutation.isCompleted,
+          };
+          updatedTask = await this.request(this.api.update(mutation.task, request));
+          break;
+        }
+        case 'delete':
+          await this.request(this.api.delete(mutation.task));
+          break;
+      }
+    } catch (error: unknown) {
+      if (generation === this.generation) this.reportMutationError(error, mutation);
+      return;
+    } finally {
+      if (generation === this.generation) this.mutating.set(false);
+    }
+    if (generation !== this.generation) return;
+
+    if (updatedTask) {
+      const savedTask = updatedTask;
+      this.items.update(items => items.map(item => item.id === savedTask.id ? savedTask : item));
+      this.editorOpen.set(false);
+      this.editingTask.set(null);
+      const completionChanged = mutation.kind === 'update' && savedTask.isCompleted !== mutation.task.isCompleted;
+      this.notice.set(completionChanged ? (savedTask.isCompleted ? 'Task completed.' : 'Task reopened.') : 'Task updated.');
+      return;
+    }
+
+    if (mutation.kind === 'delete') {
+      this.items.update(items => items.filter(item => item.id !== mutation.task.id));
+      this.deleteConfirmationId.set(null);
+      this.notice.set('Task deleted.');
+      await this.fetchPage(this.page(), generation, true);
+      return;
+    }
+
+    this.editorOpen.set(false);
+    this.editingTask.set(null);
+    this.notice.set('Task created.');
+    await this.fetchPage(this.page(), generation);
+  }
+
+  private async fetchPage(page: number, generation: number, afterDelete = false): Promise<void> {
+    if (!this.validPage(page)) return;
+    const sequence = ++this.loadSequence;
+    this.loading.set(true);
+    this.clearError();
+    let previousPage: number | null = null;
+    try {
+      const result = await this.request(this.api.list(page));
+      if (generation !== this.generation || sequence !== this.loadSequence) return;
+      this.page.set(result.page);
+      this.hasMore.set(result.hasMore);
+      this.items.set(result.items);
+      if (afterDelete && result.items.length === 0 && page > 1) {
+        previousPage = page - 1;
+      }
+    } catch (error: unknown) {
+      if (generation === this.generation && sequence === this.loadSequence) {
+        this.reportReadError(error, () => this.load(page));
+      }
+    } finally {
+      if (generation === this.generation && sequence === this.loadSequence) this.loading.set(false);
+    }
+    if (previousPage !== null && generation === this.generation) {
+      await this.fetchPage(previousPage, generation, true);
+    }
+  }
+
+  private reportReadError(error: unknown, retry: () => Promise<void>): void {
+    const status = httpStatus(error);
+    if (status === 401) {
+      this.setError('Your sign-in session has ended. Sign in again to continue.', null);
+    } else if (status === 403) {
+      this.setError('You do not have permission to view Workspace tasks.', null);
+    } else if (status === 404) {
+      this.setError('Workspace tasks are unavailable. Refresh to check again.', 'refresh');
+    } else if (status === 0 || (status !== null && status >= 500)) {
+      this.setError('Tasks could not be loaded. Check your connection and retry.', 'retry', retry);
+    } else {
+      this.setError('Tasks could not be loaded. Refresh to try again.', 'refresh');
+    }
+  }
+
+  private reportMutationError(error: unknown, mutation: Mutation): void {
+    const status = httpStatus(error);
+    const task = mutation.kind === 'create' ? null : mutation.task;
+    if (status === 401) {
+      this.setError('Your sign-in session has ended. Sign in again to continue.', null);
+    } else if (status === 403) {
+      this.setError('You do not have permission to change this task.', null);
+    } else if (status === 404) {
+      this.setError('This task is no longer available. Refresh the list before continuing.', 'refresh');
+    } else if (status === 412 || status === 428) {
+      this.conflictTaskId = task?.id ?? null;
+      this.setError(
+        status === 412 ? 'This task changed on the server. Your draft is preserved; reload the latest version before saving again.'
+          : 'The server requires a current task version. Reload the latest version before saving again.',
+        task ? 'reload' : 'refresh',
+      );
+    } else if (status === 400) {
+      this.setError('The server rejected this task. Check the title and description limits.', null);
+    } else if (status === 0 || (status !== null && status >= 500)) {
+      const retry = (): Promise<void> => this.executeMutation(mutation);
+      const message = mutation.kind === 'create'
+        ? 'Task creation could not be confirmed. A manual retry may create a duplicate.'
+        : 'The change could not be confirmed. You can retry it explicitly.';
+      this.setError(message, 'retry', retry);
+    } else {
+      this.setError('The task change failed. Refresh the list before trying again.', 'refresh');
+    }
+  }
+
+  private setError(message: string, action: ErrorAction, retry?: () => Promise<void>): void {
+    this.errorMessage.set(message);
+    this.errorAction.set(action);
+    this.retryOperation = retry ?? null;
+  }
+
+  private clearError(): void {
+    this.errorMessage.set(null);
+    this.errorAction.set(null);
+    this.retryOperation = null;
+  }
+
+  private request<T>(observable: Observable<T>): Promise<T> {
+    const cancellation = this.cancelled$;
+    return firstValueFrom(observable.pipe(takeUntil(cancellation)));
+  }
+
+  private reset(): void {
+    this.generation++;
+    this.loadSequence++;
+    this.cancelled$.next();
+    this.cancelled$.complete();
+    this.cancelled$ = new Subject<void>();
+    this.items.set([]);
+    this.page.set(1);
+    this.hasMore.set(false);
+    this.loading.set(false);
+    this.mutating.set(false);
+    this.editorOpen.set(false);
+    this.editingTask.set(null);
+    this.deleteConfirmationId.set(null);
+    this.notice.set(null);
+    this.conflictTaskId = null;
+    this.clearError();
+  }
+
+  private validPage(page: number): boolean {
+    return Number.isInteger(page) && page >= 1 && page <= WORKSPACE_TASK_MAX_PAGE;
+  }
+}
+
+function httpStatus(error: unknown): number | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const status = Reflect.get(error, 'status');
+  return typeof status === 'number' ? status : null;
+}
+{{ end }}

@@ -42,6 +42,10 @@ function inspectManifest(root, folder, manifest, host, packages) {
   if (!identifier.test(manifest.id) || manifest.id !== path.basename(folder) || reserved.has(manifest.id)) fail('invalid, reserved or mismatched domain id in ' + folder);
   if (typeof manifest.displayName !== 'string' || !manifest.displayName.trim()) fail('displayName is required for ' + manifest.id);
   if (typeof manifest.icon !== 'string' || !/^pi pi-[a-z0-9-]+$/.test(manifest.icon)) fail('use a PrimeIcon class for ' + manifest.id);
+  if (manifest.navigationPath !== undefined && (typeof manifest.navigationPath !== 'string'
+      || !/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/.test(manifest.navigationPath))) {
+    fail('navigationPath must be a relative route beneath ' + manifest.id);
+  }
   if (!strings(manifest.supportedTargets) || host.targets.some(target => !manifest.supportedTargets.includes(target))) fail('unsupported host target for ' + manifest.id);
   if (!Array.isArray(manifest.permissions) || !manifest.permissions.every(item => typeof item === 'string' && item.trim())) fail('permissions must be explicit for ' + manifest.id);
   if (!record(manifest.requirements) || !record(manifest.requirements.packages) || !Array.isArray(manifest.requirements.configuration)

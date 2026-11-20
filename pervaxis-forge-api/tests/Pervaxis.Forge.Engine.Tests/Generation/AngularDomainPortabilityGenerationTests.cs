@@ -40,22 +40,33 @@ public sealed class AngularDomainPortabilityGenerationTests
         var entries = zip.Entries.ToDictionary(entry => entry.FullName, StringComparer.Ordinal);
         string Read(string suffix)
         {
-            using var reader = new StreamReader(entries.Single(pair => ("/" + pair.Key).EndsWith(suffix, StringComparison.Ordinal)).Value.Open());
+            var matches = entries.Where(pair => ("/" + pair.Key).EndsWith(suffix, StringComparison.Ordinal)).ToArray();
+            if (matches.Length != 1)
+                throw new InvalidOperationException($"Expected one entry ending in '{suffix}', found {matches.Length}: {string.Join(", ", entries.Keys.Where(key => key.Contains("/domains/workspace/", StringComparison.Ordinal)))}");
+            using var reader = new StreamReader(matches[0].Value.Open());
             return reader.ReadToEnd();
         }
         Assert.DoesNotContain(entries.Keys, key => key.Contains("/src/app/core/", StringComparison.Ordinal)
             || key.Contains("/src/app/features/", StringComparison.Ordinal) || key.Contains("/src/app/shared/", StringComparison.Ordinal));
-        Assert.DoesNotContain(entries.Keys, key => key.Contains("/src/app/domains/", StringComparison.Ordinal) && !key.EndsWith("/README.md", StringComparison.Ordinal));
+        var workspaceFiles = entries.Keys.Where(key => key.Contains("/src/app/domains/workspace/", StringComparison.Ordinal)).ToArray();
+        Assert.Equal(!combined, workspaceFiles.Length > 0);
+        Assert.Equal(!combined, workspaceFiles.Any(key => key.EndsWith("/tasks/pages/my-tasks/my-tasks.component.html", StringComparison.Ordinal)));
         Assert.Contains("./platform/shell/app.component", Read("/app/app.component.ts"));
         Assert.Contains("./platform/platform.config", Read("/app/app.config.ts"));
         Assert.Contains("./platform/platform.routes", Read("/app/app.routes.ts"));
         Assert.Contains("UI_CONTRACT_MAJOR = 1", Read("/platform/contracts/v1/index.ts"));
+        Assert.Contains("DomainHttpResponseV1", Read("/platform/contracts/v1/index.ts"));
+        Assert.Contains("identityId", Read("/platform/contracts/v1/index.ts"));
+        Assert.Contains("navigationPath", Read("/platform/contracts/v1/index.ts"));
+        Assert.Contains("getResponse<T>", Read("/platform/core/services/api.service.ts"));
+        Assert.Contains("deleteResponse: <T>", Read("/platform/domains/domain-runtime.ts"));
         Assert.Contains("...createDomainRoutes(GENERATED_DOMAINS)", Read("/platform/platform.routes.ts"));
         Assert.Contains("...domainProviders(GENERATED_DOMAINS)", Read("/platform/platform.config.ts"));
         Assert.Contains("readonly UiDomainRegistrationV1[]", Read("/.generated/domain-registry.ts"));
         Assert.Contains("@forge/ui-contracts/v1", Read("tsconfig.json"));
         Assert.Contains("scripts/domain-tool.mjs && ng build", Read("package.json"));
         Assert.Contains("ts.resolveModuleName", Read("/scripts/domain-tool.mjs"));
+        Assert.Contains("navigationPath must be a relative route", Read("/scripts/domain-tool.mjs"));
         Assert.Contains("platformBefore", Read("/scripts/verify-copy.mjs"));
         Assert.Contains("npm run domains:prepare", Read("/.github/workflows/ci.yml"));
         Assert.Contains("npm run test:architecture", Read("/.github/workflows/ci.yml"));
@@ -72,5 +83,18 @@ public sealed class AngularDomainPortabilityGenerationTests
         Assert.Equal(1, host.RootElement.GetProperty("contractVersion").GetInt32());
         Assert.Equal(combined ? new[] { "web", "mobile" } : new[] { "web" },
             host.RootElement.GetProperty("targets").EnumerateArray().Select(target => target.GetString()));
+        if (!combined)
+        {
+            using var domain = JsonDocument.Parse(Read("/domains/workspace/domain.json"));
+            Assert.Equal("cognito-tenant", domain.RootElement.GetProperty("security").GetString());
+            Assert.Equal("workspace", domain.RootElement.GetProperty("id").GetString());
+            Assert.Equal("tasks", domain.RootElement.GetProperty("navigationPath").GetString());
+            Assert.Equal("web", domain.RootElement.GetProperty("supportedTargets").EnumerateArray().Single().GetString());
+            Assert.Contains("registerUntilDestroyed", Read("/domains/workspace/tasks/state/workspace-task.state.ts"));
+            Assert.Contains("/v1/workspace/tasks", Read("/domains/workspace/domain.config.json"));
+            Assert.Contains("If-Match", Read("/domains/workspace/tasks/api/workspace-task.api.ts"));
+            Assert.Contains("[textContent]", Read("/domains/workspace/tasks/pages/my-tasks/my-tasks.component.html"));
+            Assert.Contains("DatePipe", Read("/domains/workspace/tasks/pages/my-tasks/my-tasks.component.ts"));
+        }
     }
 }

@@ -14,6 +14,8 @@ export interface UiDomainManifestV1 {
   readonly id: string;
   readonly displayName: string;
   readonly icon: string;
+  /** Optional route beneath the domain root used by the generated navigation item. */
+  readonly navigationPath?: string;
   readonly supportedTargets: readonly ('web' | 'mobile')[];
   readonly permissions: readonly string[];
   readonly requirements: {
@@ -35,9 +37,20 @@ export interface DomainHttpV1 {
   put<T>(path: string, body: unknown): Observable<T>;
   patch<T>(path: string, body: unknown): Observable<T>;
   delete<T>(path: string): Observable<T>;
+  getResponse<T>(path: string, params?: Record<string, string>): Observable<DomainHttpResponseV1<T>>;
+  postResponse<T>(path: string, body: unknown): Observable<DomainHttpResponseV1<T>>;
+  putResponse<T>(path: string, body: unknown, headers?: Readonly<Record<string, string>>): Observable<DomainHttpResponseV1<T>>;
+  deleteResponse<T>(path: string, headers?: Readonly<Record<string, string>>): Observable<DomainHttpResponseV1<T>>;
 }
 
-export type DomainSessionResetReasonV1 = 'signed-out' | 'session-ended' | 'tenant-changed';
+/** Transport-neutral response metadata for portable conditional API operations. */
+export interface DomainHttpResponseV1<T> {
+  readonly body: T | null;
+  readonly status: number;
+  header(name: string): string | null;
+}
+
+export type DomainSessionResetReasonV1 = 'signed-out' | 'session-ended' | 'tenant-changed' | 'identity-changed';
 export interface DomainSessionStateV1 {
   registerUntilDestroyed(destroyRef: DestroyRef, listener: (reason: DomainSessionResetReasonV1) => void): void;
 }
@@ -45,6 +58,7 @@ export interface DomainIdentityV1 {
   readonly isAuthenticated: Signal<boolean>;
   readonly roles: Signal<readonly string[]>;
   readonly tenantId: Signal<string | null>;
+  readonly identityId: Signal<string | null>;
 }
 
 export const DOMAIN_HTTP = new InjectionToken<DomainHttpV1>('forge.ui.v1.http');

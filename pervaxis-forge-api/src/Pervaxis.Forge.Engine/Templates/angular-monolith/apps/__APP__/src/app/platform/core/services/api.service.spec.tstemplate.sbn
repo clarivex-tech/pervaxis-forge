@@ -1,0 +1,77 @@
+{{ if model.angular_cognito_enabled }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { HttpHeaders, provideHttpClient } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { firstValueFrom } from 'rxjs';
+import { AppConfigService } from '../config/app-config.service';
+import { ApiService } from './api.service';
+
+describe('Platform API response contract', () => {
+  let api: ApiService;
+  let http: HttpTestingController;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: AppConfigService, useValue: { config: () => ({ apiUrl: 'https://api.example.test/api' }) } },
+      ],
+    });
+    api = TestBed.inject(ApiService);
+    http = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => http.verify());
+
+  it('combines the configured API base with the exact server-paged Workspace endpoint', async () => {
+    const response = firstValueFrom(api.getResponse<unknown>('/v1/workspace/tasks', { page: '1', pageSize: '20' }));
+    const request = http.expectOne('https://api.example.test/api/v1/workspace/tasks?page=1&pageSize=20');
+    expect(request.request.method).toBe('GET');
+    request.flush({ items: [], page: 1, pageSize: 20, hasMore: false });
+    expect((await response).status).toBe(200);
+  });
+
+  it('preserves strong If-Match headers and response ETags on conditional writes', async () => {
+    const version = '123e4567-e89b-12d3-a456-426614174000';
+    const etag = '"' + version + '"';
+    const response = firstValueFrom(api.putResponse<unknown>('/v1/workspace/tasks/' + version,
+      { title: 'Review', description: null, isCompleted: true }, { 'If-Match': etag }));
+    const request = http.expectOne('https://api.example.test/api/v1/workspace/tasks/' + version);
+    expect(request.request.method).toBe('PUT');
+    expect(request.request.headers.get('If-Match')).toBe(etag);
+    request.flush({ version }, { headers: new HttpHeaders({ ETag: etag }) });
+    const result = await response;
+    expect(result.headers.get('ETag')).toBe(etag);
+  });
+
+  it('supports the required no-content conditional delete response', async () => {
+    const version = '123e4567-e89b-12d3-a456-426614174000';
+    const response = firstValueFrom(api.deleteResponse<void>('/v1/workspace/tasks/' + version, {
+      'If-Match': '"' + version + '"',
+    }));
+    const request = http.expectOne('https://api.example.test/api/v1/workspace/tasks/' + version);
+    expect(request.request.method).toBe('DELETE');
+    expect(request.request.headers.get('If-Match')).toBe('"' + version + '"');
+    request.flush(null, { status: 204, statusText: 'No Content' });
+    expect((await response).status).toBe(204);
+  });
+});
+{{ end }}

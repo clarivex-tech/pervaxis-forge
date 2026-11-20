@@ -1,0 +1,71 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { ChangeDetectionStrategy, Component, EventEmitter, Input, OnChanges, Output, SimpleChanges } from '@angular/core';
+import { FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
+import { ButtonModule } from 'primeng/button';
+import { WorkspaceTask, WorkspaceTaskDraft } from '../../contracts/workspace-task.model';
+import {
+  WORKSPACE_TASK_DESCRIPTION_MAX_LENGTH, WORKSPACE_TASK_TITLE_MAX_LENGTH,
+} from '../../constants/workspace-task.constants';
+
+const trimmedRequired: ValidatorFn = control => typeof control.value === 'string' && control.value.trim().length > 0
+  ? null
+  : ({ required: true } satisfies ValidationErrors);
+
+@Component({
+  selector: 'domain-task-editor',
+  standalone: true,
+  imports: [ReactiveFormsModule, ButtonModule],
+  templateUrl: './task-editor.component.html',
+  styleUrl: './task-editor.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class TaskEditorComponent implements OnChanges {
+  @Input() task: WorkspaceTask | null = null;
+  @Input() busy = false;
+  @Output() readonly saveDraft = new EventEmitter<WorkspaceTaskDraft>();
+  @Output() readonly cancelled = new EventEmitter<void>();
+
+  readonly titleMaxLength = WORKSPACE_TASK_TITLE_MAX_LENGTH;
+  readonly descriptionMaxLength = WORKSPACE_TASK_DESCRIPTION_MAX_LENGTH;
+  readonly form = new FormGroup({
+    title: new FormControl('', { nonNullable: true, validators: [trimmedRequired, Validators.maxLength(WORKSPACE_TASK_TITLE_MAX_LENGTH)] }),
+    description: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(WORKSPACE_TASK_DESCRIPTION_MAX_LENGTH)] }),
+  });
+
+  ngOnChanges(changes: SimpleChanges): void {
+    if (changes['task']) {
+      this.form.reset({
+        title: this.task?.title ?? '',
+        description: this.task?.description ?? '',
+      });
+    }
+  }
+
+  submit(): void {
+    this.form.markAllAsTouched();
+    if (this.form.invalid || this.busy) return;
+    const value = this.form.getRawValue();
+    this.saveDraft.emit({
+      title: value.title.trim(),
+      description: value.description === '' ? null : value.description,
+    });
+  }
+}
+{{ end }}

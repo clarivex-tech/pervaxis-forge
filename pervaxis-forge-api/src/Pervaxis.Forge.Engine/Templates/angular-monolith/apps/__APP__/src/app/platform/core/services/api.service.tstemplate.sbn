@@ -17,7 +17,7 @@
  */
 
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams, HttpResponse } from '@angular/common/http';
 import { Observable, defer } from 'rxjs';
 import { AppConfigService } from '../config/app-config.service';
 
@@ -45,12 +45,29 @@ export class ApiService {
     return defer(() => this.http.get<T>(this.url(path), { params: httpParams }));
   }
 
+  getResponse<T>(path: string, params?: Record<string, string>): Observable<HttpResponse<T>> {
+    const httpParams = params ? new HttpParams({ fromObject: params }) : undefined;
+    return defer(() => this.http.get<T>(this.url(path), { params: httpParams, observe: 'response' }));
+  }
+
   post<T>(path: string, body: unknown): Observable<T> {
     return defer(() => this.http.post<T>(this.url(path), body));
   }
 
+  postResponse<T>(path: string, body: unknown): Observable<HttpResponse<T>> {
+    return defer(() => this.http.post<T>(this.url(path), body, { observe: 'response' }));
+  }
+
   put<T>(path: string, body: unknown): Observable<T> {
     return defer(() => this.http.put<T>(this.url(path), body));
+  }
+
+  putResponse<T>(path: string, body: unknown, headers?: Readonly<Record<string, string>>): Observable<HttpResponse<T>> {
+    const requestHeaders = new HttpHeaders({ ...(headers ?? {}) });
+    return defer(() => this.http.put<T>(this.url(path), body, {
+      headers: requestHeaders,
+      observe: 'response',
+    }));
   }
 
   patch<T>(path: string, body: unknown): Observable<T> {
@@ -59,6 +76,14 @@ export class ApiService {
 
   delete<T>(path: string): Observable<T> {
     return defer(() => this.http.delete<T>(this.url(path)));
+  }
+
+  deleteResponse<T>(path: string, headers?: Readonly<Record<string, string>>): Observable<HttpResponse<T>> {
+    const requestHeaders = new HttpHeaders({ ...(headers ?? {}) });
+    return defer(() => this.http.delete<T>(this.url(path), {
+      headers: requestHeaders,
+      observe: 'response',
+    }));
   }
 
   private url(path: string): string {

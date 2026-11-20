@@ -23,8 +23,9 @@ import { DestroyRef, Injectable } from '@angular/core';
  * signed-out: the user signed out (here or in another tab).
  * session-ended: the session could not be refreshed.
  * tenant-changed: the access token now carries a different tenant.
+ * identity-changed: the active session now belongs to a different user.
  */
-export type SessionResetReason = 'signed-out' | 'session-ended' | 'tenant-changed';
+export type SessionResetReason = 'signed-out' | 'session-ended' | 'tenant-changed' | 'identity-changed';
 
 export type SessionResetListener = (reason: SessionResetReason) => void;
 
@@ -32,8 +33,8 @@ export type SessionResetListener = (reason: SessionResetReason) => void;
  * HORIZONTAL: Clears user- and tenant-specific UI state.
  *
  * Every store or cache that holds data for the signed-in user or their tenant registers a reset
- * listener. The auth layer calls reset() immediately when the user signs out, the session ends or
- * the tenant changes, so no data from the previous user or tenant stays on screen.
+ * listener. The auth layer calls reset() immediately when the user signs out, the session ends,
+ * the identity changes or the tenant changes, so previous session data stays off screen.
  * This is UI hygiene only; the API remains responsible for tenant access.
  *
  *   constructor() {

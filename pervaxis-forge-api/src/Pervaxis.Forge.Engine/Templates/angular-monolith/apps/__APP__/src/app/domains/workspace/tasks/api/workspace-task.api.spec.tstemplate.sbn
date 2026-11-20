@@ -1,0 +1,118 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { TestBed } from '@angular/core/testing';
+import { firstValueFrom, of } from 'rxjs';
+import { DOMAIN_HTTP, DOMAIN_OPTIONS, DomainHttpResponseV1 } from '@forge/ui-contracts/v1';
+import { WorkspaceTaskApi, WorkspaceTaskProtocolError } from './workspace-task.api';
+import { WorkspaceTask } from '../contracts/workspace-task.model';
+
+const taskId = '123e4567-e89b-12d3-a456-426614174000';
+const version = '223e4567-e89b-12d3-a456-426614174000';
+const etag = '"' + version + '"';
+const task: WorkspaceTask = {
+  id: taskId, title: 'Review release', description: null, isCompleted: false,
+  createdAt: '2026-11-20T12:00:00Z', updatedAt: '2026-11-20T12:00:00+00:00', version,
+};
+
+function response<T>(body: T | null, status: number, headers: Readonly<Record<string, string>> = {}): DomainHttpResponseV1<T> {
+  return { body, status, header: name => headers[name.toLowerCase()] ?? null };
+}
+
+describe('Workspace Tasks API', () => {
+  let api: WorkspaceTaskApi;
+  let http: {
+    get: jasmine.Spy;
+    getResponse: jasmine.Spy;
+    postResponse: jasmine.Spy;
+    putResponse: jasmine.Spy;
+    deleteResponse: jasmine.Spy;
+  };
+
+  beforeEach(() => {
+    http = {
+      get: jasmine.createSpy('get'),
+      getResponse: jasmine.createSpy('getResponse'),
+      postResponse: jasmine.createSpy('postResponse'),
+      putResponse: jasmine.createSpy('putResponse'),
+      deleteResponse: jasmine.createSpy('deleteResponse'),
+    };
+    TestBed.configureTestingModule({ providers: [
+      WorkspaceTaskApi,
+      { provide: DOMAIN_HTTP, useValue: http },
+      { provide: DOMAIN_OPTIONS, useValue: { apiPath: '/v1/workspace/tasks' } },
+    ] });
+    api = TestBed.inject(WorkspaceTaskApi);
+  });
+
+  it('uses only page and pageSize and validates the server pagination shape', async () => {
+    http.getResponse.and.returnValue(of(response({ items: [task], page: 1, pageSize: 20, hasMore: true }, 200)));
+    const result = await firstValueFrom(api.list(1));
+    expect(http.getResponse).toHaveBeenCalledOnceWith('/v1/workspace/tasks', { page: '1', pageSize: '20' });
+    expect(result).toEqual({ items: [task], page: 1, pageSize: 20, hasMore: true });
+
+    http.getResponse.and.returnValue(of(response({ items: [], page: 1, pageSize: 100, hasMore: false }, 200)));
+    await expectAsync(firstValueFrom(api.list(1))).toBeRejectedWithError(WorkspaceTaskProtocolError);
+  });
+
+  it('requires a strong single ETag that agrees with the GET task version', async () => {
+    http.getResponse.and.returnValue(of(response(task, 200, { etag })));
+    expect(await firstValueFrom(api.get(taskId))).toEqual({ task, etag });
+
+    http.getResponse.and.returnValue(of(response(task, 200, { etag: 'W/' + etag })));
+    await expectAsync(firstValueFrom(api.get(taskId))).toBeRejectedWithError(WorkspaceTaskProtocolError);
+  });
+
+  it('creates with the exact request fields and validates Location and ETag', async () => {
+    http.postResponse.and.returnValue(of(response(task, 201, {
+      etag,
+      location: '/api/v1/workspace/tasks/' + taskId,
+    })));
+    const created = await firstValueFrom(api.create({ title: '  Review release  ', description: null }));
+    expect(http.postResponse).toHaveBeenCalledOnceWith('/v1/workspace/tasks', {
+      title: 'Review release', description: null,
+    });
+    expect(created).toEqual(task);
+  });
+
+  it('sends a strong quoted version for PUT and requires the new matching ETag', async () => {
+    const updated = { ...task, isCompleted: true, version: '323e4567-e89b-12d3-a456-426614174000' };
+    const newEtag = '"' + updated.version + '"';
+    http.putResponse.and.returnValue(of(response(updated, 200, { etag: newEtag })));
+    expect(await firstValueFrom(api.update(task, {
+      title: task.title, description: task.description, isCompleted: true,
+    }))).toEqual(updated);
+    expect(http.putResponse).toHaveBeenCalledOnceWith('/v1/workspace/tasks/' + taskId, {
+      title: task.title, description: null, isCompleted: true,
+    }, { 'If-Match': etag });
+  });
+
+  it('sends a strong quoted version for DELETE and accepts only 204 with no body', async () => {
+    http.deleteResponse.and.returnValue(of(response(null, 204)));
+    await firstValueFrom(api.delete(task));
+    expect(http.deleteResponse).toHaveBeenCalledOnceWith('/v1/workspace/tasks/' + taskId, { 'If-Match': etag });
+  });
+
+  it('rejects invalid page numbers and non-UUID task ids before making requests', () => {
+    expect(() => api.list(10_001)).toThrowError(WorkspaceTaskProtocolError);
+    expect(() => api.get('not-a-uuid')).toThrowError(WorkspaceTaskProtocolError);
+    expect(http.get).not.toHaveBeenCalled();
+    expect(http.getResponse).not.toHaveBeenCalled();
+  });
+});
+{{ end }}

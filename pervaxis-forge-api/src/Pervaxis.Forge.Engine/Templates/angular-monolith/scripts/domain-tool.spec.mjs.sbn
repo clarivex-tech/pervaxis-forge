@@ -54,6 +54,16 @@ test('rejects incompatible package versions', t => { const f = fixture(t); updat
 test('rejects missing public configuration', t => { const f = fixture(t); json(path.join(f.folder, 'domain.config.json'), {}); assert.throws(() => prepareDomains(f.root), /missing configuration/); });
 test('rejects incompatible targets', t => { const f = fixture(t); update(path.join(f.root, 'ui-platform.json'), m => m.targets = ['web', 'mobile']); assert.throws(() => prepareDomains(f.root), /unsupported host target/); });
 test('rejects reserved route roots', t => { const f = fixture(t); update(f.manifest, m => m.id = 'admin'); assert.throws(() => prepareDomains(f.root), /reserved/); });
+test('preserves a domain-owned navigation subroute in deterministic registrations', t => {
+  const f = fixture(t); update(f.manifest, m => m.navigationPath = 'tasks');
+  prepareDomains(f.root); assert.match(fs.readFileSync(f.registry, 'utf8'), /"navigationPath":"tasks"/);
+});
+test('rejects absolute or unsafe domain navigation paths', t => {
+  for (const navigationPath of ['/tasks', '../tasks', 'tasks?all=true', '']) {
+    const f = fixture(t); update(f.manifest, m => m.navigationPath = navigationPath);
+    assert.throws(() => prepareDomains(f.root), /navigationPath must be a relative route/);
+  }
+});
 test('rejects a relative private platform import', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), "import '../../platform/contracts/v1/index';"); assert.throws(() => prepareDomains(f.root), /escapes its folder/); });
 test('rejects an alias to a private platform service', t => { const f = fixture(t); fs.writeFileSync(path.join(f.folder, 'violation.ts'), "import '@core/auth/auth.service';"); assert.throws(() => prepareDomains(f.root), /undeclared or private import/); });
 test('rejects platform dependencies on business implementations', t => { const f = fixture(t); fs.writeFileSync(path.join(f.app, 'platform/violation.ts'), "import '../domains/work-items/routes';"); assert.throws(() => prepareDomains(f.root), /platform must not import/); });

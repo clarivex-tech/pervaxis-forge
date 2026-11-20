@@ -1,0 +1,21 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+# My Workspace
+
+This authenticated, web-only domain is included by default in compatible Angular monolith prints.
+The host registers its lazy route and sidebar link from `domain.json`; no platform route or navigation
+registration is part of this folder.
+
+The UI calls the REST Workspace Tasks API through `@forge/ui-contracts/v1`. Its configured
+`apiPath` is relative to the receiving platform's public `apiUrl` (the default `/api` plus
+`/v1/workspace/tasks` produces the API path `/api/v1/workspace/tasks`). The platform supplies the
+runtime API origin and bearer authentication. Do not copy tokens, host imports, or tenant/user
+selectors into this domain.
+
+The generated REST API must separately include Workspace Tasks and its PostgreSQL migration. The
+domain never uses mock data. See the generated REST print's Workspace Tasks reference for the API
+contract, ownership rules, and deployment/migration prerequisites.
+
+The domain owns its request/response contracts, API client, route-scoped Signals state, task editor,
+tests, and these usage notes. It uses only relative URLs and public V1 contracts so the complete
+`workspace` folder can be copied unchanged into another compatible print.
+{{ end }}

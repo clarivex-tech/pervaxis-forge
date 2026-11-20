@@ -17,8 +17,10 @@
  */
 import { Injectable, Provider, computed, inject{{ if !model.angular_cognito_enabled }}, signal{{ end }} } from '@angular/core';
 import { CanActivateFn, Routes, Router, UrlTree } from '@angular/router';
+import { HttpResponse } from '@angular/common/http';
+import { map } from 'rxjs';
 import { DOMAIN_HTTP, DOMAIN_IDENTITY, DOMAIN_OPTIONS, DOMAIN_REGISTRATIONS, DOMAIN_SESSION_STATE,
-  DomainHttpV1, DomainSessionStateV1, UiDomainManifestV1, UiDomainRegistrationV1 } from '@forge/ui-contracts/v1';
+  DomainHttpResponseV1, DomainHttpV1, DomainSessionStateV1, UiDomainManifestV1, UiDomainRegistrationV1 } from '@forge/ui-contracts/v1';
 import { ApiService } from '../core/services/api.service';
 {{ if model.angular_cognito_enabled }}
 import { AuthService } from '../core/auth/auth.service';
@@ -66,16 +68,36 @@ export function createDomainRoutes(registrations: readonly UiDomainRegistrationV
 export function domainProviders(registrations: readonly UiDomainRegistrationV1[]): Provider[] {
   return [
     { provide: DOMAIN_REGISTRATIONS, useValue: registrations },
-    { provide: DOMAIN_HTTP, useFactory: (): DomainHttpV1 => inject(ApiService) },
+    { provide: DOMAIN_HTTP, useFactory: (): DomainHttpV1 => {
+      const api = inject(ApiService);
+      const response = <T>(value: HttpResponse<T>): DomainHttpResponseV1<T> => ({
+        body: value.body, status: value.status, header: name => value.headers.get(name),
+      });
+      return {
+        get: <T>(path: string, params?: Record<string, string>) => api.get<T>(path, params),
+        post: <T>(path: string, body: unknown) => api.post<T>(path, body),
+        put: <T>(path: string, body: unknown) => api.put<T>(path, body),
+        patch: <T>(path: string, body: unknown) => api.patch<T>(path, body),
+        delete: <T>(path: string) => api.delete<T>(path),
+        getResponse: <T>(path: string, params?: Record<string, string>) => api.getResponse<T>(path, params).pipe(map(response)),
+        postResponse: <T>(path: string, body: unknown) => api.postResponse<T>(path, body).pipe(map(response)),
+        putResponse: <T>(path: string, body: unknown, headers?: Readonly<Record<string, string>>) =>
+          api.putResponse<T>(path, body, headers).pipe(map(response)),
+        deleteResponse: <T>(path: string, headers?: Readonly<Record<string, string>>) =>
+          api.deleteResponse<T>(path, headers).pipe(map(response)),
+      };
+    } },
 {{ if model.angular_cognito_enabled }}
     { provide: DOMAIN_SESSION_STATE, useFactory: (): DomainSessionStateV1 => inject(SessionStateRegistry) },
     { provide: DOMAIN_IDENTITY, useFactory: () => {
       const auth = inject(AuthService); const tenant = inject(TenantContextService);
-      return { isAuthenticated: auth.isAuthenticated, roles: auth.roles, tenantId: tenant.currentTenantId };
+      return { isAuthenticated: auth.isAuthenticated, roles: auth.roles, tenantId: tenant.currentTenantId,
+        identityId: computed(() => auth.profile()?.subject ?? null) };
     } },
 {{ else }}
     { provide: DOMAIN_SESSION_STATE, useValue: { registerUntilDestroyed: () => undefined } },
-    { provide: DOMAIN_IDENTITY, useFactory: () => ({ isAuthenticated: signal(false).asReadonly(), roles: signal<readonly string[]>([]).asReadonly(), tenantId: signal<string | null>(null).asReadonly() }) },
+    { provide: DOMAIN_IDENTITY, useFactory: () => ({ isAuthenticated: signal(false).asReadonly(), roles: signal<readonly string[]>([]).asReadonly(),
+      tenantId: signal<string | null>(null).asReadonly(), identityId: signal<string | null>(null).asReadonly() }) },
 {{ end }}
   ];
 }
@@ -92,5 +114,6 @@ export class DomainNavigationService {
     .filter(({ manifest }) => this.auth.isAuthenticated() && this.tenant.claimStatus() === 'valid'
       && manifest.permissions.every(permission => this.auth.hasPermission(permission)))
 {{ end }}
-    .map(({ manifest }) => ({ label: manifest.displayName, icon: manifest.icon, routerLink: '/' + manifest.id })));
+    .map(({ manifest }) => ({ label: manifest.displayName, icon: manifest.icon,
+      routerLink: '/' + manifest.id + (manifest.navigationPath ? '/' + manifest.navigationPath : '') })));
 }
