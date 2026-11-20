@@ -21,8 +21,10 @@ using Pervaxis.Core.Abstractions.MultiTenancy;
 using Pervaxis.Forge.Contracts.V1;
 using Pervaxis.Forge.Testing.V1;
 using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts.Requests;
 using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities;
 using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Repositories;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Services;
 using Xunit;
 
 namespace Pervaxis.Forge.Reference.Domains.Workspace.Tests;
@@ -50,15 +52,19 @@ public sealed class WorkspaceTaskRepositoryTests
         using var db = database.CreateContext(tenant);
         var repository = new WorkspaceTaskRepository(database.WrapSession(db), new User("owner"), tenant);
         var task = await repository.CreateAsync("Private", null, false, Now, default);
+        var unitOfWork = database.WrapUnitOfWork(db);
+        await unitOfWork.CommitAsync();
         database.Sql.Commands.Clear();
         Assert.NotNull(await repository.GetAsync(task.Id, default));
         var select = database.Sql.Commands.Last(sql => sql.StartsWith("SELECT", StringComparison.Ordinal));
         Assert.Contains("OwnerSubject", select[(select.IndexOf("WHERE", StringComparison.Ordinal))..]);
         Assert.Contains("TenantId", select[(select.IndexOf("WHERE", StringComparison.Ordinal))..]);
         var edited = (await repository.UpdateAsync(task.Id, task.Version, "Changed", null, true, Now.AddSeconds(1), default))!;
+        await unitOfWork.CommitAsync();
         var update = database.Sql.Commands.Last(sql => sql.StartsWith("UPDATE", StringComparison.Ordinal));
         AssertWritePredicate(update);
         Assert.True(await repository.DeleteAsync(task.Id, edited.Version, default));
+        await unitOfWork.CommitAsync();
         AssertWritePredicate(database.Sql.Commands.Last(sql => sql.StartsWith("DELETE", StringComparison.Ordinal)));
     }
 
@@ -78,6 +84,7 @@ public sealed class WorkspaceTaskRepositoryTests
         using var db = database.CreateContext(tenant);
         var repository = new WorkspaceTaskRepository(database.WrapSession(db), new User("owner"), tenant);
         var task = await repository.CreateAsync("Private", null, false, Now, default);
+        await database.WrapUnitOfWork(db).CommitAsync();
         db.Entry(task).Property(nameof(WorkspaceTask.OwnerSubject)).CurrentValue = "intruder";
         await Assert.ThrowsAsync<InvalidOperationException>(() => db.SaveChangesAsync());
         db.Entry(task).Property(nameof(WorkspaceTask.OwnerSubject)).CurrentValue = "owner";
@@ -98,13 +105,19 @@ public sealed class WorkspaceTaskRepositoryTests
         var writer = new WorkspaceTaskRepository(database.WrapSession(first), new User("owner"), tenant);
         var loser = new WorkspaceTaskRepository(database.WrapSession(second), new User("owner"), tenant);
         var task = await writer.CreateAsync("Original", null, false, Now, default);
+        await database.WrapUnitOfWork(first).CommitAsync();
         var version = task.Version;
         Assert.NotNull(await loser.GetAsync(task.Id, default)); // Retain this original row version.
         await writer.UpdateAsync(task.Id, version, "Winner", null, false, Now.AddSeconds(1), default);
+        await database.WrapUnitOfWork(first).CommitAsync();
+        var loserUnitOfWork = database.WrapUnitOfWork(second);
+        var service = new WorkspaceTaskService(loser, loserUnitOfWork, TimeProvider.System, new(), new(), new());
         if (delete)
-            await Assert.ThrowsAsync<WorkspaceTaskPreconditionException>(() => loser.DeleteAsync(task.Id, version, default));
+            await Assert.ThrowsAsync<WorkspaceTaskPreconditionException>(() => service.DeleteAsync(task.Id, version, default));
         else
-            await Assert.ThrowsAsync<WorkspaceTaskPreconditionException>(() => loser.UpdateAsync(task.Id, version, "Lost", null, false, Now.AddSeconds(2), default));
+            await Assert.ThrowsAsync<WorkspaceTaskPreconditionException>(() => service.UpdateAsync(task.Id, version,
+                new UpdateWorkspaceTaskRequest { Title = "Lost", IsCompleted = false }, default));
+        Assert.Equal(0, await loserUnitOfWork.CommitAsync()); // Failed versions cannot leak into a later commit.
     }
 
     [Fact]
@@ -115,9 +128,11 @@ public sealed class WorkspaceTaskRepositoryTests
         using var db = database.CreateContext(tenant);
         var repository = new WorkspaceTaskRepository(database.WrapSession(db), new User("owner"), tenant);
         for (var i = 0; i < 5; i++) await repository.CreateAsync("Task", null, false, Now, default);
+        await database.WrapUnitOfWork(db).CommitAsync();
         using var otherDb = database.CreateContext(tenant);
         var other = new WorkspaceTaskRepository(database.WrapSession(otherDb), new User("other"), tenant);
         await other.CreateAsync("Hidden", null, false, Now, default);
+        await database.WrapUnitOfWork(otherDb).CommitAsync();
         var first = await repository.ListAsync(1, 2, default);
         var repeat = await repository.ListAsync(1, 2, default);
         var second = await repository.ListAsync(2, 2, default);

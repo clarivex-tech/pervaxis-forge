@@ -36,6 +36,8 @@ Host contract: Pervaxis.Forge.Contracts.V1 (major 1). Source folder discovery in
 
 ## Migration Guide
 
+Workspace repositories now stage only; the service commits once through Core 1.8 `IUnitOfWork` and clears failed tracked work before recovery. This uses the existing host registration and preserves all V1 interfaces and HTTP/schema contracts. Copied domain tests require the additive `DomainTestDatabase.WrapUnitOfWork` test fixture capability.
+
 Additive tenant-ready V1 capabilities: IDomainSession and IUserContext. Check their presence when copying into older V1 prints. Workspace reference module enabled: `{{ model.workspace_tasks_enabled }}`. Its validators run independently of the global validation toggle.
 
 Copy Domains/<Feature> and feature tests unchanged into a compatible print. Reconcile declared dependencies and configuration explicitly. For an existing deployment, preserve the entire existing Data/Migrations chain and model snapshot instead of the fresh starter history. Never create a new baseline over existing tables. Follow [the full upgrade policy](DeveloperReference/Portability.md).

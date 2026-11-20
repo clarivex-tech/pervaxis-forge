@@ -29,6 +29,7 @@ using Microsoft.IdentityModel.Protocols;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
 using Microsoft.IdentityModel.Tokens;
 using Moq;
+using Pervaxis.Core.Abstractions.Data;
 using Pervaxis.Core.Abstractions.MultiTenancy;
 using Pervaxis.Core.MultiTenancy;
 using Pervaxis.Core.Data.EntityFrameworkCore;
@@ -72,6 +73,7 @@ public sealed class DomainTestDatabase : IDisposable
             .UseNpgsql("Host=127.0.0.1;Port=1;Database=model_only;Username=unused;Password=unused").Options,
         DesignTimeTenantContext.Instance);
     public IDomainSession WrapSession(DbContext db) => new DomainSession(({{ model.names.dot_net_class_name }}DbContext)db);
+    public IUnitOfWork WrapUnitOfWork(DbContext db) => new TenantEfUnitOfWork((TenantDbContext)db);
 
     public WebApplication CreateApplication(SecurityKey signingKey, bool validation = true)
     {
@@ -102,6 +104,7 @@ public sealed class DomainTestDatabase : IDisposable
             .ReturnsAsync((TenantId id, CancellationToken _) => new TenantDirectoryEntry(id, "Directory tenant", id.Value == Suspended ? TenantStatus.Suspended : TenantStatus.Active));
         builder.Services.AddSingleton(directory.Object);
         builder.Services.AddScoped(provider => new {{ model.names.dot_net_class_name }}DbContext(_options, provider.GetRequiredService<ITenantContext>()));
+        builder.Services.AddPervaxisTenantRepositories<{{ model.names.dot_net_class_name }}DbContext>();
         builder.Services.Add{{ model.names.dot_net_class_name }}Services(builder.Configuration);
         builder.Services.AddControllers().AddApplicationPart(typeof({{ model.names.namespace }}.Platform.Hosting.ForgeHost).Assembly);
 {{- if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}

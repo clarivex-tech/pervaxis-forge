@@ -18,6 +18,10 @@
  */
 
 using FluentValidation;
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Core.Abstractions.Data;
+using Pervaxis.Core.Exceptions.Exceptions;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts;
 using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts.Requests;
 using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts.Responses;
 using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Repositories;
@@ -27,15 +31,25 @@ using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Validators;
 namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Services;
 
 public sealed class WorkspaceTaskService(
-    IWorkspaceTaskRepository repository, TimeProvider clock,
+    IWorkspaceTaskRepository repository, IUnitOfWork unitOfWork, TimeProvider clock,
     CreateWorkspaceTaskValidator createValidator, UpdateWorkspaceTaskValidator updateValidator,
     ListWorkspaceTasksValidator listValidator) : IWorkspaceTaskService
 {
     public async Task<WorkspaceTaskResponse> CreateAsync(CreateWorkspaceTaskRequest request, CancellationToken cancellationToken)
     {
-        await createValidator.ValidateAndThrowAsync(request, cancellationToken);
-        return (await repository.CreateAsync(request.Title.Trim(), Normalize(request.Description), request.IsCompleted,
-            clock.GetUtcNow().UtcDateTime, cancellationToken)).ToResponse();
+        try
+        {
+            await createValidator.ValidateAndThrowAsync(request, cancellationToken);
+            var task = await repository.CreateAsync(request.Title.Trim(), Normalize(request.Description), request.IsCompleted,
+                clock.GetUtcNow().UtcDateTime, cancellationToken);
+            await unitOfWork.CommitAsync(cancellationToken);
+            return task.ToResponse();
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(CancellationToken.None);
+            throw;
+        }
     }
 
     public async Task<WorkspaceTaskPageResponse> ListAsync(ListWorkspaceTasksRequest request, CancellationToken cancellationToken)
@@ -54,13 +68,57 @@ public sealed class WorkspaceTaskService(
 
     public async Task<WorkspaceTaskResponse?> UpdateAsync(Guid id, Guid expectedVersion, UpdateWorkspaceTaskRequest request, CancellationToken cancellationToken)
     {
-        await updateValidator.ValidateAndThrowAsync(request, cancellationToken);
-        return (await repository.UpdateAsync(id, expectedVersion, request.Title.Trim(), Normalize(request.Description),
-            request.IsCompleted, clock.GetUtcNow().UtcDateTime, cancellationToken))?.ToResponse();
+        try
+        {
+            await updateValidator.ValidateAndThrowAsync(request, cancellationToken);
+            var task = await repository.UpdateAsync(id, expectedVersion, request.Title.Trim(), Normalize(request.Description),
+                request.IsCompleted, clock.GetUtcNow().UtcDateTime, cancellationToken);
+            if (task is null)
+            {
+                await unitOfWork.RollbackAsync(CancellationToken.None);
+                return null;
+            }
+            await unitOfWork.CommitAsync(cancellationToken);
+            return task.ToResponse();
+        }
+        catch (Exception exception) when (exception is DbUpdateConcurrencyException or TenantResourceNotFoundException)
+        {
+            // Discard failed tracked state before the ownership-scoped database recheck.
+            await unitOfWork.RollbackAsync(CancellationToken.None);
+            if (await repository.GetAsync(id, cancellationToken) is null) return null;
+            throw new WorkspaceTaskPreconditionException();
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(CancellationToken.None);
+            throw;
+        }
     }
 
-    public Task<bool> DeleteAsync(Guid id, Guid expectedVersion, CancellationToken cancellationToken)
-        => repository.DeleteAsync(id, expectedVersion, cancellationToken);
+    public async Task<bool> DeleteAsync(Guid id, Guid expectedVersion, CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (!await repository.DeleteAsync(id, expectedVersion, cancellationToken))
+            {
+                await unitOfWork.RollbackAsync(CancellationToken.None);
+                return false;
+            }
+            await unitOfWork.CommitAsync(cancellationToken);
+            return true;
+        }
+        catch (Exception exception) when (exception is DbUpdateConcurrencyException or TenantResourceNotFoundException)
+        {
+            await unitOfWork.RollbackAsync(CancellationToken.None);
+            if (await repository.GetAsync(id, cancellationToken) is null) return false;
+            throw new WorkspaceTaskPreconditionException();
+        }
+        catch
+        {
+            await unitOfWork.RollbackAsync(CancellationToken.None);
+            throw;
+        }
+    }
 
     private static string? Normalize(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

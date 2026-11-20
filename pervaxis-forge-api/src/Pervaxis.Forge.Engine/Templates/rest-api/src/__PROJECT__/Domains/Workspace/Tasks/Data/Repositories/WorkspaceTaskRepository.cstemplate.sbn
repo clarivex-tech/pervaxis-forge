@@ -50,7 +50,6 @@ public sealed class WorkspaceTaskRepository(IDomainSession session, IUserContext
     {
         var entity = new WorkspaceTask(await OwnerAsync(cancellationToken), title, description, isCompleted, now);
         session.Add(entity);
-        await session.SaveChangesAsync(cancellationToken);
         return entity;
     }
 
@@ -75,14 +74,7 @@ public sealed class WorkspaceTaskRepository(IDomainSession session, IUserContext
         if (entity.Version != expectedVersion)
             throw new WorkspaceTaskPreconditionException();
         entity.Edit(title, description, isCompleted, now);
-        // EF's UPDATE predicate includes the tenant key, immutable original owner and original version.
-        try { await session.SaveChangesAsync(cancellationToken); }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!await (await OwnedQueryAsync(cancellationToken)).AsNoTracking().AnyAsync(task => task.Id == id, cancellationToken))
-                return null;
-            throw new WorkspaceTaskPreconditionException();
-        }
+        // Stage only. The service commits once; EF includes tenant, original owner and version in UPDATE.
         return entity;
     }
 
@@ -94,13 +86,6 @@ public sealed class WorkspaceTaskRepository(IDomainSession session, IUserContext
         if (entity.Version != expectedVersion)
             throw new WorkspaceTaskPreconditionException();
         session.Remove(entity);
-        try { await session.SaveChangesAsync(cancellationToken); }
-        catch (DbUpdateConcurrencyException)
-        {
-            if (!await (await OwnedQueryAsync(cancellationToken)).AsNoTracking().AnyAsync(task => task.Id == id, cancellationToken))
-                return false;
-            throw new WorkspaceTaskPreconditionException();
-        }
         return true;
     }
 }

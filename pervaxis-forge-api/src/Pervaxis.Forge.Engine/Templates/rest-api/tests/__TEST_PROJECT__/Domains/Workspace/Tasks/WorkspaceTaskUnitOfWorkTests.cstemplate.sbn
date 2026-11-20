@@ -1,0 +1,252 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Core.Abstractions.Data;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Forge.Contracts.V1;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts.Requests;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Repositories;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Services;
+using Pervaxis.Forge.Testing.V1;
+using Xunit;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tests;
+
+public sealed class WorkspaceTaskUnitOfWorkTests
+{
+    private static readonly DateTime Now = new(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private sealed class User : IUserContext
+    {
+        public Task<string?> GetSubjectAsync(CancellationToken cancellationToken = default) => Task.FromResult<string?>("owner");
+    }
+    private sealed class Tenant : ITenantContext
+    {
+        public TenantId TenantId => new(DomainTestDatabase.TenantA);
+        public string TenantName => "Unit of work test";
+        public TenantStatus Status => TenantStatus.Active;
+        public bool IsResolved => true;
+    }
+    // Observes the real Core implementation; it does not implement persistence/transactions itself.
+    private sealed class ObservedUnitOfWork(IUnitOfWork inner) : IUnitOfWork
+    {
+        public int Commits { get; private set; }
+        public int Rollbacks { get; private set; }
+        public CancellationToken RollbackToken { get; private set; }
+        public Func<Task>? BeforeCommit { get; set; }
+        public async Task<int> CommitAsync(CancellationToken cancellationToken = default)
+        {
+            Commits++;
+            if (BeforeCommit is { } action)
+            {
+                BeforeCommit = null;
+                await action();
+            }
+            return await inner.CommitAsync(cancellationToken);
+        }
+        public Task RollbackAsync(CancellationToken cancellationToken = default)
+        {
+            Rollbacks++;
+            RollbackToken = cancellationToken;
+            return inner.RollbackAsync(cancellationToken);
+        }
+        public ValueTask DisposeAsync() => inner.DisposeAsync();
+    }
+
+    private static WorkspaceTaskRepository Repository(DomainTestDatabase database, DbContext db)
+        => new(database.WrapSession(db), new User(), new Tenant());
+    private static WorkspaceTaskService Service(WorkspaceTaskRepository repository, IUnitOfWork unitOfWork)
+        => new(repository, unitOfWork, TimeProvider.System, new(), new(), new());
+
+    [Fact]
+    public async Task RepositoryCreateUpdateDelete_OnlyStageUntilCallerCommits()
+    {
+        using var database = new DomainTestDatabase();
+        using var db = database.CreateContext(new Tenant());
+        using var observer = database.CreateContext(new Tenant());
+        var repository = Repository(database, db);
+        var unitOfWork = database.WrapUnitOfWork(db);
+        var task = await repository.CreateAsync("Original", null, false, Now, default);
+        Assert.Empty(await observer.Set<WorkspaceTask>().AsNoTracking().ToListAsync());
+        await unitOfWork.CommitAsync();
+        await repository.UpdateAsync(task.Id, task.Version, "Staged", null, true, Now.AddSeconds(1), default);
+        Assert.Equal("Original", (await observer.Set<WorkspaceTask>().AsNoTracking().SingleAsync()).Title);
+        await unitOfWork.RollbackAsync();
+        var saved = (await repository.GetAsync(task.Id, default))!;
+        Assert.True(await repository.DeleteAsync(saved.Id, saved.Version, default));
+        Assert.Single(await observer.Set<WorkspaceTask>().AsNoTracking().ToListAsync());
+        await unitOfWork.RollbackAsync();
+        Assert.Equal(0, await unitOfWork.CommitAsync());
+        Assert.Equal("Original", (await observer.Set<WorkspaceTask>().AsNoTracking().SingleAsync()).Title);
+    }
+
+    [Fact]
+    public async Task ServiceCommitsOncePerSuccessfulMutation_AndNeverForReadsOrMissingRows()
+    {
+        using var database = new DomainTestDatabase();
+        using var db = database.CreateContext(new Tenant());
+        var unitOfWork = new ObservedUnitOfWork(database.WrapUnitOfWork(db));
+        var service = Service(Repository(database, db), unitOfWork);
+        var created = await service.CreateAsync(new CreateWorkspaceTaskRequest { Title = "Original" }, default);
+        Assert.Equal(1, unitOfWork.Commits);
+        Assert.NotNull(await service.GetAsync(created.Id, default));
+        Assert.Single((await service.ListAsync(new ListWorkspaceTasksRequest(), default)).Items);
+        Assert.Null(await service.UpdateAsync(Guid.NewGuid(), Guid.NewGuid(),
+            new UpdateWorkspaceTaskRequest { Title = "Missing", IsCompleted = true }, default));
+        Assert.False(await service.DeleteAsync(Guid.NewGuid(), Guid.NewGuid(), default));
+        Assert.Equal(1, unitOfWork.Commits);
+        var updated = (await service.UpdateAsync(created.Id, created.Version,
+            new UpdateWorkspaceTaskRequest { Title = "Changed", IsCompleted = true }, default))!;
+        Assert.Equal(2, unitOfWork.Commits);
+        Assert.NotEqual(created.Version, updated.Version);
+        Assert.True(await service.DeleteAsync(updated.Id, updated.Version, default));
+        Assert.Equal(3, unitOfWork.Commits);
+        using var observer = database.CreateContext(new Tenant());
+        Assert.Empty(await observer.Set<WorkspaceTask>().AsNoTracking().ToListAsync());
+    }
+
+    [Fact]
+    public async Task MultipleRepositoryChanges_ShareOneAtomicCommit()
+    {
+        using var database = new DomainTestDatabase();
+        using var db = database.CreateContext(new Tenant());
+        var firstRepository = Repository(database, db);
+        var secondRepository = Repository(database, db);
+        var unitOfWork = new ObservedUnitOfWork(database.WrapUnitOfWork(db));
+        var changed = await firstRepository.CreateAsync("Original", null, false, Now, default);
+        var removed = await secondRepository.CreateAsync("Remove", null, false, Now, default);
+        await unitOfWork.CommitAsync();
+        var added = await firstRepository.CreateAsync("Added", null, false, Now, default);
+        await firstRepository.UpdateAsync(changed.Id, changed.Version, "Changed", null, true, Now, default);
+        await secondRepository.DeleteAsync(removed.Id, removed.Version, default);
+        using var observer = database.CreateContext(new Tenant());
+        var before = await observer.Set<WorkspaceTask>().AsNoTracking().ToListAsync();
+        Assert.Equal(2, before.Count);
+        Assert.Contains(before, row => row.Id == changed.Id && row.Title == "Original");
+        Assert.Contains(before, row => row.Id == removed.Id);
+        Assert.DoesNotContain(before, row => row.Id == added.Id);
+        // The service's final staged insertion and all prior repository operations commit together.
+        await Service(secondRepository, unitOfWork).CreateAsync(new CreateWorkspaceTaskRequest { Title = "Final" }, default);
+        Assert.Equal(2, unitOfWork.Commits); // One seed commit and one application operation.
+        var after = await observer.Set<WorkspaceTask>().AsNoTracking().ToListAsync();
+        Assert.Equal(3, after.Count);
+        Assert.Contains(after, row => row.Id == changed.Id && row.Title == "Changed" && row.IsCompleted);
+        Assert.Contains(after, row => row.Id == added.Id);
+        Assert.DoesNotContain(after, row => row.Id == removed.Id);
+    }
+
+    [Fact]
+    public async Task ServiceCommitFailure_RollsBackEveryWrite_AndCannotLeakIntoLaterCommit()
+    {
+        using var database = new DomainTestDatabase();
+        using var db = database.CreateContext(new Tenant());
+        var repository = Repository(database, db);
+        var changed = await repository.CreateAsync("Original", null, false, Now, default);
+        var removed = await repository.CreateAsync("Keep", null, false, Now, default);
+        await database.WrapUnitOfWork(db).CommitAsync();
+        // Disposable SQLite only: the first Batch insert succeeds, the second fails inside SaveChanges.
+        await db.Database.ExecuteSqlRawAsync("""
+            CREATE TRIGGER reject_second_batch BEFORE INSERT ON workspace_tasks
+            WHEN NEW.Title = 'Batch' AND (SELECT COUNT(*) FROM workspace_tasks WHERE Title = 'Batch') > 0
+            BEGIN SELECT RAISE(ABORT, 'Injected test failure'); END;
+            """);
+        await repository.UpdateAsync(changed.Id, changed.Version, "Must roll back", null, true, Now, default);
+        await repository.DeleteAsync(removed.Id, removed.Version, default);
+        await Repository(database, db).CreateAsync("Batch", null, false, Now, default);
+        var unitOfWork = new ObservedUnitOfWork(database.WrapUnitOfWork(db));
+        var service = Service(repository, unitOfWork);
+        await Assert.ThrowsAsync<DbUpdateException>(() =>
+            service.CreateAsync(new CreateWorkspaceTaskRequest { Title = "Batch" }, default));
+        Assert.Equal(1, unitOfWork.Commits);
+        Assert.Equal(1, unitOfWork.Rollbacks);
+        Assert.Empty(db.ChangeTracker.Entries());
+        Assert.Equal(0, await unitOfWork.CommitAsync());
+        using var observer = database.CreateContext(new Tenant());
+        var rows = await observer.Set<WorkspaceTask>().AsNoTracking().ToListAsync();
+        Assert.Equal(2, rows.Count);
+        Assert.Contains(rows, row => row.Id == changed.Id && row.Title == "Original" && !row.IsCompleted);
+        Assert.Contains(rows, row => row.Id == removed.Id);
+        await service.CreateAsync(new CreateWorkspaceTaskRequest { Title = "Recovery" }, default);
+        rows = await observer.Set<WorkspaceTask>().AsNoTracking().ToListAsync();
+        Assert.Equal(3, rows.Count);
+        Assert.DoesNotContain(rows, row => row.Title is "Batch" or "Must roll back");
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task FailedOrCancelledStaging_DiscardsPendingWork(bool cancelled)
+    {
+        using var database = new DomainTestDatabase();
+        using var db = database.CreateContext(new Tenant());
+        var repository = Repository(database, db);
+        await repository.CreateAsync("Must not leak", null, false, Now, default);
+        var unitOfWork = new ObservedUnitOfWork(database.WrapUnitOfWork(db));
+        var service = Service(repository, unitOfWork);
+        using var cancellation = new CancellationTokenSource();
+        if (cancelled) cancellation.Cancel();
+        if (cancelled)
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.CreateAsync(
+                new CreateWorkspaceTaskRequest { Title = "Cancelled" }, cancellation.Token));
+        else
+            await Assert.ThrowsAsync<FluentValidation.ValidationException>(() => service.CreateAsync(
+                new CreateWorkspaceTaskRequest { Title = " " }, default));
+        Assert.Equal(0, unitOfWork.Commits);
+        Assert.Equal(1, unitOfWork.Rollbacks);
+        Assert.False(unitOfWork.RollbackToken.CanBeCanceled);
+        Assert.Empty(db.ChangeTracker.Entries());
+        Assert.Equal(0, await unitOfWork.CommitAsync());
+        using var observer = database.CreateContext(new Tenant());
+        Assert.Empty(await observer.Set<WorkspaceTask>().AsNoTracking().ToListAsync());
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ConcurrentRemovalAtCommit_RemainsMissingAndClearsPendingState(bool delete)
+    {
+        using var database = new DomainTestDatabase();
+        using var db = database.CreateContext(new Tenant());
+        var repository = Repository(database, db);
+        var task = await repository.CreateAsync("Original", null, false, Now, default);
+        await database.WrapUnitOfWork(db).CommitAsync();
+        var originalVersion = task.Version;
+        var unitOfWork = new ObservedUnitOfWork(database.WrapUnitOfWork(db))
+        {
+            BeforeCommit = async () =>
+            {
+                using var winner = database.CreateContext(new Tenant());
+                await Repository(database, winner).DeleteAsync(task.Id, originalVersion, default);
+                await database.WrapUnitOfWork(winner).CommitAsync();
+            },
+        };
+        var service = Service(repository, unitOfWork);
+        if (delete)
+            Assert.False(await service.DeleteAsync(task.Id, task.Version, default));
+        else
+            Assert.Null(await service.UpdateAsync(task.Id, task.Version,
+                new UpdateWorkspaceTaskRequest { Title = "Lost", IsCompleted = true }, default));
+        Assert.Equal(1, unitOfWork.Commits);
+        Assert.Equal(1, unitOfWork.Rollbacks);
+        Assert.Empty(db.ChangeTracker.Entries());
+        Assert.Equal(0, await unitOfWork.CommitAsync());
+    }
+}
+{{ end }}

@@ -3,6 +3,14 @@
 
 This business module is discovered automatically. Copy this whole folder and its domain tests unchanged into a compatible print. No Program, DI, MVC or DbContext edits are required. The controller calls the service, which validates and normalizes requests and calls the task repository through the shared tenant-aware session. Other simple CRUD slices may use repositories directly; keep validation, transactions and errors consistent within each feature.
 
+## Unit-of-work boundary
+
+Repositories query and stage changes only. The service orchestrates each write and calls the existing public `Pervaxis.Core.Abstractions.Data.IUnitOfWork.CommitAsync` exactly once on success. Reads and missing-row writes never commit. Core's existing scoped `TenantEfUnitOfWork` and `IDomainSession` use the same scoped tenant-aware context; no new unit-of-work implementation, context or manual host wiring is needed. One EF SaveChanges transaction commits all pending repository changes atomically.
+
+The orchestrating service owns the entire pending unit of work. Validation/staging/commit failures and missing write targets discard its tracked work with `RollbackAsync(CancellationToken.None)`, so cancellation cannot skip cleanup and a later commit cannot accidentally persist failed changes. A real concurrency failure is handled at commit: discard failed state, recheck through the tenant-and-owner-scoped repository, return 404 if the row disappeared, otherwise 412. The repository still checks the supplied version before staging an edit.
+
+For an operation involving several repositories, stage all changes in one orchestration scope and commit once at its boundary. Do not compose multiple independently committing services and expect one atomic operation. Simple CRUD slices may place that orchestration in the controller instead; a mandatory service layer is not intrinsic to vertical slices. Keep commit/rollback ownership consistent. V1 `IDomainSession.SaveChangesAsync` remains available for older modules; new repositories must not use it to commit internally.
+
 ## HTTP contract
 
 All routes require an authenticated human Cognito bearer and an active tenant. The base route is `/api/v1/workspace/tasks`.
@@ -34,6 +42,8 @@ The `workspace_tasks` table has composite primary key `(TenantId, Id)`, immutabl
 Requires .NET 10, PostgreSQL, tenant-ready Core 1.8.0, compatible EF Core 10.0.8/Npgsql 10.0.0 APIs, FluentValidation 12, and V1 `IDomainModule`, `IDomainSession`, `IUserContext` contracts. Compare the receiving print's actual capabilities and central package versions: an older V1 print may lack the additive session/user contracts. Never copy duplicate host contracts into this module. Runtime business namespaces are stable across host names. Cross-slice calls must use separately owned contracts, never another slice's implementation.
 
 `ForgeManifest.IncludeWorkspaceTasks` defaults to null (automatic inclusion for PostgreSQL tenant-ready REST prints with Cognito). Set false to omit the reference module, tests and starter migration. Explicit true on an incompatible print fails validation. No additional feature configuration or secrets are required. The module owns validator registration and execution even when global FluentValidation integration is disabled. When copying into an opted-out compatible print, reconcile package references explicitly; no handwritten host wiring is needed.
+
+The reusable domain tests also require the additive `Pervaxis.Forge.Testing.V1.DomainTestDatabase.WrapUnitOfWork` fixture capability. It wraps the real Core implementation, and the MVC fixture mirrors production Core registration. Refresh compatible test fixtures when moving tests into an older print; the runtime V1 session/user/module interfaces are unchanged.
 
 ## Database lifecycle and upgrades
 
