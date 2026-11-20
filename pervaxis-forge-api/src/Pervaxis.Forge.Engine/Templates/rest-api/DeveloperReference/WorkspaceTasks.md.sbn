@@ -1,0 +1,7 @@
+{{ if model.workspace_tasks_enabled }}
+# Workspace tasks
+
+This print includes an automatically discovered reference business module. Its [module contract and upgrade guide](../src/{{ model.names.namespace }}/Domains/Workspace/README.md) defines routes, DTOs, ownership, pagination, ETags, dependencies and migration lifecycle. Copy the complete module and its domain tests unchanged into a compatible print; reconcile dependencies and append application-specific database upgrades as described there.
+
+No UI, integrations, events, sharing or admin ownership bypass are included.
+{{ end }}

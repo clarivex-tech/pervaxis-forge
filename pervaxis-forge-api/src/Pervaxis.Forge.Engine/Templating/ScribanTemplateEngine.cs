@@ -47,6 +47,7 @@ public sealed class ScribanTemplateEngine : ITemplateEngine
             ["model"] = new Scriban.Runtime.ScriptObject
             {
                 ["token_region"] = model.Manifest.TokenEnrichment?.Region,
+                ["workspace_tasks_enabled"] = model.WorkspaceTasksEnabled,
                 ["token_user_pool_id"] = model.Manifest.TokenEnrichment?.UserPoolId,
                 ["angular_cognito_enabled"] = model.AngularCognitoEnabled,
                 ["angular_auth_configured"] = model.Manifest.AngularAuth is not null,

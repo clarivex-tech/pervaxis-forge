@@ -17,16 +17,11 @@
  ************************************************************************
  */
 
-using System.Security.Claims;
-using System.Text.Json;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.IdentityModel.Tokens;
 using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Forge.Contracts.V1;
 using {{ model.names.namespace }}.Platform.Infrastructure.Extensions;
 using {{ model.names.namespace }}.Platform.Models.Configuration;
 
@@ -39,6 +34,7 @@ namespace {{ model.names.namespace }}.Platform.Profile;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class MeController(
     ITenantContext tenant,
+    IUserContext user,
     IOptions<ForgeAuthorizationOptions> authorization,
     IOptions<ForgeOidcOptions> oidc) : ControllerBase
 {
@@ -50,8 +46,7 @@ public sealed class MeController(
     public async Task<ActionResult<MeResponse>> GetAsync()
     {
         // This is the bearer token accepted by JwtBearer, never a body/query token or an ID token.
-        var token = await HttpContext.GetTokenAsync(JwtBearerDefaults.AuthenticationScheme, "access_token");
-        var subject = ReadUserSubject(User, token);
+        var subject = await user.GetSubjectAsync(HttpContext.RequestAborted);
         if (subject is null)
             return Problem(statusCode: StatusCodes.Status401Unauthorized, title: "A user access token is required.",
                 type: "urn:pervaxis:profile:user_identity_required");
@@ -74,33 +69,5 @@ public sealed class MeController(
         });
     }
 
-    private static string? ReadUserSubject(ClaimsPrincipal principal, string? token)
-    {
-        if (principal.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(token))
-            return null;
-
-        // Inspect only the payload of the token ALREADY accepted by JwtBearer. Principal claims flatten
-        // JSON arrays and can hide duplicate JSON properties; user identity must be scalar and unambiguous.
-        using var payload = JsonDocument.Parse(Base64UrlEncoder.Decode(new JsonWebToken(token).EncodedPayload));
-        var subject = ReadScalar(payload.RootElement, "sub");
-        var username = ReadScalar(payload.RootElement, "username");
-        var clientId = ReadScalar(payload.RootElement, "client_id");
-        if (subject is null || username is null || clientId is null
-            || string.Equals(subject, clientId, StringComparison.Ordinal))
-            return null; // Client-credentials tokens identify the client in sub and do not identify a user.
-
-        var subjects = principal.FindAll("sub").ToArray();
-        return subjects.Length == 1 && string.Equals(subjects[0].Value, subject, StringComparison.Ordinal)
-            ? subject : null;
-    }
-
-    private static string? ReadScalar(JsonElement payload, string name)
-    {
-        var values = payload.EnumerateObject().Where(property => property.NameEquals(name)).ToArray();
-        if (values.Length != 1 || values[0].Value.ValueKind != JsonValueKind.String)
-            return null;
-        var value = values[0].Value.GetString();
-        return string.IsNullOrWhiteSpace(value) ? null : value;
-    }
 }
 {{ end }}

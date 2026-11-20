@@ -1,0 +1,59 @@
+{{ if model.manifest.tenant_ready }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Security.Claims;
+using System.Text.Json;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
+
+namespace {{ model.names.namespace }}.Platform.Auth;
+
+/// <summary>Scalar user identity extraction from the token already accepted by JwtBearer.</summary>
+public static class CognitoUserSubject
+{
+    public static string? Read(ClaimsPrincipal? principal, string? token)
+    {
+        if (principal?.Identity?.IsAuthenticated != true || string.IsNullOrWhiteSpace(token))
+            return null;
+
+        // Inspect only the payload of the token ALREADY accepted by JwtBearer. Principal claims flatten
+        // JSON arrays and can hide duplicate JSON properties; user identity must be scalar and unambiguous.
+        using var payload = JsonDocument.Parse(Base64UrlEncoder.Decode(new JsonWebToken(token).EncodedPayload));
+        var subject = ReadScalar(payload.RootElement, "sub");
+        var username = ReadScalar(payload.RootElement, "username");
+        var clientId = ReadScalar(payload.RootElement, "client_id");
+        if (subject is null || username is null || clientId is null
+            || string.Equals(subject, clientId, StringComparison.Ordinal))
+            return null; // Client-credentials tokens identify the client in sub and do not identify a user.
+
+        var subjects = principal.FindAll("sub").ToArray();
+        return subjects.Length == 1 && string.Equals(subjects[0].Value, subject, StringComparison.Ordinal)
+            ? subject : null;
+    }
+
+    private static string? ReadScalar(JsonElement payload, string name)
+    {
+        var values = payload.EnumerateObject().Where(property => property.NameEquals(name)).ToArray();
+        if (values.Length != 1 || values[0].Value.ValueKind != JsonValueKind.String)
+            return null;
+        var value = values[0].Value.GetString();
+        return string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+}
+{{ end }}

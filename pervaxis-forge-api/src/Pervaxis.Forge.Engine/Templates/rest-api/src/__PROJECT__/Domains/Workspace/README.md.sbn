@@ -1,0 +1,45 @@
+{{ if model.workspace_tasks_enabled }}
+# Workspace tasks reference module
+
+This business module is discovered automatically. Copy this whole folder and its domain tests unchanged into a compatible print. No Program, DI, MVC or DbContext edits are required. The controller calls the service, which validates and normalizes requests and calls the task repository through the shared tenant-aware session. Other simple CRUD slices may use repositories directly; keep validation, transactions and errors consistent within each feature.
+
+## HTTP contract
+
+All routes require an authenticated human Cognito bearer and an active tenant. The base route is `/api/v1/workspace/tasks`.
+
+| Request | Result |
+|---|---|
+| POST base | 201, Location, strong ETag and task |
+| GET base?page=1&pageSize=20 | 200, page |
+| GET base/{id} | 200, ETag and task; 404 if unavailable |
+| PUT base/{id}, If-Match | 200, new ETag and task |
+| DELETE base/{id}, If-Match | 204 |
+
+Create accepts required `title` (trimmed, 1–200 characters), optional nullable `description` (up to 4000 characters; whitespace becomes null), and optional `isCompleted` (default false). PUT replaces these fields and requires `isCompleted`. Unknown JSON properties and unsupported query parameters return 400. Callers cannot select or assign tenant, owner, IDs, timestamps or version.
+
+A task response contains `id`, `title`, `description`, `isCompleted`, UTC `createdAt` and `updatedAt`, and `version` (UUID). A page contains `items`, `page`, `pageSize`, `hasMore`. Pages are one-based, limited to 1–10000; size is 1–100 (default 20). Ordering is ascending creation time then UUID. Offset pagination has a bounded window and is deterministic for unchanged data; concurrent writes can shift later pages. `hasMore` reports additional matching rows, including rows beyond that window. There is no total-count query or configurable sort.
+
+PUT and DELETE require exactly one strong quoted UUID ETag in `If-Match`. Missing returns 428; malformed, weak, wildcard or multiple values return 400; a stale value or a concurrent update race returns 412. For a valid conditional request, unavailable or differently owned rows return 404 before comparing versions. GET and mutation responses expose ETag to browser callers through host CORS. Task responses are not cacheable.
+
+## Ownership and storage
+
+Every database query scopes both tenant ID and immutable validated human subject. API keys and machine identities cannot use this module. Roles, including PlatformAdmin, never bypass ownership. The same user in a different tenant and a different user in the same tenant cannot access a task. Tenant admission can reject requests before the controller. No request header or payload selects an owner or tenant.
+
+Subjects are scoped to the host's single configured Cognito issuer, not globally unique across user pools. Changing issuer against an existing database requires an explicit identity/data migration; do not simply point the deployment at another pool. The module reuses host bearer validation and token freshness policy. It introduces no password flow, Cognito calls, scopes or IAM permissions.
+
+The `workspace_tasks` table has composite primary key `(TenantId, Id)`, immutable `OwnerSubject` (128 characters), title/description/completion fields, UTC timestamps and UUID `Version`. An index covers tenant, owner, creation time and ID. Update/delete predicates include tenant, original owner and version. UUID versions provide optimistic concurrency; they are not sequential counters.
+
+## Compatibility and generation
+
+Requires .NET 10, PostgreSQL, tenant-ready Core 1.8.0, compatible EF Core 10.0.8/Npgsql 10.0.0 APIs, FluentValidation 12, and V1 `IDomainModule`, `IDomainSession`, `IUserContext` contracts. Compare the receiving print's actual capabilities and central package versions: an older V1 print may lack the additive session/user contracts. Never copy duplicate host contracts into this module. Runtime business namespaces are stable across host names. Cross-slice calls must use separately owned contracts, never another slice's implementation.
+
+`ForgeManifest.IncludeWorkspaceTasks` defaults to null (automatic inclusion for PostgreSQL tenant-ready REST prints with Cognito). Set false to omit the reference module, tests and starter migration. Explicit true on an incompatible print fails validation. No additional feature configuration or secrets are required. The module owns validator registration and execution even when global FluentValidation integration is disabled. When copying into an opted-out compatible print, reconcile package references explicitly; no handwritten host wiring is needed.
+
+## Database lifecycle and upgrades
+
+For a genuinely empty application, use its single generated migration chain, including `20261120000000_AddWorkspaceTasks`. Applied migrations and the latest snapshot are application-owned state, even though templates supply starter history.
+
+For an existing deployment, preserve its complete migration history, designers and latest snapshot. Copy the domain and tests, then append a new migration after the application's actual tip. Do not blindly copy this starter migration into a lineage with later changes, replace its snapshot, merge baseline histories, or generate a new baseline over existing tables. Review the resulting SQL and test against a restored database before deployment. Never rewrite/delete applied migrations or run migrations on application startup. `EnsureCreated` is only for disposable tests.
+
+See [portability and safe upgrades](../../../../DeveloperReference/Portability.md) and [ownership](../../../../DeveloperReference/Ownership.md). Tests cover real MVC, validation, human admission, same-tenant/different-user isolation, cross-tenant isolation, SQL ownership predicates, races and pagination. Generator tests copy this module and its tests byte-for-byte into differently named prints with no host edits. PostgreSQL model and migration-script checks run offline; behavioral tests use disposable SQLite databases.
+{{ end }}

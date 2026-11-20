@@ -1,0 +1,107 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.EntityFrameworkCore;
+using Pervaxis.Core.Abstractions.MultiTenancy;
+using Pervaxis.Forge.Contracts.V1;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Constants;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Repositories;
+
+public sealed class WorkspaceTaskRepository(IDomainSession session, IUserContext user, ITenantContext tenant) : IWorkspaceTaskRepository
+{
+    private async Task<string> OwnerAsync(CancellationToken cancellationToken)
+    {
+        if (!tenant.IsResolved || tenant.Status != TenantStatus.Active)
+            throw new UnauthorizedAccessException("An active tenant is required.");
+        var subject = await user.GetSubjectAsync(cancellationToken);
+        if (string.IsNullOrWhiteSpace(subject) || subject.Length > 128)
+            throw new UnauthorizedAccessException("A validated human user is required.");
+        return subject;
+    }
+
+    private async Task<IQueryable<WorkspaceTask>> OwnedQueryAsync(CancellationToken cancellationToken)
+    {
+        var owner = await OwnerAsync(cancellationToken);
+        var tenantId = tenant.TenantId;
+        // Keep BOTH predicates in SQL, in addition to Core's global tenant filter.
+        return session.Query<WorkspaceTask>().Where(task => task.TenantId == tenantId && task.OwnerSubject == owner);
+    }
+
+    public async Task<WorkspaceTask> CreateAsync(string title, string? description, bool isCompleted, DateTime now, CancellationToken cancellationToken)
+    {
+        var entity = new WorkspaceTask(await OwnerAsync(cancellationToken), title, description, isCompleted, now);
+        session.Add(entity);
+        await session.SaveChangesAsync(cancellationToken);
+        return entity;
+    }
+
+    public async Task<IReadOnlyList<WorkspaceTask>> ListAsync(int page, int pageSize, CancellationToken cancellationToken)
+    {
+        if (page is < 1 or > WorkspaceTaskConstants.MaximumPage || pageSize is < 1 or > WorkspaceTaskConstants.MaximumPageSize)
+            throw new ArgumentOutOfRangeException(nameof(page));
+        var query = await OwnedQueryAsync(cancellationToken);
+        return await query.AsNoTracking().OrderBy(task => task.CreatedAt).ThenBy(task => task.Id)
+            .Skip((page - 1) * pageSize).Take(pageSize + 1).ToListAsync(cancellationToken);
+    }
+
+    public async Task<WorkspaceTask?> GetAsync(Guid id, CancellationToken cancellationToken)
+        => await (await OwnedQueryAsync(cancellationToken)).SingleOrDefaultAsync(task => task.Id == id, cancellationToken);
+
+    public async Task<WorkspaceTask?> UpdateAsync(Guid id, Guid expectedVersion, string title, string? description,
+        bool isCompleted, DateTime now, CancellationToken cancellationToken)
+    {
+        var entity = await GetAsync(id, cancellationToken);
+        if (entity is null)
+            return null;
+        if (entity.Version != expectedVersion)
+            throw new WorkspaceTaskPreconditionException();
+        entity.Edit(title, description, isCompleted, now);
+        // EF's UPDATE predicate includes the tenant key, immutable original owner and original version.
+        try { await session.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!await (await OwnedQueryAsync(cancellationToken)).AsNoTracking().AnyAsync(task => task.Id == id, cancellationToken))
+                return null;
+            throw new WorkspaceTaskPreconditionException();
+        }
+        return entity;
+    }
+
+    public async Task<bool> DeleteAsync(Guid id, Guid expectedVersion, CancellationToken cancellationToken)
+    {
+        var entity = await GetAsync(id, cancellationToken);
+        if (entity is null)
+            return false;
+        if (entity.Version != expectedVersion)
+            throw new WorkspaceTaskPreconditionException();
+        session.Remove(entity);
+        try { await session.SaveChangesAsync(cancellationToken); }
+        catch (DbUpdateConcurrencyException)
+        {
+            if (!await (await OwnedQueryAsync(cancellationToken)).AsNoTracking().AnyAsync(task => task.Id == id, cancellationToken))
+                return false;
+            throw new WorkspaceTaskPreconditionException();
+        }
+        return true;
+    }
+}
+{{ end }}

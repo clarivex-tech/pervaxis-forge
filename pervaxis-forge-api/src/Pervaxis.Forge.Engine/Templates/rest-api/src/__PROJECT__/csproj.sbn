@@ -28,7 +28,7 @@
     <PackageReference Include="Serilog.Enrichers.Environment" />
     <PackageReference Include="AWS.Logger.SeriLog" />
 {{ end }}
-{{ if model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
+{{ if model.workspace_tasks_enabled || model.manifest.validation == null || model.manifest.validation.fluent_validation_enabled }}
     <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
 {{ end }}
 {{ if model.manifest.database != null }}

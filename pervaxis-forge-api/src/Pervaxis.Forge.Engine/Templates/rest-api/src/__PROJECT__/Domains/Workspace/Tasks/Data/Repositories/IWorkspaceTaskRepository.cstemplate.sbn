@@ -1,0 +1,33 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Repositories;
+
+/// <summary>Every operation enforces both current tenant and current human owner inside the database query.</summary>
+public interface IWorkspaceTaskRepository
+{
+    Task<WorkspaceTask> CreateAsync(string title, string? description, bool isCompleted, DateTime now, CancellationToken cancellationToken);
+    Task<IReadOnlyList<WorkspaceTask>> ListAsync(int page, int pageSize, CancellationToken cancellationToken);
+    Task<WorkspaceTask?> GetAsync(Guid id, CancellationToken cancellationToken);
+    Task<WorkspaceTask?> UpdateAsync(Guid id, Guid expectedVersion, string title, string? description, bool isCompleted, DateTime now, CancellationToken cancellationToken);
+    Task<bool> DeleteAsync(Guid id, Guid expectedVersion, CancellationToken cancellationToken);
+}
+{{ end }}

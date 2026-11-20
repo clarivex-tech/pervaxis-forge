@@ -1,0 +1,33 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Contracts.Responses;
+using Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities;
+
+namespace Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Mappings;
+
+public static class WorkspaceTaskMappings
+{
+    public static WorkspaceTaskResponse ToResponse(this WorkspaceTask entity) => new()
+    {
+        Id = entity.Id, Title = entity.Title, Description = entity.Description, IsCompleted = entity.IsCompleted,
+        CreatedAt = entity.CreatedAt, UpdatedAt = entity.UpdatedAt, Version = entity.Version,
+    };
+}
+{{ end }}

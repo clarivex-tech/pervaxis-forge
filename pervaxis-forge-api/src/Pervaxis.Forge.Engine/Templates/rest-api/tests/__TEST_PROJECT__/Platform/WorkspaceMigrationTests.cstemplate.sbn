@@ -1,0 +1,47 @@
+{{ if model.workspace_tasks_enabled }}
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
+using Pervaxis.Forge.Testing.V1;
+using Xunit;
+
+namespace {{ model.names.test_project_name }}.Platform;
+
+public sealed class WorkspaceMigrationTests
+{
+    [Fact]
+    public void UpgradeFromTenantHistory_GeneratesAppendOnlyWorkspaceSql()
+    {
+        using var database = new DomainTestDatabase();
+        using var db = database.CreatePostgresModelContext();
+        Assert.Contains("20260101000000_AddTenants", db.Database.GetMigrations());
+        Assert.Contains("20261120000000_AddWorkspaceTasks", db.Database.GetMigrations());
+        // GenerateScript uses metadata only; no connection to PostgreSQL or AWS.
+        var sql = db.GetService<IMigrator>().GenerateScript("20260101000000_AddTenants", "20261120000000_AddWorkspaceTasks");
+        Assert.Contains("CREATE TABLE workspace_tasks", sql);
+        Assert.Contains("IX_workspace_tasks_tenant_owner_created_id", sql);
+        Assert.DoesNotContain("DROP TABLE", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("ALTER TABLE tenants", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("UPDATE tenants", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("DELETE FROM tenants", sql, StringComparison.OrdinalIgnoreCase);
+    }
+}
+{{ end }}

@@ -30,6 +30,7 @@ public static class ServiceCollectionExtensions
         IConfiguration configuration)
     {
         services.AddScoped<IDomainQueries, DomainQueries>();
+        services.AddScoped<IDomainSession, DomainSession>();
         services.AddForgeDomains(configuration);
 
         // HTTP client with full DelegatingHandler chain:

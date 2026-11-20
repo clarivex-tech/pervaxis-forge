@@ -58,6 +58,51 @@ namespace {{ model.names.namespace }}.Data.Migrations
                             UpdatedAt = new DateTimeOffset(new DateTime({{ model.default_tenant_seeded_year }}, {{ model.default_tenant_seeded_month }}, {{ model.default_tenant_seeded_day }}, 0, 0, 0, 0, DateTimeKind.Unspecified), new TimeSpan(0, 0, 0, 0, 0))
                         });
                 });
+{{ if model.workspace_tasks_enabled }}
+            modelBuilder.Entity("Pervaxis.Forge.Reference.Domains.Workspace.Tasks.Data.Entities.WorkspaceTask", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<bool>("IsCompleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("OwnerSubject")
+                        .IsConcurrencyToken()
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("uuid");
+
+                    b.HasKey("TenantId", "Id");
+
+                    b.HasIndex("TenantId", "OwnerSubject", "CreatedAt", "Id")
+                        .HasDatabaseName("IX_workspace_tasks_tenant_owner_created_id");
+
+                    b.ToTable("workspace_tasks", (string)null);
+                });
+{{ end }}
 #pragma warning restore 612, 618
         }
     }
