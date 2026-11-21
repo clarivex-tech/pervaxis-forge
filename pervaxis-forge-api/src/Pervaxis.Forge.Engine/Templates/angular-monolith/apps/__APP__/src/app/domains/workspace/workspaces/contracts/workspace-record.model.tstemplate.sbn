@@ -1,0 +1,97 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+export type WorkspaceStatus = 'Active' | 'Suspended' | 'Archived';
+export type WorkspacePlan = 'Standard' | 'Professional' | 'Enterprise';
+export type WorkspaceMemberRole = 'Owner' | 'Admin' | 'Member' | 'Viewer';
+export type WorkspaceAuditAction = 'created' | 'updated' | 'status-changed' | 'deleted' | 'restored';
+
+/** One Workspace row shown in the CRUDA list. */
+export interface WorkspaceRecord {
+  readonly id: string;
+  readonly name: string;
+  readonly code: string;
+  readonly owner: string;
+  readonly plan: WorkspacePlan;
+  readonly status: WorkspaceStatus;
+  readonly memberCount: number;
+  readonly description: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly updatedBy: string;
+}
+
+/** Editable fields of a Workspace. The code is immutable after creation. */
+export interface WorkspaceDraft {
+  readonly name: string;
+  readonly code: string;
+  readonly owner: string;
+  readonly plan: WorkspacePlan;
+  readonly status: WorkspaceStatus;
+  readonly description: string;
+}
+
+export interface WorkspaceMember {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly role: WorkspaceMemberRole;
+  readonly joinedAt: string;
+}
+
+export interface WorkspaceAuditChange {
+  readonly field: string;
+  readonly from: string | null;
+  readonly to: string | null;
+}
+
+export interface WorkspaceAuditEvent {
+  readonly id: string;
+  readonly action: WorkspaceAuditAction;
+  readonly actor: string;
+  readonly at: string;
+  readonly summary: string;
+  readonly changes: readonly WorkspaceAuditChange[];
+}
+
+export interface WorkspaceFilters {
+  readonly search: string;
+  readonly status: WorkspaceStatus | '';
+  readonly plan: WorkspacePlan | '';
+}
+
+export interface WorkspaceExportResult {
+  readonly recordCount: number;
+  /** Mock exports never produce a file. */
+  readonly fileGenerated: false;
+}
+
+export type WorkspaceFieldName = 'name' | 'code' | 'owner' | 'plan' | 'status' | 'description';
+export type WorkspaceFieldErrors = Partial<Record<WorkspaceFieldName, string>>;
+
+/** Page-level status of the list, independent of drawers and dialogs. */
+export type WorkspaceViewState = 'loading' | 'ready' | 'empty' | 'no-results' | 'error' | 'denied';
+
+export type WorkspaceDrawerState =
+  | { readonly mode: 'closed' }
+  | { readonly mode: 'create' }
+  | { readonly mode: 'read'; readonly id: string; readonly tab: WorkspaceDetailTab }
+  | { readonly mode: 'edit'; readonly id: string; readonly returnTo: 'read' | 'closed' };
+
+export type WorkspaceDetailTab = 'overview' | 'members' | 'audit';
+{{ end }}

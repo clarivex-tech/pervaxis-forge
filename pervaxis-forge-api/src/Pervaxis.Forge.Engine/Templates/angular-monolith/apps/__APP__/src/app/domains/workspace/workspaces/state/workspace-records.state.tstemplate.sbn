@@ -1,0 +1,470 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { DestroyRef, Injectable, computed, inject, signal } from '@angular/core';
+import { MessageService } from 'primeng/api';
+import { Observable, Subject, firstValueFrom, takeUntil } from 'rxjs';
+import { DOMAIN_SESSION_STATE } from '@forge/ui-contracts/v1';
+import { WORKSPACE_COPY } from '../constants/workspace-record.constants';
+import {
+  WorkspaceAuditEvent, WorkspaceDetailTab, WorkspaceDraft, WorkspaceDrawerState, WorkspaceFieldErrors,
+  WorkspaceFilters, WorkspaceMember, WorkspaceRecord, WorkspaceViewState,
+} from '../contracts/workspace-record.model';
+import { WorkspaceRecordsData, WorkspaceRecordsError } from '../sources/workspace-records.data';
+
+export const WORKSPACE_TOAST_KEY = 'workspaces';
+const TOAST_LIFE_MS = 4000;
+const UNKNOWN_REFERENCE = 'ERR-WS-UNKNOWN';
+
+type LoadStatus = 'idle' | 'loading' | 'ready' | 'error' | 'denied';
+export type WorkspaceChipKey = keyof WorkspaceFilters;
+
+export interface WorkspaceFailure {
+  readonly message: string;
+  readonly referenceCode: string;
+}
+
+export interface WorkspaceFilterChip {
+  readonly key: WorkspaceChipKey;
+  readonly label: string;
+}
+
+const EMPTY_FILTERS: WorkspaceFilters = { search: '', status: '', plan: '' };
+
+/**
+ * Route-scoped Signals state for the Workspaces CRUDA screen. It owns list data, filters, selection,
+ * the drawer and delete flows, and user feedback. It talks only to the WorkspaceRecordsData port.
+ */
+@Injectable()
+export class WorkspaceRecordsState {
+  private readonly data = inject(WorkspaceRecordsData);
+  private readonly messages = inject(MessageService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly sessionState = inject(DOMAIN_SESSION_STATE);
+  private generation = 0;
+  private loadSequence = 0;
+  private detailSequence = 0;
+  private cancelled$ = new Subject<void>();
+
+  readonly dataSource = this.data.source;
+  readonly records = signal<readonly WorkspaceRecord[]>([]);
+  readonly loadStatus = signal<LoadStatus>('idle');
+  readonly loadFailure = signal<WorkspaceFailure | null>(null);
+  readonly filters = signal<WorkspaceFilters>(EMPTY_FILTERS);
+  readonly selectedIds = signal<readonly string[]>([]);
+  readonly drawer = signal<WorkspaceDrawerState>({ mode: 'closed' });
+  readonly saving = signal(false);
+  readonly saveFailure = signal<WorkspaceFailure | null>(null);
+  readonly fieldErrors = signal<WorkspaceFieldErrors>({});
+  readonly members = signal<readonly WorkspaceMember[]>([]);
+  readonly audit = signal<readonly WorkspaceAuditEvent[]>([]);
+  readonly detailLoading = signal(false);
+  readonly detailFailure = signal<WorkspaceFailure | null>(null);
+  readonly deleteRequest = signal<readonly WorkspaceRecord[] | null>(null);
+  readonly deleting = signal(false);
+  readonly deleteFailure = signal<WorkspaceFailure | null>(null);
+  readonly bulkBusy = signal(false);
+  readonly recentlyDeleted = signal<readonly WorkspaceRecord[] | null>(null);
+
+  readonly busy = computed(() => this.saving() || this.deleting() || this.bulkBusy());
+  readonly filtered = computed(() => applyFilters(this.records(), this.filters()));
+  readonly summary = computed(() => {
+    const records = this.records();
+    return {
+      total: records.length,
+      active: records.filter(record => record.status === 'Active').length,
+      suspended: records.filter(record => record.status === 'Suspended').length,
+      members: records.reduce((sum, record) => sum + record.memberCount, 0),
+    };
+  });
+  readonly hasFilters = computed(() => {
+    const filters = this.filters();
+    return filters.search.trim() !== '' || filters.status !== '' || filters.plan !== '';
+  });
+  readonly chips = computed<readonly WorkspaceFilterChip[]>(() => {
+    const filters = this.filters();
+    const chips: WorkspaceFilterChip[] = [];
+    if (filters.search.trim()) chips.push({ key: 'search', label: 'Search: ' + filters.search.trim() });
+    if (filters.status) chips.push({ key: 'status', label: 'Status: ' + filters.status });
+    if (filters.plan) chips.push({ key: 'plan', label: 'Plan: ' + filters.plan });
+    return chips;
+  });
+  /** Selected rows that are still visible. Bulk actions only ever touch these. */
+  readonly selectedRecords = computed(() => {
+    const ids = new Set(this.selectedIds());
+    return this.filtered().filter(record => ids.has(record.id));
+  });
+  readonly viewState = computed<WorkspaceViewState>(() => {
+    switch (this.loadStatus()) {
+      case 'idle':
+      case 'loading': return 'loading';
+      case 'error': return 'error';
+      case 'denied': return 'denied';
+      case 'ready':
+        if (this.records().length === 0) return 'empty';
+        return this.filtered().length === 0 ? 'no-results' : 'ready';
+    }
+  });
+  readonly activeRecord = computed(() => {
+    const drawer = this.drawer();
+    if (drawer.mode !== 'read' && drawer.mode !== 'edit') return null;
+    return this.records().find(record => record.id === drawer.id) ?? null;
+  });
+
+  constructor() {
+    this.sessionState.registerUntilDestroyed(this.destroyRef, () => this.reset());
+    this.destroyRef.onDestroy(() => this.reset());
+  }
+
+  async load(): Promise<void> {
+    const generation = this.generation;
+    const sequence = ++this.loadSequence;
+    this.loadStatus.set('loading');
+    this.loadFailure.set(null);
+    try {
+      const records = await this.request(this.data.list());
+      if (generation !== this.generation || sequence !== this.loadSequence) return;
+      this.records.set(records);
+      this.pruneSelection();
+      this.loadStatus.set('ready');
+    } catch (error: unknown) {
+      if (generation !== this.generation || sequence !== this.loadSequence) return;
+      const failure = toFailure(error, 'Workspaces could not be loaded.');
+      this.loadFailure.set(failure);
+      this.loadStatus.set(error instanceof WorkspaceRecordsError && error.status === 403 ? 'denied' : 'error');
+    }
+  }
+
+  async refresh(): Promise<void> {
+    await this.load();
+    if (this.loadStatus() === 'ready') this.toast('success', WORKSPACE_COPY.toast.refreshed);
+  }
+
+  setSearch(search: string): void {
+    this.filters.update(filters => filters.search === search ? filters : { ...filters, search });
+  }
+
+  setStatus(status: WorkspaceFilters['status']): void {
+    this.filters.update(filters => filters.status === status ? filters : { ...filters, status });
+  }
+
+  setPlan(plan: WorkspaceFilters['plan']): void {
+    this.filters.update(filters => filters.plan === plan ? filters : { ...filters, plan });
+  }
+
+  clearFilter(key: WorkspaceChipKey): void {
+    this.filters.update(filters => ({ ...filters, [key]: '' }));
+  }
+
+  clearFilters(): void {
+    this.filters.set(EMPTY_FILTERS);
+  }
+
+  setSelection(ids: readonly string[]): void {
+    const known = new Set(this.filtered().map(record => record.id));
+    const next = ids.filter(id => known.has(id));
+    const current = this.selectedIds();
+    if (next.length === current.length && next.every((id, index) => id === current[index])) return;
+    this.selectedIds.set(next);
+  }
+
+  clearSelection(): void {
+    this.selectedIds.set([]);
+  }
+
+  openCreate(): void {
+    if (this.busy()) return;
+    this.resetForm();
+    this.drawer.set({ mode: 'create' });
+  }
+
+  openRead(id: string, tab: WorkspaceDetailTab = 'overview'): void {
+    if (this.busy() || !this.records().some(record => record.id === id)) return;
+    this.resetForm();
+    this.drawer.set({ mode: 'read', id, tab });
+    void this.loadDetail(id);
+  }
+
+  setTab(tab: WorkspaceDetailTab): void {
+    const drawer = this.drawer();
+    if (drawer.mode === 'read') this.drawer.set({ ...drawer, tab });
+  }
+
+  openEdit(id: string, returnTo: 'read' | 'closed'): void {
+    if (this.busy() || !this.records().some(record => record.id === id)) return;
+    this.resetForm();
+    this.drawer.set({ mode: 'edit', id, returnTo });
+  }
+
+  /** Closes the drawer unless a save is running. */
+  closeDrawer(): void {
+    if (this.saving()) return;
+    this.drawer.set({ mode: 'closed' });
+    this.resetForm();
+  }
+
+  /** Cancel inside the form: return to the read view when the form was opened from it. */
+  cancelForm(): void {
+    if (this.saving()) return;
+    const drawer = this.drawer();
+    this.resetForm();
+    if (drawer.mode === 'edit' && drawer.returnTo === 'read') {
+      this.drawer.set({ mode: 'read', id: drawer.id, tab: 'overview' });
+      void this.loadDetail(drawer.id);
+    } else {
+      this.drawer.set({ mode: 'closed' });
+    }
+  }
+
+  /** Returns true when the workspace was saved and the drawer closed. */
+  async saveDraft(draft: WorkspaceDraft): Promise<boolean> {
+    const drawer = this.drawer();
+    if (this.saving() || (drawer.mode !== 'create' && drawer.mode !== 'edit')) return false;
+    const generation = this.generation;
+    const editId = drawer.mode === 'edit' ? drawer.id : null;
+    const creating = editId === null;
+    this.saving.set(true);
+    this.resetForm();
+    try {
+      const saved = await this.request(editId === null
+        ? this.data.create(draft)
+        : this.data.update(editId, draft));
+      if (generation !== this.generation) return false;
+      this.records.update(records => creating ? [saved, ...records] : records.map(record => record.id === saved.id ? saved : record));
+      this.drawer.set({ mode: 'closed' });
+      this.toast('success', creating ? WORKSPACE_COPY.toast.created : WORKSPACE_COPY.toast.updated);
+      return true;
+    } catch (error: unknown) {
+      if (generation !== this.generation) return false;
+      const failure = toFailure(error, 'The workspace could not be saved.');
+      const fieldErrors = error instanceof WorkspaceRecordsError ? error.fieldErrors : {};
+      this.fieldErrors.set(fieldErrors);
+      this.saveFailure.set(Object.keys(fieldErrors).length > 0
+        ? { message: 'Fix the highlighted fields to continue.', referenceCode: failure.referenceCode }
+        : failure);
+      this.toast('error', creating ? WORKSPACE_COPY.toast.createFailed : WORKSPACE_COPY.toast.updateFailed,
+        failure.referenceCode);
+      return false;
+    } finally {
+      if (generation === this.generation) this.saving.set(false);
+    }
+  }
+
+  async suspendSelected(): Promise<void> {
+    const ids = this.selectedRecords().map(record => record.id);
+    if (ids.length === 0 || this.busy()) return;
+    const generation = this.generation;
+    this.bulkBusy.set(true);
+    try {
+      const updated = await this.request(this.data.setStatus(ids, 'Suspended'));
+      if (generation !== this.generation) return;
+      const byId = new Map(updated.map(record => [record.id, record]));
+      this.records.update(records => records.map(record => byId.get(record.id) ?? record));
+      this.clearSelection();
+      this.toast('success', WORKSPACE_COPY.toast.suspended);
+    } catch (error: unknown) {
+      if (generation === this.generation) {
+        this.toast('error', WORKSPACE_COPY.toast.suspendFailed, toFailure(error, '').referenceCode);
+      }
+    } finally {
+      if (generation === this.generation) this.bulkBusy.set(false);
+    }
+  }
+
+  requestDelete(records: readonly WorkspaceRecord[]): void {
+    if (records.length === 0 || this.busy()) return;
+    this.deleteFailure.set(null);
+    this.deleteRequest.set(records);
+  }
+
+  cancelDelete(): void {
+    if (this.deleting()) return;
+    this.deleteRequest.set(null);
+    this.deleteFailure.set(null);
+  }
+
+  /** Returns true when the records were deleted. */
+  async confirmDelete(): Promise<boolean> {
+    const records = this.deleteRequest();
+    if (!records || this.deleting()) return false;
+    const generation = this.generation;
+    const ids = records.map(record => record.id);
+    this.deleting.set(true);
+    this.deleteFailure.set(null);
+    try {
+      await this.request(this.data.remove(ids));
+      if (generation !== this.generation) return false;
+      this.records.update(current => current.filter(record => !ids.includes(record.id)));
+      this.pruneSelection();
+      const drawer = this.drawer();
+      if ((drawer.mode === 'read' || drawer.mode === 'edit') && ids.includes(drawer.id)) {
+        this.drawer.set({ mode: 'closed' });
+        this.resetForm();
+      }
+      this.deleteRequest.set(null);
+      this.recentlyDeleted.set(records);
+      this.toast('success', records.length > 1 ? WORKSPACE_COPY.toast.deletedMany : WORKSPACE_COPY.toast.deleted);
+      return true;
+    } catch (error: unknown) {
+      if (generation !== this.generation) return false;
+      const failure = toFailure(error, 'The workspaces could not be deleted.');
+      this.deleteFailure.set(failure);
+      this.toast('error', WORKSPACE_COPY.toast.deleteFailed, failure.referenceCode);
+      return false;
+    } finally {
+      if (generation === this.generation) this.deleting.set(false);
+    }
+  }
+
+  /** Mock-only restore of the most recent deletion. No backend restore exists yet. */
+  async restoreDeleted(): Promise<void> {
+    const records = this.recentlyDeleted();
+    if (!records || this.busy()) return;
+    const generation = this.generation;
+    this.bulkBusy.set(true);
+    try {
+      const restored = await this.request(this.data.restore(records.map(record => record.id)));
+      if (generation !== this.generation) return;
+      this.records.update(current => [...restored, ...current]);
+      this.recentlyDeleted.set(null);
+      this.toast('success', WORKSPACE_COPY.toast.restored);
+    } catch (error: unknown) {
+      if (generation === this.generation) {
+        this.toast('error', WORKSPACE_COPY.toast.restoreFailed, toFailure(error, '').referenceCode);
+      }
+    } finally {
+      if (generation === this.generation) this.bulkBusy.set(false);
+    }
+  }
+
+  dismissRecentlyDeleted(): void {
+    this.recentlyDeleted.set(null);
+  }
+
+  /** Mock-only export. It reports a count and never produces a file. */
+  async exportRecords(scope: 'selected' | 'filtered'): Promise<void> {
+    const source = scope === 'selected' ? this.selectedRecords() : this.filtered();
+    if (this.busy()) return;
+    const generation = this.generation;
+    this.bulkBusy.set(true);
+    try {
+      await this.request(this.data.exportRecords(source.map(record => record.id)));
+      if (generation === this.generation) this.toast('success', WORKSPACE_COPY.toast.exported);
+    } catch (error: unknown) {
+      if (generation === this.generation) {
+        this.toast('error', WORKSPACE_COPY.toast.exportFailed, toFailure(error, '').referenceCode);
+      }
+    } finally {
+      if (generation === this.generation) this.bulkBusy.set(false);
+    }
+  }
+
+  /** Mock-only. No audit export exists in any backend yet. */
+  exportAuditLog(): void {
+    this.toast('success', WORKSPACE_COPY.toast.auditExported);
+  }
+
+  toast(severity: 'success' | 'error' | 'info', summary: string, detail?: string): void {
+    this.messages.add({
+      key: WORKSPACE_TOAST_KEY, severity, summary,
+      detail: detail ? 'Reference: ' + detail : undefined,
+      life: TOAST_LIFE_MS,
+    });
+  }
+
+  private async loadDetail(id: string): Promise<void> {
+    const generation = this.generation;
+    const sequence = ++this.detailSequence;
+    this.detailLoading.set(true);
+    this.detailFailure.set(null);
+    this.members.set([]);
+    this.audit.set([]);
+    try {
+      const [members, audit] = await Promise.all([
+        this.request(this.data.members(id)),
+        this.request(this.data.audit(id)),
+      ]);
+      if (generation !== this.generation || sequence !== this.detailSequence) return;
+      this.members.set(members);
+      this.audit.set(audit);
+    } catch (error: unknown) {
+      if (generation !== this.generation || sequence !== this.detailSequence) return;
+      const failure = toFailure(error, 'Members and audit history could not be loaded.');
+      this.detailFailure.set(failure);
+      this.toast('error', WORKSPACE_COPY.toast.detailFailed, failure.referenceCode);
+    } finally {
+      if (generation === this.generation && sequence === this.detailSequence) this.detailLoading.set(false);
+    }
+  }
+
+  private pruneSelection(): void {
+    const known = new Set(this.records().map(record => record.id));
+    const current = this.selectedIds();
+    const next = current.filter(id => known.has(id));
+    if (next.length !== current.length) this.selectedIds.set(next);
+  }
+
+  private resetForm(): void {
+    this.saveFailure.set(null);
+    this.fieldErrors.set({});
+  }
+
+  private request<T>(observable: Observable<T>): Promise<T> {
+    return firstValueFrom(observable.pipe(takeUntil(this.cancelled$)));
+  }
+
+  private reset(): void {
+    this.generation++;
+    this.loadSequence++;
+    this.detailSequence++;
+    this.cancelled$.next();
+    this.cancelled$.complete();
+    this.cancelled$ = new Subject<void>();
+    this.records.set([]);
+    this.loadStatus.set('idle');
+    this.loadFailure.set(null);
+    this.filters.set(EMPTY_FILTERS);
+    this.selectedIds.set([]);
+    this.drawer.set({ mode: 'closed' });
+    this.saving.set(false);
+    this.resetForm();
+    this.members.set([]);
+    this.audit.set([]);
+    this.detailLoading.set(false);
+    this.detailFailure.set(null);
+    this.deleteRequest.set(null);
+    this.deleting.set(false);
+    this.deleteFailure.set(null);
+    this.bulkBusy.set(false);
+    this.recentlyDeleted.set(null);
+  }
+}
+
+function applyFilters(records: readonly WorkspaceRecord[], filters: WorkspaceFilters): readonly WorkspaceRecord[] {
+  const term = filters.search.trim().toLowerCase();
+  return records.filter(record =>
+    (!term || (record.name + ' ' + record.code + ' ' + record.owner).toLowerCase().includes(term))
+    && (!filters.status || record.status === filters.status)
+    && (!filters.plan || record.plan === filters.plan));
+}
+
+function toFailure(error: unknown, fallback: string): WorkspaceFailure {
+  if (error instanceof WorkspaceRecordsError) return { message: error.message, referenceCode: error.referenceCode };
+  return { message: fallback, referenceCode: UNKNOWN_REFERENCE };
+}
+{{ end }}

@@ -1,0 +1,59 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { DatePipe } from '@angular/common';
+import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ButtonModule } from 'primeng/button';
+import { SkeletonModule } from 'primeng/skeleton';
+import { TabsModule } from 'primeng/tabs';
+import {
+  WorkspaceAuditEvent, WorkspaceDetailTab, WorkspaceMember, WorkspaceRecord,
+} from '../../contracts/workspace-record.model';
+import { WorkspaceFailure } from '../../state/workspace-records.state';
+
+const TABS: readonly WorkspaceDetailTab[] = ['overview', 'members', 'audit'];
+
+@Component({
+  selector: 'domain-workspace-detail',
+  standalone: true,
+  imports: [DatePipe, ButtonModule, SkeletonModule, TabsModule],
+  templateUrl: './workspace-detail.component.html',
+  styleUrl: './workspace-detail.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class WorkspaceDetailComponent {
+  readonly record = input.required<WorkspaceRecord>();
+  readonly tab = input<WorkspaceDetailTab>('overview');
+  readonly members = input<readonly WorkspaceMember[]>([]);
+  readonly audit = input<readonly WorkspaceAuditEvent[]>([]);
+  readonly loading = input(false);
+  readonly failure = input<WorkspaceFailure | null>(null);
+  readonly busy = input(false);
+  readonly tabChange = output<WorkspaceDetailTab>();
+  readonly edit = output<void>();
+  readonly remove = output<void>();
+  readonly exportAudit = output<void>();
+
+  protected readonly placeholderRows = [1, 2, 3];
+
+  protected onTab(value: string | number | undefined): void {
+    const tab = TABS.find(candidate => candidate === value);
+    if (tab) this.tabChange.emit(tab);
+  }
+}
+{{ end }}

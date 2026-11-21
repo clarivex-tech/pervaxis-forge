@@ -1,0 +1,110 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { DOMAIN_OPTIONS, DOMAIN_SESSION_STATE } from '@forge/ui-contracts/v1';
+import { MOCK_WORKSPACE_LATENCY_MS } from '../../sources/mock-workspace-records.data';
+import { provideWorkspaceRecords } from '../../sources/workspace-records.providers';
+import { WorkspaceRecordsComponent } from './workspace-records.component';
+
+async function settle(fixture: ComponentFixture<unknown>): Promise<void> {
+  fixture.detectChanges();
+  await fixture.whenStable();
+  await new Promise(resolve => setTimeout(resolve, 30));
+  fixture.detectChanges();
+}
+
+async function until(fixture: ComponentFixture<unknown>, condition: () => boolean): Promise<void> {
+  for (let attempt = 0; attempt < 60; attempt++) {
+    await settle(fixture);
+    if (condition()) return;
+  }
+  throw new Error('Timed out waiting for the Workspaces page.');
+}
+
+function configure(mode: string): ComponentFixture<WorkspaceRecordsComponent> {
+  TestBed.configureTestingModule({
+    imports: [WorkspaceRecordsComponent],
+    providers: [
+      provideWorkspaceRecords(),
+      { provide: DOMAIN_OPTIONS, useValue: { workspaceRecordsMode: mode } },
+      { provide: MOCK_WORKSPACE_LATENCY_MS, useValue: 0 },
+      { provide: DOMAIN_SESSION_STATE, useValue: { registerUntilDestroyed: () => undefined } },
+    ],
+  });
+  return TestBed.createComponent(WorkspaceRecordsComponent);
+}
+
+describe('WorkspaceRecordsComponent', () => {
+  afterEach(() => TestBed.resetTestingModule());
+
+  describe('in explicit mock mode', () => {
+    let fixture: ComponentFixture<WorkspaceRecordsComponent>;
+    let root: HTMLElement;
+
+    beforeEach(async () => {
+      fixture = configure('mock');
+      root = fixture.nativeElement as HTMLElement;
+      await until(fixture, () => root.querySelectorAll('.ag-row').length > 0);
+    });
+
+    it('labels the data as mock and shows the page header, summary cards and grid rows', () => {
+      expect(root.querySelector('h1')?.textContent).toContain('Workspaces');
+      expect(root.querySelector('.mock-banner')?.textContent).toContain('Mock data');
+      expect(root.querySelectorAll('.kpi').length).toBe(4);
+      expect(root.querySelector('.kpi dd')?.textContent?.trim()).toBe('14');
+      expect(root.querySelector('[role="grid"], [role="treegrid"]')).not.toBeNull();
+    });
+
+    it('opens the create drawer with grouped required fields and reports inline validation errors', async () => {
+      const create = Array.from(root.querySelectorAll('button')).find(button => button.textContent?.includes('New workspace'));
+      create?.click();
+      await until(fixture, () => document.getElementById('workspace-form-name') !== null);
+      expect(document.querySelectorAll('.workspace-drawer fieldset legend').length).toBeGreaterThanOrEqual(3);
+      const submit = document.querySelector<HTMLButtonElement>('.workspace-drawer button[type="submit"]') as HTMLButtonElement;
+      submit.click();
+      await settle(fixture);
+      expect(document.querySelector('.workspace-drawer .error-summary')?.textContent).toContain('Enter a workspace name.');
+      expect(document.getElementById('workspace-form-name-error')?.textContent).toContain('Enter a workspace name.');
+      expect(document.getElementById('workspace-form-name')?.getAttribute('aria-invalid')).toBe('true');
+    });
+
+    it('filters from the toolbar and shows a removable chip and the no-results state', async () => {
+      const search = root.querySelector<HTMLInputElement>('#workspace-search') as HTMLInputElement;
+      search.value = 'zzz-no-match';
+      search.dispatchEvent(new Event('input'));
+      await settle(fixture);
+      expect(root.querySelector('.chips')?.textContent).toContain('Search: zzz-no-match');
+      expect(root.querySelector('.state h2')?.textContent).toContain('No matching workspaces');
+      const clear = Array.from(root.querySelectorAll('button')).find(button => button.textContent?.includes('Clear filters'));
+      clear?.click();
+      await until(fixture, () => root.querySelectorAll('.ag-row').length > 0);
+      expect(root.querySelector('.chips')).toBeNull();
+    });
+  });
+
+  it('shows a visible error instead of mock data when mock mode is not explicitly configured', async () => {
+    const fixture = configure('live');
+    const root = fixture.nativeElement as HTMLElement;
+    await until(fixture, () => root.querySelector('.state--error') !== null);
+    expect(root.querySelector('.mock-banner')).toBeNull();
+    expect(root.querySelectorAll('.ag-row').length).toBe(0);
+    expect(root.querySelector('.state--error')?.textContent).toContain('ERR-WS-UNCONFIGURED');
+  });
+});
+{{ end }}

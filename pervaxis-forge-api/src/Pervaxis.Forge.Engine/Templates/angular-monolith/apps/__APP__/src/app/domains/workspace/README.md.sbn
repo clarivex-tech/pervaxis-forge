@@ -13,8 +13,27 @@ the runtime API origin and bearer authentication. Do not copy tokens, host impor
 selectors into this domain.
 
 The generated REST API must separately include Workspace Tasks and its PostgreSQL migration. The
-domain never uses mock data. See the generated REST print's Workspace Tasks reference for the API
-contract, ownership rules, and deployment/migration prerequisites.
+Tasks screen never uses mock data and never falls back to it. See the generated REST print's
+Workspace Tasks reference for the API contract, ownership rules, and deployment/migration
+prerequisites.
+
+## Workspaces CRUDA reference screen (mock data)
+
+`/workspace/workspaces` is the reusable list/create/read/update/delete reference screen for future
+domain modules. It is UI-first: no Workspaces API, database or AWS resource exists yet. Records,
+Members, the Audit timeline, export and restore are all simulated in the browser and are labelled
+"mock" in the UI.
+
+- The data source is chosen only by the public option `workspaceRecordsMode` in
+  `domain.config.json`. `mock` selects the in-browser mock. Any other value selects a source that
+  fails visibly with a reference code. Mock data is never a fallback for API or authentication errors.
+- Screens talk to the `WorkspaceRecordsData` port (`workspaces/sources`). A live implementation
+  replaces the mock by providing that port; components and state do not change.
+- Everything lives under `workspaces/`: contracts, constants, data, route-scoped Signals state,
+  components (AG Grid Community grid, drawer, form, detail, delete dialog) and the page. It uses
+  PrimeNG, AG Grid Community, the shared `--color-*` theme tokens and `@forge/ui-contracts/v1` only.
+- To reuse the pattern, copy `workspaces/`, rename the record types, columns and copy, and register a
+  route that calls `provideWorkspaceRecords()` (rename it to match your module).
 
 The domain owns its request/response contracts, API client, route-scoped Signals state, task editor,
 tests, and these usage notes. It uses only relative URLs and public V1 contracts so the complete

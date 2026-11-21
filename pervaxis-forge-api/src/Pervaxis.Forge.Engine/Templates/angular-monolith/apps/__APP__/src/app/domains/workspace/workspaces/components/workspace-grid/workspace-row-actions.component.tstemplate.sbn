@@ -1,0 +1,74 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { ChangeDetectionStrategy, Component, signal } from '@angular/core';
+import { ButtonModule } from 'primeng/button';
+import { WorkspaceRecord } from '../../contracts/workspace-record.model';
+
+export interface WorkspaceRowActionCallbacks {
+  readonly onEdit: (record: WorkspaceRecord) => void;
+  readonly onDelete: (record: WorkspaceRecord) => void;
+}
+
+interface RowActionParams extends WorkspaceRowActionCallbacks {
+  readonly data?: WorkspaceRecord;
+}
+
+/** AG Grid cell renderer with the per-row Edit and Delete buttons. */
+@Component({
+  selector: 'domain-workspace-row-actions',
+  standalone: true,
+  imports: [ButtonModule],
+  template: `
+    @if (record(); as row) {
+      <div class="row-actions">
+        <p-button label="Edit" size="small" [text]="true" [ariaLabel]="'Edit ' + row.name" (onClick)="edit(row)" />
+        <p-button label="Delete" size="small" [text]="true" severity="danger" [ariaLabel]="'Delete ' + row.name" (onClick)="remove(row)" />
+      </div>
+    }
+  `,
+  styles: [`
+    :host { display: flex; align-items: center; height: 100%; }
+    .row-actions { display: flex; gap: 0.125rem; justify-content: flex-end; align-items: center; width: 100%; }
+  `],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class WorkspaceRowActionsComponent {
+  protected readonly record = signal<WorkspaceRecord | null>(null);
+  private callbacks: WorkspaceRowActionCallbacks | null = null;
+
+  agInit(params: RowActionParams): void {
+    this.callbacks = params;
+    this.record.set(params.data ?? null);
+  }
+
+  refresh(params: RowActionParams): boolean {
+    this.callbacks = params;
+    this.record.set(params.data ?? null);
+    return true;
+  }
+
+  protected edit(record: WorkspaceRecord): void {
+    this.callbacks?.onEdit(record);
+  }
+
+  protected remove(record: WorkspaceRecord): void {
+    this.callbacks?.onDelete(record);
+  }
+}
+{{ end }}

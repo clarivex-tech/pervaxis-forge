@@ -19,6 +19,7 @@
 import { Routes } from '@angular/router';
 import { WorkspaceTaskApi } from './tasks/api/workspace-task.api';
 import { WorkspaceTaskState } from './tasks/state/workspace-task.state';
+import { provideWorkspaceRecords } from './workspaces/sources/workspace-records.providers';
 
 export const DOMAIN_ROUTES: Routes = [
   { path: '', pathMatch: 'full', redirectTo: 'tasks' },
@@ -26,6 +27,11 @@ export const DOMAIN_ROUTES: Routes = [
     path: 'tasks',
     providers: [WorkspaceTaskApi, WorkspaceTaskState],
     loadComponent: () => import('./tasks/pages/my-tasks/my-tasks.component').then(module => module.MyTasksComponent),
+  },
+  {
+    path: 'workspaces',
+    providers: provideWorkspaceRecords(),
+    loadComponent: () => import('./workspaces/pages/workspace-records/workspace-records.component').then(module => module.WorkspaceRecordsComponent),
   },
 ];
 {{ end }}

@@ -1,0 +1,47 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+/**
+ * Remembers the element that opened a drawer or dialog so focus can return to it when the overlay
+ * closes. When that element no longer exists (for example its row was deleted), a fallback runs.
+ */
+export class FocusReturn {
+  private target: HTMLElement | null = null;
+
+  capture(document: Document): void {
+    const active = document.activeElement;
+    this.target = active instanceof HTMLElement && active !== document.body ? active : null;
+  }
+
+  /** Forgets the remembered element without moving focus. */
+  clear(): void {
+    this.target = null;
+  }
+
+  restore(fallback?: () => void): void {
+    const target = this.target;
+    this.target = null;
+    if (target?.isConnected) {
+      target.focus();
+    } else {
+      fallback?.();
+    }
+  }
+}
+{{ end }}

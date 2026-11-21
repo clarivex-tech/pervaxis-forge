@@ -114,6 +114,8 @@ export class DomainNavigationService {
     .filter(({ manifest }) => this.auth.isAuthenticated() && this.tenant.claimStatus() === 'valid'
       && manifest.permissions.every(permission => this.auth.hasPermission(permission)))
 {{ end }}
-    .map(({ manifest }) => ({ label: manifest.displayName, icon: manifest.icon,
-      routerLink: '/' + manifest.id + (manifest.navigationPath ? '/' + manifest.navigationPath : '') })));
+    .flatMap(({ manifest }) => manifest.navigationItems?.length
+      ? manifest.navigationItems.map(item => ({ label: item.label, icon: item.icon, routerLink: '/' + manifest.id + '/' + item.path }))
+      : [{ label: manifest.displayName, icon: manifest.icon,
+        routerLink: '/' + manifest.id + (manifest.navigationPath ? '/' + manifest.navigationPath : '') }]));
 }

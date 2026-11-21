@@ -1,0 +1,97 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+<form class="form" [formGroup]="form" (ngSubmit)="submit()" novalidate [attr.aria-busy]="saving()">
+  <div class="form__body">
+    <p class="form__legend-note"><span class="required-mark" aria-hidden="true">*</span> Required field</p>
+
+    @if (showSummary()) {
+      <div #summary class="error-summary" role="alert" tabindex="-1" aria-labelledby="workspace-form-summary-title">
+        <p id="workspace-form-summary-title" class="error-summary__title"
+           [textContent]="failure()?.message ?? ('Fix ' + issues().length + ' field' + (issues().length === 1 ? '' : 's') + ' to continue.')"></p>
+        @if (failure(); as problem) {
+          <p class="error-summary__reference" [textContent]="'Reference: ' + problem.referenceCode"></p>
+        }
+        @if (issues().length > 0) {
+          <ul class="error-summary__list">
+            @for (issue of issues(); track issue.field) {
+              <li>
+                <button type="button" class="link-button" (click)="focusField(issue.field)">
+                  <span [textContent]="issue.label"></span>: <span [textContent]="issue.message"></span>
+                </button>
+              </li>
+            }
+          </ul>
+        }
+      </div>
+    }
+
+    <fieldset class="group" [disabled]="saving()">
+      <legend>General</legend>
+
+      <div class="field" [class.field--invalid]="fieldInvalid('name')">
+        <label for="workspace-form-name">Workspace name <span class="required-mark" aria-hidden="true">*</span><span class="sr-only"> (required)</span></label>
+        <input id="workspace-form-name" pInputText type="text" formControlName="name" autocomplete="off" data-autofocus
+               [attr.aria-invalid]="fieldInvalid('name')"
+               aria-describedby="workspace-form-name-hint workspace-form-name-error" (blur)="touched()" />
+        <small id="workspace-form-name-hint" class="hint" [textContent]="'Shown across the product. ' + nameMin + ' to ' + nameMax + ' characters.'"></small>
+        <small id="workspace-form-name-error" class="error" [attr.role]="fieldInvalid('name') ? 'alert' : null" [textContent]="errors().name ?? ''"></small>
+      </div>
+
+      <div class="row">
+        <div class="field" [class.field--invalid]="fieldInvalid('code')">
+          <label for="workspace-form-code">Code <span class="required-mark" aria-hidden="true">*</span><span class="sr-only"> (required)</span></label>
+          <input id="workspace-form-code" pInputText type="text" formControlName="code" autocomplete="off" maxlength="7"
+                 [attr.aria-invalid]="fieldInvalid('code')"
+                 aria-describedby="workspace-form-code-hint workspace-form-code-error"
+                 (input)="uppercaseCode($event)" (blur)="touched()" />
+          <small id="workspace-form-code-hint" class="hint"
+                 [textContent]="editing() ? 'The code cannot be changed after creation.' : 'Unique, for example FIN-001. Cannot change later.'"></small>
+          <small id="workspace-form-code-error" class="error" [attr.role]="fieldInvalid('code') ? 'alert' : null" [textContent]="errors().code ?? ''"></small>
+        </div>
+
+        <div class="field" [class.field--invalid]="fieldInvalid('owner')">
+          <label for="workspace-form-owner">Owner <span class="required-mark" aria-hidden="true">*</span><span class="sr-only"> (required)</span></label>
+          <input id="workspace-form-owner" pInputText type="text" formControlName="owner" autocomplete="off"
+                 [attr.aria-invalid]="fieldInvalid('owner')"
+                 aria-describedby="workspace-form-owner-hint workspace-form-owner-error" (blur)="touched()" />
+          <small id="workspace-form-owner-hint" class="hint">The person accountable for this workspace.</small>
+          <small id="workspace-form-owner-error" class="error" [attr.role]="fieldInvalid('owner') ? 'alert' : null" [textContent]="errors().owner ?? ''"></small>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="group" [disabled]="saving()">
+      <legend>Plan and access</legend>
+      <div class="row">
+        <div class="field">
+          <label for="workspace-form-plan">Plan</label>
+          <p-select inputId="workspace-form-plan" formControlName="plan" [options]="plans" appendTo="body" />
+          <small class="hint">Controls limits and included features.</small>
+        </div>
+        <div class="field">
+          <label for="workspace-form-status">Status</label>
+          <p-select inputId="workspace-form-status" formControlName="status" [options]="statuses" appendTo="body" />
+          <small class="hint">Suspended workspaces stay visible but read-only.</small>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="group" [disabled]="saving()">
+      <legend>Details</legend>
+      <div class="field" [class.field--invalid]="fieldInvalid('description')">
+        <label for="workspace-form-description">Description <span class="optional">(optional)</span></label>
+        <textarea id="workspace-form-description" pTextarea formControlName="description" rows="3"
+                  [attr.aria-invalid]="fieldInvalid('description')"
+                  aria-describedby="workspace-form-description-hint workspace-form-description-error" (blur)="touched()"></textarea>
+        <small id="workspace-form-description-hint" class="hint" [textContent]="'Up to ' + descriptionMax + ' characters.'"></small>
+        <small id="workspace-form-description-error" class="error" [attr.role]="fieldInvalid('description') ? 'alert' : null" [textContent]="errors().description ?? ''"></small>
+      </div>
+    </fieldset>
+  </div>
+
+  <footer class="form__footer">
+    <p-button type="button" label="Cancel" severity="secondary" [outlined]="true" [disabled]="saving()" (onClick)="cancelled.emit()" />
+    <p-button type="submit" [label]="saving() ? 'Saving...' : (editing() ? 'Save changes' : 'Create workspace')"
+              [loading]="saving()" [disabled]="saving()" />
+  </footer>
+</form>
+{{ end }}

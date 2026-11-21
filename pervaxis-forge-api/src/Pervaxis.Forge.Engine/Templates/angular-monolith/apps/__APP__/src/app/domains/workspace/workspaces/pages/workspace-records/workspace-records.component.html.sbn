@@ -1,0 +1,152 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+<section class="workspaces" aria-labelledby="workspaces-heading" [attr.aria-busy]="state.viewState() === 'loading'">
+  <!-- 1. Page header: breadcrumb, title, description, primary action -->
+  <nav class="crumbs" aria-label="Breadcrumb">
+    <ol>
+      <li>Workspace</li>
+      <li aria-current="page">Workspaces</li>
+    </ol>
+  </nav>
+  <header class="page-header">
+    <div>
+      <h1 #heading id="workspaces-heading" tabindex="-1">Workspaces</h1>
+      <p class="intro">Group users, data and settings for a team or project.</p>
+    </div>
+    <p-button label="New workspace" icon="pi pi-plus" [disabled]="state.busy() || state.viewState() === 'denied'" (onClick)="create()" />
+  </header>
+
+  @if (state.dataSource === 'mock') {
+    <p class="mock-banner" role="note"><i class="pi pi-info-circle" aria-hidden="true"></i><span><strong>Mock data.</strong>&nbsp;<span [textContent]="copy.mockBanner"></span></span></p>
+    <domain-workspace-mock-controls />
+  }
+
+  <!-- 2. Summary cards -->
+  <dl class="kpis" aria-label="Workspace summary">
+    <div class="kpi"><dt>Total workspaces</dt><dd [textContent]="summaryValue() ? state.summary().total : '-'"></dd></div>
+    <div class="kpi"><dt>Active</dt><dd [textContent]="summaryValue() ? state.summary().active : '-'"></dd></div>
+    <div class="kpi"><dt>Suspended</dt><dd [textContent]="summaryValue() ? state.summary().suspended : '-'"></dd></div>
+    <div class="kpi"><dt>Members assigned</dt><dd [textContent]="summaryValue() ? state.summary().members : '-'"></dd></div>
+  </dl>
+
+  <section class="panel" aria-label="Workspace list">
+    <!-- 3. Toolbar: search, filters, export, refresh -->
+    <div class="toolbar" role="search">
+      <div class="toolbar__search">
+        <label class="sr-only" for="workspace-search">Search workspaces</label>
+        <input id="workspace-search" pInputText type="search" placeholder="Search by name, code or owner" autocomplete="off"
+               [value]="state.filters().search" [disabled]="controlsDisabled()" (input)="onSearch($event)" />
+      </div>
+      <div class="toolbar__filter">
+        <label class="sr-only" for="workspace-status-filter">Filter by status</label>
+        <p-select inputId="workspace-status-filter" [options]="statuses" placeholder="All statuses" [showClear]="true"
+                  [ngModel]="state.filters().status || null" [disabled]="controlsDisabled()" (ngModelChange)="onStatus($event)" appendTo="body" />
+      </div>
+      <div class="toolbar__filter">
+        <label class="sr-only" for="workspace-plan-filter">Filter by plan</label>
+        <p-select inputId="workspace-plan-filter" [options]="plans" placeholder="All plans" [showClear]="true"
+                  [ngModel]="state.filters().plan || null" [disabled]="controlsDisabled()" (ngModelChange)="onPlan($event)" appendTo="body" />
+      </div>
+      <span class="toolbar__spacer"></span>
+      <p-button label="Export (mock)" icon="pi pi-download" severity="secondary" [outlined]="true"
+                ariaLabel="Export workspaces. Mock only, no file is generated."
+                [disabled]="controlsDisabled() || state.busy()" (onClick)="state.exportRecords('filtered')" />
+      <p-button icon="pi pi-refresh" severity="secondary" [text]="true" ariaLabel="Refresh workspaces"
+                [disabled]="state.viewState() === 'loading' || state.busy()" (onClick)="state.refresh()" />
+    </div>
+    <p class="sr-only" role="status" aria-live="polite" [textContent]="announcement()"></p>
+
+    @if (state.chips().length > 0) {
+      <div class="chips" role="group" aria-label="Active filters">
+        <span class="chips__label">Filters:</span>
+        @for (chip of state.chips(); track chip.key) {
+          <span class="chip">
+            <span [textContent]="chip.label"></span>
+            <button type="button" [attr.aria-label]="'Remove filter ' + chip.label" (click)="removeChip(chip.key)"><i class="pi pi-times" aria-hidden="true"></i></button>
+          </span>
+        }
+      </div>
+    }
+
+    <!-- 4. Bulk action bar -->
+    @if (state.selectedRecords().length > 0) {
+      <div class="bulk" role="region" aria-label="Bulk actions">
+        <strong [textContent]="state.selectedRecords().length + ' selected'"></strong>
+        <p-button label="Suspend" size="small" severity="secondary" [outlined]="true" [disabled]="state.busy()" (onClick)="state.suspendSelected()" />
+        <p-button label="Export (mock)" size="small" severity="secondary" [outlined]="true" [disabled]="state.busy()" (onClick)="state.exportRecords('selected')" />
+        <p-button label="Delete" size="small" severity="danger" [disabled]="state.busy()" (onClick)="requestDelete(state.selectedRecords())" />
+        <p-button label="Clear selection" size="small" [text]="true" (onClick)="state.clearSelection()" />
+      </div>
+    }
+
+    @if (state.recentlyDeleted(); as deleted) {
+      <div class="undo" role="status">
+        <span [textContent]="deleted.length + (deleted.length === 1 ? ' workspace' : ' workspaces') + ' deleted (mock).'"></span>
+        <p-button label="Restore (mock)" size="small" severity="secondary" [outlined]="true" [disabled]="state.busy()" (onClick)="state.restoreDeleted()" />
+        <p-button label="Dismiss" size="small" [text]="true" (onClick)="state.dismissRecentlyDeleted()" />
+      </div>
+    }
+
+    <!-- 5. Data states and AG Grid table with pagination -->
+    @switch (state.viewState()) {
+      @case ('loading') {
+        <div class="skeleton" role="status" aria-label="Loading workspaces">
+          @for (row of skeletonRows; track row) { <p-skeleton height="1.1rem" /> }
+        </div>
+      }
+      @case ('empty') {
+        <div class="state" role="status">
+          <h2>No workspaces yet</h2>
+          <p>Create your first workspace to start grouping users and data.</p>
+          <p-button label="New workspace" icon="pi pi-plus" [disabled]="state.busy()" (onClick)="create()" />
+        </div>
+      }
+      @case ('no-results') {
+        <div class="state" role="status">
+          <h2>No matching workspaces</h2>
+          <p>Try a different search term or clear the filters.</p>
+          <p-button label="Clear filters" severity="secondary" [outlined]="true" (onClick)="state.clearFilters()" />
+        </div>
+      }
+      @case ('error') {
+        <div class="state state--error" role="alert">
+          <h2>Couldn&rsquo;t load workspaces</h2>
+          <p [textContent]="state.loadFailure()?.message ?? 'Workspaces could not be loaded.'"></p>
+          <p class="reference" [textContent]="'Reference: ' + (state.loadFailure()?.referenceCode ?? 'ERR-WS-UNKNOWN')"></p>
+          <p-button label="Try again" icon="pi pi-refresh" (onClick)="state.load()" />
+        </div>
+      }
+      @case ('denied') {
+        <div class="state" role="alert">
+          <h2>You don&rsquo;t have access to Workspaces</h2>
+          <p>Ask a tenant administrator to grant the Workspace viewer role.</p>
+          <p class="reference" [textContent]="'Reference: ' + (state.loadFailure()?.referenceCode ?? 'ERR-WS-4031')"></p>
+        </div>
+      }
+      @case ('ready') {
+        <domain-workspace-grid
+          [rows]="state.filtered()"
+          [selectedIds]="state.selectedIds()"
+          (selectionChange)="state.setSelection($event)"
+          (open)="open($event)"
+          (edit)="edit($event)"
+          (remove)="requestDelete([$event])" />
+      }
+    }
+  </section>
+
+  <!-- 6. Create, edit and read drawer -->
+  <domain-workspace-drawer (closed)="onDrawerClosed()" (deleteRequested)="requestDelete([$event])" />
+
+  <!-- 7. Delete confirmation -->
+  <domain-workspace-delete-dialog
+    [records]="state.deleteRequest()"
+    [busy]="state.deleting()"
+    [failure]="state.deleteFailure()"
+    (confirmed)="confirmDelete()"
+    (cancelled)="cancelDelete()"
+    (hidden)="onDeleteDialogHidden()" />
+
+  <!-- 8. Toasts -->
+  <p-toast [key]="toastKey" position="bottom-center" />
+</section>
+{{ end }}

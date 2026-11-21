@@ -1,0 +1,231 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import {
+  ChangeDetectionStrategy, Component, ElementRef, Injector, afterNextRender, computed, effect, inject, input, output,
+  signal, untracked, viewChild,
+} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { AbstractControl, FormControl, FormGroup, ReactiveFormsModule, ValidationErrors, ValidatorFn, Validators } from '@angular/forms';
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
+import { TextareaModule } from 'primeng/textarea';
+import { merge } from 'rxjs';
+import {
+  WORKSPACE_CODE_PATTERN, WORKSPACE_DESCRIPTION_MAX_LENGTH, WORKSPACE_NAME_MAX_LENGTH, WORKSPACE_NAME_MIN_LENGTH,
+  WORKSPACE_OWNER_MAX_LENGTH, WORKSPACE_PLANS, WORKSPACE_STATUSES,
+} from '../../constants/workspace-record.constants';
+import {
+  WorkspaceDraft, WorkspaceFieldErrors, WorkspaceFieldName, WorkspacePlan, WorkspaceRecord, WorkspaceStatus,
+} from '../../contracts/workspace-record.model';
+import { WorkspaceFailure } from '../../state/workspace-records.state';
+
+const trimmedRequired: ValidatorFn = control => typeof control.value === 'string' && control.value.trim().length > 0
+  ? null
+  : ({ required: true } satisfies ValidationErrors);
+
+const trimmedLength = (min: number, max: number): ValidatorFn => control => {
+  const length = typeof control.value === 'string' ? control.value.trim().length : 0;
+  if (length === 0) return null;
+  return length < min || length > max ? ({ length: true } satisfies ValidationErrors) : null;
+};
+
+const FIELD_ORDER: readonly WorkspaceFieldName[] = ['name', 'code', 'owner', 'plan', 'status', 'description'];
+const FIELD_LABEL: Readonly<Record<WorkspaceFieldName, string>> = {
+  name: 'Workspace name', code: 'Code', owner: 'Owner', plan: 'Plan', status: 'Status', description: 'Description',
+};
+
+export interface WorkspaceFormIssue {
+  readonly field: WorkspaceFieldName;
+  readonly label: string;
+  readonly message: string;
+}
+
+@Component({
+  selector: 'domain-workspace-form',
+  standalone: true,
+  imports: [ReactiveFormsModule, ButtonModule, InputTextModule, SelectModule, TextareaModule],
+  templateUrl: './workspace-form.component.html',
+  styleUrl: './workspace-form.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class WorkspaceFormComponent {
+  /** The workspace being edited, or null when creating. */
+  readonly record = input<WorkspaceRecord | null>(null);
+  readonly saving = input(false);
+  readonly failure = input<WorkspaceFailure | null>(null);
+  readonly serverErrors = input<WorkspaceFieldErrors>({});
+  /** Codes already in use. Used for instant duplicate feedback before the server checks. */
+  readonly takenCodes = input<readonly string[]>([]);
+  readonly saveDraft = output<WorkspaceDraft>();
+  readonly cancelled = output<void>();
+
+  protected readonly nameMin = WORKSPACE_NAME_MIN_LENGTH;
+  protected readonly nameMax = WORKSPACE_NAME_MAX_LENGTH;
+  protected readonly ownerMax = WORKSPACE_OWNER_MAX_LENGTH;
+  protected readonly descriptionMax = WORKSPACE_DESCRIPTION_MAX_LENGTH;
+  protected readonly plans = [...WORKSPACE_PLANS];
+  protected readonly statuses = [...WORKSPACE_STATUSES];
+  protected readonly editing = computed(() => this.record() !== null);
+
+  protected readonly form = new FormGroup({
+    name: new FormControl('', { nonNullable: true, validators: [trimmedRequired, trimmedLength(WORKSPACE_NAME_MIN_LENGTH, WORKSPACE_NAME_MAX_LENGTH)] }),
+    code: new FormControl('', { nonNullable: true, validators: [trimmedRequired, Validators.pattern(WORKSPACE_CODE_PATTERN)] }),
+    owner: new FormControl('', { nonNullable: true, validators: [trimmedRequired, Validators.maxLength(WORKSPACE_OWNER_MAX_LENGTH)] }),
+    plan: new FormControl<WorkspacePlan>('Standard', { nonNullable: true }),
+    status: new FormControl<WorkspaceStatus>('Active', { nonNullable: true }),
+    description: new FormControl('', { nonNullable: true, validators: [Validators.maxLength(WORKSPACE_DESCRIPTION_MAX_LENGTH)] }),
+  });
+
+  private readonly injector = inject(Injector);
+  private readonly summary = viewChild<ElementRef<HTMLElement>>('summary');
+  private readonly version = signal(0);
+  private readonly submitted = signal(false);
+  private readonly editedSinceServerError = signal<ReadonlySet<WorkspaceFieldName>>(new Set());
+
+  protected readonly issues = computed<readonly WorkspaceFormIssue[]>(() => {
+    this.version();
+    const submitted = this.submitted();
+    const result: WorkspaceFormIssue[] = [];
+    for (const field of FIELD_ORDER) {
+      const message = this.messageFor(field, submitted);
+      if (message) result.push({ field, label: FIELD_LABEL[field], message });
+    }
+    return result;
+  });
+  protected readonly errors = computed(() => {
+    const map: Partial<Record<WorkspaceFieldName, string>> = {};
+    for (const issue of this.issues()) map[issue.field] = issue.message;
+    return map;
+  });
+  protected readonly showSummary = computed(() =>
+    (this.submitted() && this.issues().length > 0) || this.failure() !== null);
+
+  constructor() {
+    merge(this.form.valueChanges, this.form.statusChanges).pipe(takeUntilDestroyed()).subscribe(() => this.version.update(value => value + 1));
+    for (const field of FIELD_ORDER) {
+      const control: AbstractControl = this.form.controls[field];
+      control.valueChanges.pipe(takeUntilDestroyed()).subscribe(() =>
+        this.editedSinceServerError.update(edited => new Set(edited).add(field)));
+    }
+    effect(() => {
+      const record = this.record();
+      untracked(() => {
+        this.submitted.set(false);
+        this.editedSinceServerError.set(new Set());
+        this.form.reset({
+          name: record?.name ?? '', code: record?.code ?? '', owner: record?.owner ?? '',
+          plan: record?.plan ?? 'Standard', status: record?.status ?? 'Active', description: record?.description ?? '',
+        });
+        if (record) this.form.controls.code.disable({ emitEvent: false });
+        else this.form.controls.code.enable({ emitEvent: false });
+      });
+    });
+    effect(() => {
+      this.serverErrors();
+      untracked(() => this.editedSinceServerError.set(new Set()));
+    });
+    effect(() => {
+      const saving = this.saving();
+      untracked(() => {
+        if (saving) {
+          this.form.disable({ emitEvent: false });
+        } else {
+          this.form.enable({ emitEvent: false });
+          if (this.record()) this.form.controls.code.disable({ emitEvent: false });
+        }
+      });
+    });
+    effect(() => {
+      if (this.failure()) this.focusSummary();
+    });
+  }
+
+  protected fieldInvalid(field: WorkspaceFieldName): boolean {
+    return this.errors()[field] !== undefined;
+  }
+
+  protected touched(): void {
+    this.version.update(value => value + 1);
+  }
+
+  protected uppercaseCode(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const upper = input.value.toUpperCase();
+    if (upper !== input.value) this.form.controls.code.setValue(upper);
+  }
+
+  protected focusField(field: WorkspaceFieldName): void {
+    const element = document.getElementById('workspace-form-' + field);
+    element?.focus();
+  }
+
+  protected submit(): void {
+    this.submitted.set(true);
+    this.form.markAllAsTouched();
+    this.version.update(value => value + 1);
+    if (this.saving()) return;
+    if (this.issues().length > 0) {
+      this.focusSummary();
+      return;
+    }
+    const value = this.form.getRawValue();
+    this.saveDraft.emit({
+      name: value.name.trim(), code: value.code.trim(), owner: value.owner.trim(),
+      plan: value.plan, status: value.status, description: value.description.trim(),
+    });
+  }
+
+  private messageFor(field: WorkspaceFieldName, submitted: boolean): string | null {
+    const control = this.form.controls[field];
+    const show = submitted || control.touched || control.dirty;
+    if (show) {
+      const client = this.clientMessage(field);
+      if (client) return client;
+    }
+    const server = this.serverErrors()[field];
+    return server && !this.editedSinceServerError().has(field) ? server : null;
+  }
+
+  private clientMessage(field: WorkspaceFieldName): string | null {
+    const control = this.form.controls[field];
+    switch (field) {
+      case 'name':
+        if (control.hasError('required')) return 'Enter a workspace name.';
+        return control.hasError('length') ? 'Enter a name with ' + WORKSPACE_NAME_MIN_LENGTH + ' to ' + WORKSPACE_NAME_MAX_LENGTH + ' characters.' : null;
+      case 'code':
+        if (control.disabled) return null;
+        if (control.hasError('required')) return 'Enter a code.';
+        if (control.hasError('pattern')) return 'Use the format ABC-123.';
+        return this.takenCodes().includes(control.value.trim()) ? 'This code is already used. Choose another.' : null;
+      case 'owner':
+        if (control.hasError('required')) return 'Enter an owner.';
+        return control.hasError('maxlength') ? 'The owner cannot exceed ' + WORKSPACE_OWNER_MAX_LENGTH + ' characters.' : null;
+      case 'description':
+        return control.hasError('maxlength') ? 'The description cannot exceed ' + WORKSPACE_DESCRIPTION_MAX_LENGTH + ' characters.' : null;
+      default:
+        return null;
+    }
+  }
+
+  private focusSummary(): void {
+    afterNextRender(() => this.summary()?.nativeElement.focus(), { injector: this.injector });
+  }
+}
+{{ end }}

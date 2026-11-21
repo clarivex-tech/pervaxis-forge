@@ -1,0 +1,76 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+<p-drawer
+  [visible]="visible()"
+  (visibleChange)="onVisibleChange($event)"
+  (onHide)="onHidden()"
+  position="right"
+  [modal]="true"
+  [dismissible]="!state.saving()"
+  [closeOnEscape]="false"
+  [showCloseIcon]="false"
+  [blockScroll]="true"
+  styleClass="workspace-drawer"
+  [dt]="drawerTokens"
+  [style]="{ width: 'min(34rem, 100vw)' }">
+  <ng-template #header>
+    <div class="drawer-header">
+      <div class="drawer-title">
+        <h2 id="workspace-drawer-title" [textContent]="title()"></h2>
+        @if (rendered().mode === 'read' && renderedRecord(); as record) {
+          <div class="drawer-subtitle">
+            <domain-workspace-status-badge [status]="record.status" />
+            <span class="code" [textContent]="record.code"></span>
+          </div>
+        } @else if (rendered().mode === 'edit' && renderedRecord(); as record) {
+          <div class="drawer-subtitle"><span class="code" [textContent]="record.name"></span></div>
+        }
+      </div>
+      <button type="button" class="drawer-close" aria-label="Close panel" [disabled]="state.saving()" (click)="state.closeDrawer()">
+        <i class="pi pi-times" aria-hidden="true"></i>
+      </button>
+    </div>
+  </ng-template>
+
+  <div class="drawer-shell" role="dialog" aria-modal="true" aria-labelledby="workspace-drawer-title">
+    @for (key of [renderKey()]; track key) {
+      @switch (rendered().mode) {
+        @case ('read') {
+          @if (renderedRecord(); as record) {
+            <domain-workspace-detail
+              [record]="record"
+              [tab]="$any(rendered()).tab"
+              [members]="state.members()"
+              [audit]="state.audit()"
+              [loading]="state.detailLoading()"
+              [failure]="state.detailFailure()"
+              [busy]="state.busy()"
+              (tabChange)="state.setTab($event)"
+              (edit)="state.openEdit(record.id, 'read')"
+              (remove)="deleteRequested.emit(record)"
+              (exportAudit)="state.exportAuditLog()" />
+          }
+        }
+        @case ('create') {
+          <domain-workspace-form
+            [saving]="state.saving()"
+            [failure]="state.saveFailure()"
+            [serverErrors]="state.fieldErrors()"
+            [takenCodes]="takenCodes()"
+            (saveDraft)="state.saveDraft($event)"
+            (cancelled)="state.cancelForm()" />
+        }
+        @case ('edit') {
+          <domain-workspace-form
+            [record]="renderedRecord()"
+            [saving]="state.saving()"
+            [failure]="state.saveFailure()"
+            [serverErrors]="state.fieldErrors()"
+            [takenCodes]="takenCodes()"
+            (saveDraft)="state.saveDraft($event)"
+            (cancelled)="state.cancelForm()" />
+        }
+      }
+    }
+  </div>
+</p-drawer>
+{{ end }}

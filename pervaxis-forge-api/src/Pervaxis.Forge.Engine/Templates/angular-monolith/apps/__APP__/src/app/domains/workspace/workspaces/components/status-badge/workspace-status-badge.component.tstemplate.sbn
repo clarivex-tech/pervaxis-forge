@@ -1,0 +1,52 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { WorkspaceStatus } from '../../contracts/workspace-record.model';
+
+/** Status pill. Works as a normal component and as an AG Grid cell renderer. */
+@Component({
+  selector: 'domain-workspace-status-badge',
+  standalone: true,
+  template: `<span class="badge" [class]="'badge badge--' + tone()" [textContent]="value()"></span>`,
+  styles: [`
+    :host { display: inline-flex; align-items: center; }
+    .badge { display: inline-block; padding: 0.1rem 0.6rem; border: 1px solid transparent; border-radius: 999px; font-size: 0.8rem; font-weight: 600; line-height: 1.4; }
+    .badge--active { background: var(--color-success-bg); border-color: var(--color-success-border); color: var(--color-success); }
+    .badge--suspended { background: var(--color-warning-bg); border-color: var(--color-warning-border); color: var(--color-warning); }
+    .badge--archived { background: var(--color-surface-hover); border-color: var(--color-border); color: var(--color-text-muted); }
+  `],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class WorkspaceStatusBadgeComponent {
+  readonly status = input<WorkspaceStatus | null>(null);
+  private readonly fromGrid = signal<WorkspaceStatus | null>(null);
+  protected readonly value = computed(() => this.status() ?? this.fromGrid() ?? '');
+  protected readonly tone = computed(() => this.value().toLowerCase());
+
+  /** AG Grid cell renderer entry points. */
+  agInit(params: { readonly value?: WorkspaceStatus | null }): void {
+    this.fromGrid.set(params.value ?? null);
+  }
+
+  refresh(params: { readonly value?: WorkspaceStatus | null }): boolean {
+    this.fromGrid.set(params.value ?? null);
+    return true;
+  }
+}
+{{ end }}

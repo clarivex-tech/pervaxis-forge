@@ -1,0 +1,218 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { DestroyRef } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { MessageService } from 'primeng/api';
+import { DOMAIN_SESSION_STATE, DomainSessionResetReasonV1 } from '@forge/ui-contracts/v1';
+import { WorkspaceDraft } from '../contracts/workspace-record.model';
+import { MOCK_WORKSPACE_LATENCY_MS, MockWorkspaceRecordsData } from '../sources/mock-workspace-records.data';
+import { UnconfiguredWorkspaceRecordsData } from '../sources/unconfigured-workspace-records.data';
+import { WorkspaceRecordsData } from '../sources/workspace-records.data';
+import { WorkspaceRecordsState } from './workspace-records.state';
+
+const draft: WorkspaceDraft = {
+  name: 'Quality Lab', code: 'QLT-014', owner: 'Rhea Kapoor', plan: 'Professional', status: 'Active', description: '',
+};
+
+describe('WorkspaceRecordsState', () => {
+  let state: WorkspaceRecordsState;
+  let mock: MockWorkspaceRecordsData;
+  let messages: jasmine.Spy;
+  let reset: () => void;
+
+  function configure(source: typeof MockWorkspaceRecordsData | typeof UnconfiguredWorkspaceRecordsData): void {
+    reset = () => undefined;
+    TestBed.configureTestingModule({ providers: [
+      WorkspaceRecordsState, MessageService, MockWorkspaceRecordsData, UnconfiguredWorkspaceRecordsData,
+      { provide: MOCK_WORKSPACE_LATENCY_MS, useValue: 0 },
+      { provide: WorkspaceRecordsData, useExisting: source },
+      { provide: DOMAIN_SESSION_STATE, useValue: {
+        registerUntilDestroyed: (_destroyRef: DestroyRef, listener: (reason: DomainSessionResetReasonV1) => void) => {
+          reset = () => listener('signed-out');
+        },
+      } },
+    ] });
+    messages = spyOn(TestBed.inject(MessageService), 'add');
+    mock = TestBed.inject(MockWorkspaceRecordsData);
+    state = TestBed.inject(WorkspaceRecordsState);
+  }
+
+  const summaries = (): string[] => messages.calls.allArgs().map(args => (args[0] as { summary: string }).summary);
+
+  describe('with the explicit mock source', () => {
+    beforeEach(async () => {
+      configure(MockWorkspaceRecordsData);
+      await state.load();
+    });
+
+    it('loads mock workspaces and derives summary counts', () => {
+      expect(state.viewState()).toBe('ready');
+      expect(state.dataSource).toBe('mock');
+      const summary = state.summary();
+      expect(summary.total).toBe(14);
+      expect(summary.active + summary.suspended).toBeLessThan(summary.total);
+      expect(summary.members).toBe(state.records().reduce((sum, record) => sum + record.memberCount, 0));
+    });
+
+    it('filters by search, status and plan, exposes removable chips and reports no results', () => {
+      state.setSearch('fin-001');
+      expect(state.filtered().map(record => record.code)).toEqual(['FIN-001']);
+      state.setStatus('Suspended');
+      expect(state.viewState()).toBe('no-results');
+      expect(state.chips().map(chip => chip.key)).toEqual(['search', 'status']);
+      state.clearFilter('search');
+      expect(state.filtered().every(record => record.status === 'Suspended')).toBeTrue();
+      state.clearFilters();
+      expect(state.hasFilters()).toBeFalse();
+      expect(state.viewState()).toBe('ready');
+    });
+
+    it('shows empty, error and denied page states from the mock scenarios', async () => {
+      mock.setScenario('empty');
+      await state.load();
+      expect(state.viewState()).toBe('empty');
+      mock.setScenario('error');
+      await state.load();
+      expect(state.viewState()).toBe('error');
+      expect(state.loadFailure()?.referenceCode).toBe('ERR-WS-5031');
+      mock.setScenario('denied');
+      await state.load();
+      expect(state.viewState()).toBe('denied');
+    });
+
+    it('creates a workspace, closes the drawer and toasts with the action verb', async () => {
+      state.openCreate();
+      expect(state.drawer().mode).toBe('create');
+      expect(await state.saveDraft(draft)).toBeTrue();
+      expect(state.drawer().mode).toBe('closed');
+      expect(state.records()[0].code).toBe('QLT-014');
+      expect(summaries()).toEqual(['Workspace created']);
+    });
+
+    it('maps a duplicate code to a field error without closing the drawer', async () => {
+      state.openCreate();
+      expect(await state.saveDraft({ ...draft, code: 'FIN-001' })).toBeFalse();
+      expect(state.drawer().mode).toBe('create');
+      expect(state.fieldErrors().code).toContain('already used');
+      expect(state.saveFailure()?.message).toContain('highlighted');
+      expect(state.saving()).toBeFalse();
+    });
+
+    it('keeps the form open and toasts an error when a save fails', async () => {
+      mock.failNextMutation.set(true);
+      state.openCreate();
+      expect(await state.saveDraft(draft)).toBeFalse();
+      expect(state.saveFailure()?.referenceCode).toBe('ERR-WS-5032');
+      expect(summaries()).toEqual(['Couldn\u2019t create workspace']);
+      expect(await state.saveDraft(draft)).toBeTrue();
+    });
+
+    it('edits a workspace and records an audit entry', async () => {
+      const target = state.records()[1];
+      state.openRead(target.id);
+      state.openEdit(target.id, 'read');
+      expect(await state.saveDraft({ ...draft, code: target.code, name: 'Retail Operations' })).toBeTrue();
+      expect(state.records().find(record => record.id === target.id)?.name).toBe('Retail Operations');
+      expect(summaries()).toEqual(['Changes saved']);
+      state.openRead(target.id);
+      await new Promise(resolve => setTimeout(resolve, 20));
+      expect(state.audit()[0].summary).toContain('updated');
+    });
+
+    it('returns from edit to the read view when the form is cancelled', () => {
+      const id = state.records()[0].id;
+      state.openRead(id);
+      state.openEdit(id, 'read');
+      state.cancelForm();
+      expect(state.drawer()).toEqual({ mode: 'read', id, tab: 'overview' });
+    });
+
+    it('suspends only the visible selected workspaces', async () => {
+      const [first, second] = state.records().filter(record => record.status === 'Active');
+      state.setSelection([first.id, second.id]);
+      state.setSearch(first.code);
+      expect(state.selectedRecords().map(record => record.id)).toEqual([first.id]);
+      await state.suspendSelected();
+      expect(state.records().find(record => record.id === first.id)?.status).toBe('Suspended');
+      expect(state.records().find(record => record.id === second.id)?.status).toBe('Active');
+      expect(state.selectedIds()).toEqual([]);
+      expect(summaries()).toEqual(['Workspaces suspended']);
+    });
+
+    it('deletes one workspace after confirmation and can restore it in the mock', async () => {
+      const target = state.records()[0];
+      state.requestDelete([target]);
+      expect(state.deleteRequest()).toEqual([target]);
+      expect(await state.confirmDelete()).toBeTrue();
+      expect(state.records().some(record => record.id === target.id)).toBeFalse();
+      expect(state.recentlyDeleted()).toEqual([target]);
+      await state.restoreDeleted();
+      expect(state.records().some(record => record.id === target.id)).toBeTrue();
+      expect(summaries()).toEqual(['Workspace deleted', 'Workspaces restored (mock)']);
+    });
+
+    it('bulk deletes the selection and closes an open drawer for a deleted row', async () => {
+      const [first, second] = state.records();
+      state.openRead(first.id);
+      state.setSelection([first.id, second.id]);
+      state.requestDelete(state.selectedRecords());
+      await state.confirmDelete();
+      expect(state.records().length).toBe(12);
+      expect(state.drawer().mode).toBe('closed');
+      expect(state.selectedIds()).toEqual([]);
+      expect(summaries()).toEqual(['Workspaces deleted']);
+    });
+
+    it('keeps the delete request open and reports the failure when deletion fails', async () => {
+      mock.failNextMutation.set(true);
+      state.requestDelete([state.records()[0]]);
+      expect(await state.confirmDelete()).toBeFalse();
+      expect(state.deleteRequest()).not.toBeNull();
+      expect(state.deleteFailure()?.referenceCode).toBe('ERR-WS-5032');
+      expect(summaries()).toEqual(['Couldn\u2019t delete workspaces']);
+    });
+
+    it('reports exports as mock without generating a file', async () => {
+      await state.exportRecords('filtered');
+      expect(summaries()).toEqual(['Export prepared (mock). No file was generated.']);
+    });
+
+    it('clears all state when the session ends', () => {
+      state.openCreate();
+      state.setSearch('x');
+      reset();
+      expect(state.records()).toEqual([]);
+      expect(state.drawer().mode).toBe('closed');
+      expect(state.hasFilters()).toBeFalse();
+      expect(state.viewState()).toBe('loading');
+    });
+  });
+
+  describe('without the explicit mock mode', () => {
+    it('fails visibly instead of falling back to mock data', async () => {
+      configure(UnconfiguredWorkspaceRecordsData);
+      await state.load();
+      expect(state.dataSource).toBe('unconfigured');
+      expect(state.viewState()).toBe('error');
+      expect(state.records()).toEqual([]);
+      expect(state.loadFailure()?.referenceCode).toBe('ERR-WS-UNCONFIGURED');
+    });
+  });
+});
+{{ end }}

@@ -1,0 +1,50 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+<p-dialog
+  [visible]="open()"
+  (visibleChange)="onVisibleChange($event)"
+  (onShow)="focusInitial()"
+  (onHide)="hidden.emit()"
+  [header]="title()"
+  [modal]="true"
+  [draggable]="false"
+  [resizable]="false"
+  [closable]="!busy()"
+  [closeOnEscape]="false"
+  [focusOnShow]="false"
+  [role]="'alertdialog'"
+  closeAriaLabel="Cancel deletion"
+  [style]="{ width: 'min(30rem, calc(100vw - 2rem))' }">
+  <div class="body">
+    @if (bulk()) {
+      <p>These workspaces will be removed:</p>
+      <ul class="names">
+        @for (name of listedNames(); track $index) { <li [textContent]="name"></li> }
+        @if (hiddenCount() > 0) { <li [textContent]="'and ' + hiddenCount() + ' more'"></li> }
+      </ul>
+    }
+    @if (memberTotal() > 0) {
+      <p [textContent]="'This removes ' + memberTotal() + ' member assignment' + (memberTotal() === 1 ? '' : 's') + ' and the workspace data.'"></p>
+    }
+    <p class="mock-note" role="note"><i class="pi pi-info-circle" aria-hidden="true"></i> Mock behavior: records are removed from this browser preview only. Restore is simulated and no 30-day backend restore exists yet.</p>
+
+    @if (phrase(); as required) {
+      <div class="confirm-field">
+        <label for="workspace-delete-confirm">Type <strong [textContent]="required"></strong> to confirm</label>
+        <input #typedInput id="workspace-delete-confirm" pInputText type="text" autocomplete="off" spellcheck="false"
+               [value]="typed()" [disabled]="busy()" (input)="onTyped($event)" (keydown.enter)="confirm()"
+               aria-describedby="workspace-delete-confirm-hint" />
+        <small id="workspace-delete-confirm-hint" class="hint">Matching is exact and case sensitive.</small>
+      </div>
+    }
+
+    @if (failure(); as problem) {
+      <p class="inline-error" role="alert" [textContent]="problem.message + ' Reference: ' + problem.referenceCode"></p>
+    }
+  </div>
+  <ng-template #footer>
+    <p-button #cancelButton label="Cancel" severity="secondary" [outlined]="true" [disabled]="busy()" (onClick)="cancelled.emit()" />
+    <p-button [label]="busy() ? 'Deleting...' : (bulk() ? 'Delete workspaces' : 'Delete')" severity="danger"
+              [loading]="busy()" [disabled]="!canConfirm()" (onClick)="confirm()" />
+  </ng-template>
+</p-dialog>
+{{ end }}

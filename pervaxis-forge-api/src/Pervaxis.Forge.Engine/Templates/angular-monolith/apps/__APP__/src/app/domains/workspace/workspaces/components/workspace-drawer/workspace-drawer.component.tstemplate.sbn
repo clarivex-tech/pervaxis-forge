@@ -1,0 +1,135 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import {
+  ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, afterNextRender, computed, effect, inject, output, signal,
+  untracked,
+} from '@angular/core';
+import { ButtonModule } from 'primeng/button';
+import { DrawerModule } from 'primeng/drawer';
+import { WorkspaceDrawerState, WorkspaceRecord } from '../../contracts/workspace-record.model';
+import { WorkspaceRecordsState } from '../../state/workspace-records.state';
+import { WorkspaceDetailComponent } from '../workspace-detail/workspace-detail.component';
+import { WorkspaceFormComponent } from '../workspace-form/workspace-form.component';
+import { WorkspaceStatusBadgeComponent } from '../status-badge/workspace-status-badge.component';
+
+const CLOSE_ANIMATION_MS = 280;
+
+/**
+ * One drawer with three modes: read, create and edit. It keeps the last shown content mounted until
+ * the close animation ends, then reports `closed` so the page can restore focus to the opener.
+ */
+@Component({
+  selector: 'domain-workspace-drawer',
+  standalone: true,
+  imports: [ButtonModule, DrawerModule, WorkspaceDetailComponent, WorkspaceFormComponent, WorkspaceStatusBadgeComponent],
+  templateUrl: './workspace-drawer.component.html',
+  styleUrl: './workspace-drawer.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class WorkspaceDrawerComponent {
+  /** Emitted once the drawer is fully hidden. */
+  readonly closed = output<void>();
+  /** Delete was requested from the read view. */
+  readonly deleteRequested = output<WorkspaceRecord>();
+
+  protected readonly state = inject(WorkspaceRecordsState);
+  protected readonly rendered = signal<WorkspaceDrawerState>({ mode: 'closed' });
+  protected readonly renderKey = signal(0);
+  protected readonly visible = computed(() => this.state.drawer().mode !== 'closed');
+  protected readonly renderedRecord = computed(() => {
+    const view = this.rendered();
+    if (view.mode !== 'read' && view.mode !== 'edit') return null;
+    return this.state.records().find(record => record.id === view.id) ?? this.lastRecord;
+  });
+  protected readonly title = computed(() => {
+    switch (this.rendered().mode) {
+      case 'create': return 'New workspace';
+      case 'edit': return 'Edit workspace';
+      case 'read': return this.renderedRecord()?.name ?? 'Workspace';
+      default: return '';
+    }
+  });
+  protected readonly takenCodes = computed(() => this.state.records().map(record => record.code));
+  /** Content spans the full drawer so the form and detail views own their padding and sticky footer. */
+  protected readonly drawerTokens = { header: { padding: '1rem 1.25rem' }, content: { padding: '0' } };
+
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly injector = inject(Injector);
+  private lastRecord: WorkspaceRecord | null = null;
+  private previousMode: WorkspaceDrawerState['mode'] = 'closed';
+
+  constructor() {
+    effect(() => {
+      const drawer = this.state.drawer();
+      untracked(() => {
+        if (drawer.mode === 'closed') {
+          // PrimeNG only reports onHide for user-driven closes, so finish programmatic closes here too.
+          if (this.previousMode !== 'closed') setTimeout(() => this.finishClose(), CLOSE_ANIMATION_MS);
+          return;
+        }
+        if (this.previousMode === 'closed') this.renderKey.update(value => value + 1);
+        this.previousMode = drawer.mode;
+        this.rendered.set(drawer);
+        this.focusInitial();
+      });
+    });
+    effect(() => {
+      const record = this.state.activeRecord();
+      if (record) this.lastRecord = record;
+    });
+  }
+
+  protected onVisibleChange(visible: boolean): void {
+    if (!visible) this.state.closeDrawer();
+  }
+
+  protected onHidden(): void {
+    this.finishClose();
+  }
+
+  private finishClose(): void {
+    if (this.state.drawer().mode !== 'closed' || this.previousMode === 'closed') return;
+    this.previousMode = 'closed';
+    this.rendered.set({ mode: 'closed' });
+    this.lastRecord = null;
+    this.closed.emit();
+  }
+
+  /** Escape closes the drawer, unless an open select or the delete dialog already handled it. */
+  @HostListener('document:keydown', ['$event'])
+  protected onKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape' || event.defaultPrevented || !this.visible() || this.state.saving() || this.state.deleteRequest()) return;
+    this.state.closeDrawer();
+  }
+
+  /** Focuses the first field of a form, or the close button of the read view, once the content exists. */
+  private focusInitial(attempt = 0): void {
+    afterNextRender(() => {
+      const root = this.host.nativeElement.ownerDocument;
+      const target = root.querySelector<HTMLElement>('.workspace-drawer [data-autofocus]')
+        ?? root.querySelector<HTMLElement>('.workspace-drawer .drawer-close');
+      if (target) {
+        target.focus();
+      } else if (attempt < 10) {
+        setTimeout(() => this.focusInitial(attempt + 1), 50);
+      }
+    }, { injector: this.injector });
+  }
+}
+{{ end }}

@@ -46,6 +46,12 @@ function inspectManifest(root, folder, manifest, host, packages) {
       || !/^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/.test(manifest.navigationPath))) {
     fail('navigationPath must be a relative route beneath ' + manifest.id);
   }
+  const routePattern = /^[a-z0-9]+(?:-[a-z0-9]+)*(?:\/[a-z0-9]+(?:-[a-z0-9]+)*)*$/;
+  if (manifest.navigationItems !== undefined && (!Array.isArray(manifest.navigationItems) || manifest.navigationItems.some(item => !record(item)
+      || typeof item.label !== 'string' || !item.label.trim() || typeof item.icon !== 'string' || !/^pi pi-[a-z0-9-]+$/.test(item.icon)
+      || typeof item.path !== 'string' || !routePattern.test(item.path)))) {
+    fail('navigationItems need a label, PrimeIcon class and relative path for ' + manifest.id);
+  }
   if (!strings(manifest.supportedTargets) || host.targets.some(target => !manifest.supportedTargets.includes(target))) fail('unsupported host target for ' + manifest.id);
   if (!Array.isArray(manifest.permissions) || !manifest.permissions.every(item => typeof item === 'string' && item.trim())) fail('permissions must be explicit for ' + manifest.id);
   if (!record(manifest.requirements) || !record(manifest.requirements.packages) || !Array.isArray(manifest.requirements.configuration)
