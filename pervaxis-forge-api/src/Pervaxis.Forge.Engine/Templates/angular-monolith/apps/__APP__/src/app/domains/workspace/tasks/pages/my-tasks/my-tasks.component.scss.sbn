@@ -1,38 +1,38 @@
 {{ if model.angular_cognito_enabled && model.web_admin_layout }}
 :host { display: block; }
-.workspace { width: min(100%, 72rem); margin: 0 auto; padding: clamp(1rem, 3vw, 2rem); color: var(--p-text-color, #1e293b); }
+.workspace { width: min(100%, 72rem); margin: 0 auto; padding: clamp(1rem, 3vw, 2rem); color: var(--color-text); }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 1.5rem; }
 .page-header h1 { margin: 0.2rem 0 0; font-size: clamp(1.7rem, 4vw, 2.2rem); }
-.eyebrow { margin: 0; color: var(--p-primary-color, #4338ca); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.09em; }
-.intro, .task-description, .task-meta { color: var(--p-text-muted-color, #64748b); }
+.eyebrow { margin: 0; color: var(--color-primary); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.09em; }
+.intro, .task-description, .task-meta { color: var(--color-text-muted); }
 .intro { margin: 0.5rem 0 0; }
 .editor-panel, .empty-state, .task-card, .error-panel {
-  border: 1px solid var(--p-content-border-color, #e2e8f0);
+  border: 1px solid var(--color-border);
   border-radius: 0.85rem;
-  background: var(--p-content-background, #fff);
+  background: var(--color-surface);
   padding: 1.25rem;
 }
 .editor-panel { margin-bottom: 1.25rem; }
 .empty-state { text-align: center; padding: clamp(2rem, 6vw, 4rem) 1rem; }
 .empty-state h2 { margin: 0; }
-.empty-state p { margin: 0.5rem 0 1.25rem; color: var(--p-text-muted-color, #64748b); }
-.error-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1rem; border-color: var(--p-red-300, #fca5a5); }
+.empty-state p { margin: 0.5rem 0 1.25rem; color: var(--color-text-muted); }
+.error-panel { display: flex; align-items: center; flex-wrap: wrap; gap: 0.75rem; margin: 0 0 1rem; border-color: var(--color-danger-border); background: var(--color-danger-bg); }
 .error-panel p { margin: 0; flex: 1 1 18rem; }
-.notice, .status { padding: 0.75rem 1rem; border-radius: 0.6rem; background: var(--p-primary-50, #eef2ff); }
+.notice, .status { padding: 0.75rem 1rem; border-radius: 0.6rem; background: var(--color-primary-light); }
 .task-list { display: grid; gap: 0.85rem; list-style: none; padding: 0; margin: 0; }
 .task-card { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.25rem; }
-.task-card--completed h2 { text-decoration: line-through; color: var(--p-text-muted-color, #64748b); }
+.task-card--completed h2 { text-decoration: line-through; color: var(--color-text-muted); }
 .task-content { min-width: 0; }
 .task-content h2 { margin: 0; overflow-wrap: anywhere; font-size: 1.1rem; }
 .task-description { margin: 0.5rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .task-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 0.7rem; margin: 0.65rem 0 0; font-size: 0.85rem; }
-.status-pill { padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--p-primary-50, #eef2ff); color: var(--p-primary-700, #4338ca); font-weight: 600; }
-.status-pill--completed { background: var(--p-green-50, #ecfdf5); color: var(--p-green-700, #047857); }
+.status-pill { padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--color-primary-light); color: var(--color-primary); font-weight: 600; }
+.status-pill--completed { background: var(--color-success-bg); color: var(--color-success); }
 .task-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 0.5rem; }
-.delete-confirmation { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding: 0.5rem; border: 1px solid var(--p-red-300, #fca5a5); border-radius: 0.6rem; }
+.delete-confirmation { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; padding: 0.5rem; border: 1px solid var(--color-danger-border); border-radius: 0.6rem; }
 .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin: 1.5rem 0; }
 .pagination span { min-width: 4rem; text-align: center; }
-:host :focus-visible { outline: 3px solid var(--p-primary-color, #4f46e5); outline-offset: 2px; }
+:host :focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
 @media (max-width: 700px) {
   .page-header, .task-card { flex-direction: column; }
   .task-actions { justify-content: flex-start; }

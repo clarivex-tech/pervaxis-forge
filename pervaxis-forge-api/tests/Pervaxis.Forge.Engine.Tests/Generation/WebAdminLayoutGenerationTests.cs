@@ -52,6 +52,9 @@ public sealed class WebAdminLayoutGenerationTests
         Assert.Equal(!combined, shell.Contains("<p-drawer", StringComparison.Ordinal));
         Assert.Equal(!combined, zip.Entries.Any(e => e.FullName.EndsWith("/theme.service.ts", StringComparison.Ordinal)));
         Assert.Equal(!combined, shell.Contains("Skip to main content", StringComparison.Ordinal));
+        var styles = await Read("/styles.scss");
+        Assert.Equal(!combined, styles.Contains("--color-primary: var(--p-primary-color)", StringComparison.Ordinal));
+        Assert.Equal(!combined, (await Read("/platform.config.ts")).Contains("ripple: true", StringComparison.Ordinal));
         var admin = await Read("/administration.component.html");
         Assert.Equal(!combined, admin.Contains("pInputText", StringComparison.Ordinal));
         Assert.Contains("permissionGuard('PlatformAdmin')", await Read("/platform.routes.ts"));
@@ -63,6 +66,31 @@ public sealed class WebAdminLayoutGenerationTests
         Assert.DoesNotContain("@angular/material", packages);
         Assert.DoesNotContain("{{", shell);
     }
+    [Fact]
+    public async Task RenderedShell_HidesPublicChromeAndKeepsSettingsInAuthenticatedShell()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "verify", VerticalSlug = "verify", ServiceName = "admin-web",
+            ComponentPrefix = "vfy", ServiceType = ServiceType.Monolithic, CloudProvider = "AWS",
+            AngularAuth = TestTenancy.AngularAuth,
+            UiTargets = ["web"],
+        };
+        using var zip = new ZipArchive(new MemoryStream(await new PrintGenerator().GenerateAsync(manifest, "AWS")));
+
+        var shell = new StreamReader(zip.Entries.Single(e => e.FullName.EndsWith("/shell/app.component.html", StringComparison.Ordinal)).Open()).ReadToEnd();
+        var component = new StreamReader(zip.Entries.Single(e => e.FullName.EndsWith("/shell/app.component.ts", StringComparison.Ordinal)).Open()).ReadToEnd();
+
+        Assert.Contains("!auth.isAuthenticated()", shell);
+        Assert.Contains("@if (auth.isAuthenticated())", shell);
+        Assert.DoesNotContain("tenant.currentTenantId", shell);
+        Assert.DoesNotContain("app-header__tenant", shell);
+        Assert.Contains("routerLink: '/settings'", component);
+        var workspaceConfig = new StreamReader(zip.Entries.Single(e =>
+            e.FullName.EndsWith("/domains/workspace/domain.config.json", StringComparison.Ordinal)).Open()).ReadToEnd();
+        Assert.Contains("\"apiPath\": \"/api/v1/workspace/tasks\"", workspaceConfig);
+    }
+
     [Fact]
     public async Task DefaultAndExplicitWebRenderIdenticalApplicationSources()
     {
@@ -79,6 +107,49 @@ public sealed class WebAdminLayoutGenerationTests
             model with { Manifest = manifest with { UiTargets = ["web"] } });
         Assert.Equal(explicitWeb.Select(file => (file.Path, file.Content)),
             defaults.Select(file => (file.Path, file.Content)));
+    }
+
+    [Fact]
+    public async Task WebAdminThemeUsesCentralSemanticIndigoSlateTokens()
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "verify", VerticalSlug = "verify", ServiceName = "admin-web",
+            ComponentPrefix = "vfy", ServiceType = ServiceType.Monolithic, CloudProvider = "AWS",
+            AngularAuth = TestTenancy.AngularAuth,
+        };
+        using var zip = new ZipArchive(new MemoryStream(await new PrintGenerator().GenerateAsync(manifest, "AWS")));
+        async Task<string> Read(string suffix)
+        {
+            using var reader = new StreamReader(zip.Entries.Single(e => e.FullName.EndsWith(suffix, StringComparison.Ordinal)).Open());
+            return await reader.ReadToEndAsync();
+        }
+
+        var preset = await Read("/platform.config.ts");
+        Assert.Contains("color: '{indigo.600}'", preset);
+        Assert.Contains("hoverColor: '{indigo.700}'", preset);
+        Assert.Contains("color: '{indigo.300}'", preset);
+        Assert.Contains("contrastColor: '{slate.900}'", preset);
+        Assert.Contains("width: '3px'", preset);
+
+        var styles = await Read("/styles.scss");
+        Assert.Contains("--color-bg: var(--p-slate-50)", styles);
+        Assert.Contains("--color-bg: var(--p-slate-900)", styles);
+        Assert.Contains("--color-header-bg: var(--p-indigo-950)", styles);
+        Assert.Contains("--color-header-focus: var(--p-indigo-200)", styles);
+        Assert.Contains("--color-sidebar-bg: var(--p-indigo-50)", styles);
+        Assert.Contains("--color-sidebar-bg: var(--p-indigo-900)", styles);
+        Assert.Contains("--p-drawer-background: var(--color-sidebar-bg)", styles);
+        Assert.Contains("--color-success-bg: var(--p-green-950)", styles);
+        Assert.Contains("--color-danger-bg: var(--p-red-950)", styles);
+
+        Assert.Contains(".app-header__brand, .app-header__user { color: var(--color-header-text); }", styles);
+        Assert.Contains(".sidebar-item.active", styles);
+
+        var workspace = await Read("/my-tasks.component.scss");
+        Assert.Contains("var(--color-success-bg)", workspace);
+        Assert.Contains("var(--color-danger-border)", workspace);
+        Assert.DoesNotContain("#", workspace);
     }
 
 }

@@ -19,12 +19,13 @@
 
 import { ChangeDetectionStrategy, Component, OnInit, computed, inject } from '@angular/core';
 import { ButtonModule } from 'primeng/button';
+import { RippleModule } from 'primeng/ripple';
 import { AuthService } from '../../core/auth/auth.service';
 import { ThemeService } from '../../core/services/theme.service';
 import { MyProfileState } from './my-profile-state';
 
 @Component({
-  selector: '{{ model.manifest.component_prefix }}-settings', standalone: true, imports: [ButtonModule],
+  selector: '{{ model.manifest.component_prefix }}-settings', standalone: true, imports: [ButtonModule, RippleModule],
   providers: [MyProfileState], changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './settings.component.html', styleUrl: './settings.component.scss',
 })

@@ -4,8 +4,8 @@
   <header class="settings-heading"><span class="eyebrow">YOUR ACCOUNT</span><h1>Settings</h1><p>View your profile and make this workspace feel right for you.</p></header>
   <div class="settings-layout">
     <nav class="settings-navigation" aria-label="Settings sections">
-      <a href="settings#my-profile"><i class="pi pi-user" aria-hidden="true"></i>My Profile</a>
-      <a href="settings#appearance"><i class="pi pi-palette" aria-hidden="true"></i>Appearance</a>
+      <a pRipple href="settings#my-profile"><i class="pi pi-user" aria-hidden="true"></i>My Profile</a>
+      <a pRipple href="settings#appearance"><i class="pi pi-palette" aria-hidden="true"></i>Appearance</a>
     </nav>
     <div class="settings-sections">
       <section class="settings-card" aria-labelledby="my-profile">

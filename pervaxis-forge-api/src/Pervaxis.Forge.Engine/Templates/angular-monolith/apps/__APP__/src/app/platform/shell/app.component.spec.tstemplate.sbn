@@ -62,16 +62,17 @@ import { RouteLoadingService } from '../core/services/route-loading.service';
 import { ConfirmDialogService } from '../shared/services/confirm-dialog.service';
 {{ if model.angular_cognito_enabled }}
 import { AuthService } from '../core/auth/auth.service';
-import { TenantContextService } from '../core/auth/tenant-context.service';
 import { InactivityService } from '../core/services/inactivity.service';
 import { SessionStateRegistry } from '../core/auth/session-state';
 {{ end }}
 
 describe('Web application shell', () => {
   const roles = signal<readonly string[]>([]);
+  const isAuthenticated = signal(true);
   const dismiss = jasmine.createSpy('dismiss');
   beforeEach(async () => {
     roles.set([]);
+    isAuthenticated.set(true);
     await TestBed.configureTestingModule({
       imports: [AppComponent], providers: [provideRouter([]), provideNoopAnimations(),
         { provide: LoadingService, useValue: { isLoading: signal(false) } },
@@ -79,8 +80,7 @@ describe('Web application shell', () => {
         { provide: RouteLoadingService, useValue: { init: () => undefined } },
         { provide: ConfirmDialogService, useValue: { activeDialog: signal(null), resolve: () => undefined } },
 {{ if model.angular_cognito_enabled }}
-        { provide: AuthService, useValue: { roles, isAuthenticated: signal(true), profile: signal({displayName: 'Admin'}), logout: jasmine.createSpy('logout') } },
-        { provide: TenantContextService, useValue: { currentTenantId: signal(null) } },
+        { provide: AuthService, useValue: { roles, isAuthenticated, profile: signal({displayName: 'Admin'}), logout: jasmine.createSpy('logout') } },
         { provide: InactivityService, useValue: { start: () => undefined } },
 {{ end }}
       ],
@@ -108,6 +108,13 @@ describe('Web application shell', () => {
     fixture.componentInstance.dismissNotification(7); expect(dismiss).toHaveBeenCalledWith(7);
   });
 {{ if model.angular_cognito_enabled }}
+  it('hides the header and sidebar when signed out and removes tenant labels from the header', () => {
+    isAuthenticated.set(false);
+    const fixture = TestBed.createComponent(AppComponent); fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.app-header')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.app-sidebar')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.app-header__tenant')).toBeNull();
+  });
   it('offers Settings and direct sign-out in the user menu, separate from administration', async () => {
     const fixture = TestBed.createComponent(AppComponent); fixture.detectChanges();
     expect(fixture.componentInstance.userMenuItems.map(item => item.label).filter(Boolean)).toEqual(['Settings', 'Sign out']);

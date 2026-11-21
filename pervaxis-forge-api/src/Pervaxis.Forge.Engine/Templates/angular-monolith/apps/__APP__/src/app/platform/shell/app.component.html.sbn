@@ -44,7 +44,7 @@
   @for (notification of notifications(); track notification.id) {
     <div class="notification-toast" [class]="'notification-toast--' + notification.type">
       <span [textContent]="notification.message"></span>
-      <button (click)="dismissNotification(notification.id)" aria-label="Dismiss">&times;</button>
+      <button pRipple (click)="dismissNotification(notification.id)" aria-label="Dismiss">&times;</button>
     </div>
   }
 </div>
@@ -64,7 +64,10 @@
 }
 
 <!-- App Shell Layout -->
-<div class="app-layout" [class.sidebar-collapsed]="sidebarCollapsed">
+<div class="app-layout" {{ if model.angular_cognito_enabled }}[class.app-layout--public]="!auth.isAuthenticated()"{{ end }} [class.sidebar-collapsed]="sidebarCollapsed">
+{{ if model.angular_cognito_enabled }}
+  @if (auth.isAuthenticated()) {
+{{ end }}
   <!-- Header -->
   <p-toolbar class="app-header" styleClass="border-noround">
     <ng-template #start>
@@ -74,14 +77,10 @@
     <ng-template #end>
 {{ if model.angular_cognito_enabled }}
       @if (auth.isAuthenticated()) {
-        @if (tenant.currentTenantId(); as tenantId) {
-          <span class="app-header__tenant" [title]="'Tenant ' + tenantId" [textContent]="'Tenant ' + tenantId.slice(0, 8)"></span>
-        }
         <p-avatar icon="pi pi-user" shape="circle" styleClass="ml-2" />
         <span class="app-header__user" [textContent]="auth.profile()?.displayName ?? ''"></span>
         <p-button label="Sign out" icon="pi pi-sign-out" [text]="true" severity="secondary" (onClick)="signOut()" />
       }
-
 {{ end }}
     </ng-template>
   </p-toolbar>
@@ -100,6 +99,9 @@
       }
     </nav>
   </aside>
+{{ if model.angular_cognito_enabled }}
+  }
+{{ end }}
 
   <!-- Main Content -->
   <main class="app-content">
@@ -166,8 +168,8 @@
       <h3 [textContent]="confirmDialog()?.title"></h3>
       <p [textContent]="confirmDialog()?.message"></p>
       <div class="confirm-actions">
-        <button class="btn" (click)="onConfirmCancel()" [textContent]="confirmDialog()?.cancelLabel || 'Cancel'"></button>
-        <button class="btn" [class.btn--danger]="confirmDialog()?.destructive" (click)="onConfirmOk()" [textContent]="confirmDialog()?.confirmLabel || 'Confirm'"></button>
+        <button pRipple class="btn" (click)="onConfirmCancel()" [textContent]="confirmDialog()?.cancelLabel || 'Cancel'"></button>
+        <button pRipple class="btn" [class.btn--danger]="confirmDialog()?.destructive" (click)="onConfirmOk()" [textContent]="confirmDialog()?.confirmLabel || 'Confirm'"></button>
       </div>
     </div>
   </div>
@@ -197,15 +199,24 @@
 {{ end }}
   </nav>
 </ng-template>
+{{ if model.angular_cognito_enabled }}
+@if (auth.isAuthenticated()) {
+{{ end }}
 <p-drawer [visible]="mobileNavigationOpen()" (visibleChange)="navigationVisibilityChanged($event)" header="Navigation" styleClass="app-navigation-drawer" [modal]="true" [dismissible]="true"
           [closeOnEscape]="true" [blockScroll]="true" (onShow)="focusNavigation()" (onHide)="closeNavigation(true)">
   <ng-container [ngTemplateOutlet]="navigation" />
 </p-drawer>
-<div class="app-layout" [class.sidebar-collapsed]="sidebarCollapsed()">
+{{ if model.angular_cognito_enabled }}
+}
+{{ end }}
+<div class="app-layout" {{ if model.angular_cognito_enabled }}[class.app-layout--public]="!auth.isAuthenticated()"{{ end }} [class.sidebar-collapsed]="sidebarCollapsed()">
+{{ if model.angular_cognito_enabled }}
+  @if (auth.isAuthenticated()) {
+{{ end }}
   <header class="app-header">
-    <p-toolbar [style]="{ border: '0', borderRadius: '0', gap: '0.75rem', padding: '0.75rem 1rem', background: 'var(--color-bg)' }">
+    <p-toolbar [style]="{ border: '0', borderRadius: '0', gap: '0.75rem', padding: '0.75rem 1rem', background: 'var(--color-header-bg)', color: 'var(--color-header-text)' }">
       <ng-template #start>
-        <button id="navigation-toggle" type="button" class="navigation-toggle" (click)="toggleSidebar()"
+        <button pRipple id="navigation-toggle" type="button" class="navigation-toggle" (click)="toggleSidebar()"
                 [attr.aria-label]="narrowScreen() ? 'Open navigation' : sidebarCollapsed() ? 'Expand navigation' : 'Collapse navigation'"
                 [attr.aria-expanded]="narrowScreen() ? mobileNavigationOpen() : !sidebarCollapsed()">
           <i class="pi pi-bars" aria-hidden="true"></i>
@@ -217,21 +228,23 @@
         @if (auth.isAuthenticated()) {
           <div class="app-header__identity">
             <span class="app-header__user" [textContent]="auth.profile()?.displayName ?? ''"></span>
-            @if (tenant.currentTenantId(); as tenantId) {
-              <span class="app-header__tenant" [title]="'Tenant ' + tenantId" [textContent]="'Tenant ' + tenantId.slice(0, 8)"></span>
-            }
           </div>
           <p-menu #accountMenu [id]="'user-account-menu'" [model]="userMenuItems" [popup]="true" appendTo="body" ariaLabel="User menu" />
-          <button id="user-menu-toggle" type="button" class="navigation-toggle" title="Account" aria-label="Open user menu" aria-haspopup="menu"
+          <button pRipple id="user-menu-toggle" type="button" class="navigation-toggle" title="Account" aria-label="Open user menu" aria-haspopup="menu"
                   aria-controls="user-account-menu" [attr.aria-expanded]="accountMenu.visible === true" (click)="accountMenu.toggle($event)">
             <i class="pi pi-user" aria-hidden="true"></i>
           </button>
+{{ if model.angular_cognito_enabled }}
         }
+{{ end }}
 {{ end }}
       </ng-template>
     </p-toolbar>
   </header>
   <aside class="app-sidebar"><ng-container [ngTemplateOutlet]="navigation" /></aside>
+{{ if model.angular_cognito_enabled }}
+  }
+{{ end }}
   <main class="app-content" id="main-content" tabindex="-1"><router-outlet /></main>
 </div>
 {{ end }}
