@@ -49,10 +49,75 @@ describe('Platform API response contract', () => {
     expect((await response).status).toBe(200);
   });
 
+  it('joins API bases and request paths by removing only their shared boundary segments', async () => {
+    const cases = [
+      { apiUrl: 'https://api.example.test', path: '/api/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api', path: '/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api/v1', path: '/api/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api/v1', path: '/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api/v1', path: '/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/api', path: '/api/v1/workspace/tasks', expected: 'https://api.example.test/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test', path: '/workspace/tasks', expected: 'https://api.example.test/workspace/tasks' },
+      { apiUrl: '/api/v1', path: '/workspace/tasks', expected: '/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/gateway/api/v1', path: '/api/v1/workspace/tasks', expected: 'https://api.example.test/gateway/api/v1/workspace/tasks' },
+      { apiUrl: 'https://api.example.test/tenant-a/v1', path: '/v1/workspace/tasks', expected: 'https://api.example.test/tenant-a/v1/workspace/tasks' },
+    ];
+
+    for (const testCase of cases) {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          { provide: AppConfigService, useValue: { config: () => ({ apiUrl: testCase.apiUrl }) } },
+        ],
+      });
+      const configuredApi = TestBed.inject(ApiService);
+      const configuredHttp = TestBed.inject(HttpTestingController);
+      const response = firstValueFrom(configuredApi.getResponse<unknown>(testCase.path));
+      const request = configuredHttp.expectOne(testCase.expected);
+      expect(request.request.url).toBe(testCase.expected);
+      request.flush({ items: [], page: 1, pageSize: 20, hasMore: false });
+      await response;
+      configuredHttp.verify();
+    }
+  });
+
+  it('preserves profile and tenant API endpoints under configured API bases', async () => {
+    const cases = [
+      { apiUrl: 'https://api.example.test', path: '/api/v1/me', expected: 'https://api.example.test/api/v1/me' },
+      { apiUrl: 'https://api.example.test/api', path: '/api/v1/me', expected: 'https://api.example.test/api/v1/me' },
+      { apiUrl: 'https://api.example.test/api/v1', path: '/api/v1/me', expected: 'https://api.example.test/api/v1/me' },
+      { apiUrl: 'https://api.example.test/api', path: '/api/v1/tenants', expected: 'https://api.example.test/api/v1/tenants' },
+      { apiUrl: 'https://api.example.test/api/v1', path: '/api/v1/tenants', expected: 'https://api.example.test/api/v1/tenants' },
+      { apiUrl: 'https://api.example.test/gateway/api/v1', path: '/api/v1/tenants', expected: 'https://api.example.test/gateway/api/v1/tenants' },
+      { apiUrl: '/api/v1', path: '/api/v1/tenants', expected: '/api/v1/tenants' },
+    ];
+
+    for (const testCase of cases) {
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        providers: [
+          provideHttpClient(),
+          provideHttpClientTesting(),
+          { provide: AppConfigService, useValue: { config: () => ({ apiUrl: testCase.apiUrl }) } },
+        ],
+      });
+      const configuredApi = TestBed.inject(ApiService);
+      const configuredHttp = TestBed.inject(HttpTestingController);
+      const response = firstValueFrom(configuredApi.getResponse<unknown>(testCase.path));
+      const request = configuredHttp.expectOne(testCase.expected);
+      expect(request.request.url).toBe(testCase.expected);
+      request.flush({});
+      await response;
+      configuredHttp.verify();
+    }
+  });
+
   it('preserves strong If-Match headers and response ETags on conditional writes', async () => {
     const version = '123e4567-e89b-12d3-a456-426614174000';
     const etag = '"' + version + '"';
-    const response = firstValueFrom(api.putResponse<unknown>('/v1/workspace/tasks/' + version,
+    const response = firstValueFrom(api.putResponse<unknown>('/api/v1/workspace/tasks/' + version,
       { title: 'Review', description: null, isCompleted: true }, { 'If-Match': etag }));
     const request = http.expectOne('https://api.example.test/api/v1/workspace/tasks/' + version);
     expect(request.request.method).toBe('PUT');
@@ -64,7 +129,7 @@ describe('Platform API response contract', () => {
 
   it('supports the required no-content conditional delete response', async () => {
     const version = '123e4567-e89b-12d3-a456-426614174000';
-    const response = firstValueFrom(api.deleteResponse<void>('/v1/workspace/tasks/' + version, {
+    const response = firstValueFrom(api.deleteResponse<void>('/api/v1/workspace/tasks/' + version, {
       'If-Match': '"' + version + '"',
     }));
     const request = http.expectOne('https://api.example.test/api/v1/workspace/tasks/' + version);

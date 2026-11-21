@@ -91,6 +91,28 @@ export class ApiService {
     if (!config) {
       throw new Error('The API is not configured (assets/app-config.json is missing or invalid).');
     }
-    return `${config.apiUrl}${path.startsWith('/') ? path : `/${path}`}`;
+
+    const base = config.apiUrl.replace(/\/+$/, '');
+    const requestedPath = path.startsWith('/') ? path : `/${path}`;
+    const pathEnd = requestedPath.search(/[?#]/);
+    const requestPath = pathEnd < 0 ? requestedPath : requestedPath.slice(0, pathEnd);
+    const requestSuffix = pathEnd < 0 ? '' : requestedPath.slice(pathEnd);
+    const schemeEnd = base.indexOf('://');
+    const pathStart = base.indexOf('/', schemeEnd < 0 ? 0 : schemeEnd + 3);
+    const origin = pathStart < 0 ? base : base.slice(0, pathStart);
+    const basePath = pathStart < 0 ? '' : base.slice(pathStart);
+    const baseSegments = basePath.split('/').filter(Boolean);
+    const requestSegments = requestPath.split('/').filter(Boolean);
+
+    let overlap = Math.min(baseSegments.length, requestSegments.length);
+    while (overlap > 0) {
+      const baseSuffix = baseSegments.slice(-overlap);
+      const requestPrefix = requestSegments.slice(0, overlap);
+      if (baseSuffix.every((segment, index) => segment === requestPrefix[index])) break;
+      overlap--;
+    }
+
+    const joinedPath = [...baseSegments, ...requestSegments.slice(overlap)].join('/');
+    return `${origin}/${joinedPath}${requestSuffix}`;
   }
 }

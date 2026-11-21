@@ -6,9 +6,10 @@ The host registers its lazy route and sidebar link from `domain.json`; no platfo
 registration is part of this folder.
 
 The UI calls the REST Workspace Tasks API through `@forge/ui-contracts/v1`. Its configured
-`apiPath` is relative to the receiving platform's public `apiUrl` (the default `/api` plus
-`/v1/workspace/tasks` produces the API path `/api/v1/workspace/tasks`). The platform supplies the
-runtime API origin and bearer authentication. Do not copy tokens, host imports, or tenant/user
+`apiPath` is `/api/v1/workspace/tasks`; the platform joins that path with the public `apiUrl`,
+removing only overlapping boundary path segments. This supports an origin-only API URL, a URL
+already ending in `/api` or `/api/v1`, and API URLs with other path prefixes. The platform supplies
+the runtime API origin and bearer authentication. Do not copy tokens, host imports, or tenant/user
 selectors into this domain.
 
 The generated REST API must separately include Workspace Tasks and its PostgreSQL migration. The

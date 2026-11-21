@@ -1,6 +1,6 @@
 # Generated web administration shell
 
-The Angular monolith web-only print owns this PrimeNG layout. Ng-Matero informed the layout direction; no Ng-Matero code, Material shell, packages, demo authentication, or charts are included.
+The Angular monolith web-only print uses a Pervaxis-owned Platform administration shell built with PrimeNG components and custom templates and styles. Navigation, responsive behavior, appearance settings, and administration features are implemented in the monolith's Platform templates; no third-party admin-shell framework is used.
 
 ## Ownership and reuse
 

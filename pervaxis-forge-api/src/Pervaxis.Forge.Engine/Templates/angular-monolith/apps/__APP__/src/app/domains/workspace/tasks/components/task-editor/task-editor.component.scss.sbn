@@ -5,20 +5,20 @@
 .task-editor h2 { margin: 0; font-size: 1.25rem; }
 .field { display: grid; gap: 0.4rem; }
 .field label { font-weight: 600; }
-.field label span, .field small { color: var(--p-text-muted-color, #64748b); }
+.field label span, .field small { color: var(--color-text-muted); }
 .field input, .field textarea {
   width: 100%;
   box-sizing: border-box;
   padding: 0.7rem 0.8rem;
-  border: 1px solid var(--p-content-border-color, #cbd5e1);
+  border: 1px solid var(--color-border);
   border-radius: 0.5rem;
-  color: var(--p-text-color, #1e293b);
-  background: var(--p-content-background, #fff);
+  color: var(--color-text);
+  background: var(--color-surface);
   font: inherit;
 }
 .field input:focus-visible, .field textarea:focus-visible,
-.editor-actions :focus-visible { outline: 3px solid var(--p-primary-color, #4f46e5); outline-offset: 2px; }
+.editor-actions :focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
 .field textarea { resize: vertical; }
-.field-error { color: var(--p-red-600, #b91c1c) !important; }
+.field-error { color: var(--color-danger) !important; }
 .editor-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
 {{ end }}

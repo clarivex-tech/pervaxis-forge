@@ -10,7 +10,7 @@ p { line-height: 1.6; }
 .eyebrow { color: var(--p-primary-color); font-size: .75rem; font-weight: 700; letter-spacing: .08em; }
 .muted, .page-heading p:not(.eyebrow), .tenant-id { color: var(--color-text-muted); font-size: .875rem; margin: .75rem 0; }
 .admin-grid { display: grid; grid-template-columns: minmax(240px, 1fr) minmax(0, 2.5fr); gap: 1.5rem; align-items: start; }
-.admin-panel { background: var(--color-bg); border: 1px solid var(--color-border); border-radius: .875rem; padding: clamp(1rem, 2vw, 1.5rem); min-width: 0; }
+.admin-panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: .875rem; padding: clamp(1rem, 2vw, 1.5rem); min-width: 0; }
 .tenant-details, .stack, .field { display: grid; gap: .625rem; min-width: 0; }
 .tenant-details { gap: 1.5rem; }
 label { font-weight: 600; font-size: .875rem; }
@@ -22,7 +22,7 @@ hr, .lifecycle { border: 0; border-top: 1px solid var(--color-border); margin-to
 .table-scroll { max-width: 100%; overflow-x: auto; margin: 1.5rem 0; }
 table { width: 100%; min-width: 540px; border-collapse: collapse; }
 th, td { text-align: start; padding: .875rem; border-bottom: 1px solid var(--color-border); }
-th { font-size: .75rem; color: var(--color-text-muted); background: var(--color-surface); }
+th { font-size: .75rem; color: var(--color-text-muted); background: var(--color-bg); }
 td { font-size: .875rem; overflow-wrap: anywhere; }
 .empty-state { padding: 2rem 1rem; text-align: center; color: var(--color-text-muted); }
 .empty-state i { font-size: 2rem; margin-bottom: 1rem; }

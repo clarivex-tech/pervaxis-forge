@@ -18,16 +18,19 @@
 
 import { Component } from '@angular/core';
 import { RouterLink } from '@angular/router';
+{{ if model.web_admin_layout }}
+import { RippleModule } from 'primeng/ripple';
+{{ end }}
 
 @Component({
   selector: '{{ model.manifest.component_prefix }}-not-found',
   standalone: true,
-  imports: [RouterLink],
+  imports: [RouterLink{{ if model.web_admin_layout }}, RippleModule{{ end }}],
   template: `
     <div class="not-found">
       <h1>404</h1>
       <p>Page not found</p>
-      <a routerLink="/dashboard">Back to Dashboard</a>
+      <a routerLink="/dashboard" {{ if model.web_admin_layout }}pRipple{{ end }}>Back to Dashboard</a>
     </div>
   `,
   styles: [`

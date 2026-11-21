@@ -22,6 +22,9 @@ import { RouterLink } from '@angular/router';
 import { AuthService } from '../../core/auth/auth.service';
 import { SessionSummaryComponent } from '../../core/auth/session-summary.component';
 {{ end }}
+{{ if model.web_admin_layout }}
+import { RippleModule } from 'primeng/ripple';
+{{ end }}
 
 /**
  * PLATFORM: Starter landing page. Business dashboards belong in domains/.
@@ -31,7 +34,14 @@ import { SessionSummaryComponent } from '../../core/auth/session-summary.compone
 @Component({
   selector: '{{ model.manifest.component_prefix }}-dashboard',
   standalone: true,
-  imports: [{{ if model.angular_cognito_enabled }}SessionSummaryComponent, RouterLink{{ end }}],
+  imports: [
+{{ if model.angular_cognito_enabled }}
+    SessionSummaryComponent, RouterLink,
+{{ end }}
+{{ if model.web_admin_layout }}
+    RippleModule,
+{{ end }}
+  ],
   template: `
     <div class="dashboard">
       <h1>Welcome to {{ model.manifest.service_name }}</h1>
@@ -39,7 +49,7 @@ import { SessionSummaryComponent } from '../../core/auth/session-summary.compone
 {{ if model.angular_cognito_enabled }}
       <{{ model.manifest.component_prefix }}-session-summary />
       @if (auth.hasRole('PlatformAdmin')) {
-        <p><a routerLink="/admin/tenants">Manage tenants and users</a></p>
+        <p><a routerLink="/admin/tenants" {{ if model.web_admin_layout }}pRipple{{ end }}>Manage tenants and users</a></p>
       }
 {{ end }}
     </div>
@@ -48,6 +58,10 @@ import { SessionSummaryComponent } from '../../core/auth/session-summary.compone
     .dashboard {
       padding: var(--spacing-xl);
     }
+{{ if model.web_admin_layout }}
+    a { color: var(--p-primary-color); font-weight: 600; }
+    a:hover { color: var(--p-primary-hover-color); }
+{{ end }}
     h1 {
       margin-bottom: var(--spacing-md);
     }

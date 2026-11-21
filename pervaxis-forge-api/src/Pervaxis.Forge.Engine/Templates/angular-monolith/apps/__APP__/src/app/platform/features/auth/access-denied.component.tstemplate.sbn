@@ -20,6 +20,9 @@
 import { Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute } from '@angular/router';
+{{ if model.web_admin_layout }}
+import { RippleModule } from 'primeng/ripple';
+{{ end }}
 import { map } from 'rxjs';
 import { AuthService } from '../../core/auth/auth.service';
 
@@ -32,12 +35,15 @@ const REASONS: Readonly<Record<string, string>> = {
 @Component({
   selector: '{{ model.manifest.component_prefix }}-access-denied',
   standalone: true,
+{{ if model.web_admin_layout }}
+  imports: [RippleModule],
+{{ end }}
   template: `
     <main class="access-denied">
       <h1>Access denied</h1>
       <p [textContent]="message()"></p>
       @if (auth.isAuthenticated()) {
-        <button type="button" class="btn" (click)="signOut()">Sign out</button>
+        <button {{ if model.web_admin_layout }}pRipple {{ end }}type="button" class="btn" (click)="signOut()">Sign out</button>
       }
     </main>
   `,

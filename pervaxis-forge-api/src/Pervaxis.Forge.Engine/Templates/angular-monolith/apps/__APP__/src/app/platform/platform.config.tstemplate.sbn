@@ -25,12 +25,73 @@ import Aura from '@primeng/themes/aura';
 {{ if model.web_admin_layout }}
 import { definePreset } from '@primeng/themes';
 
-// Use accessible primary text/button colors in each scheme; preserve the native baseline.
+// Keep the admin palette in the platform preset so PrimeNG and custom UI share one source.
 const webTheme = definePreset(Aura, {
   semantic: {
+    focusRing: { width: '3px', style: 'solid', color: '{primary.color}', offset: '2px', shadow: 'none' },
     colorScheme: {
-      light: { primary: { color: '{indigo.700}', contrastColor: '#ffffff', hoverColor: '{indigo.800}', activeColor: '{indigo.900}' } },
-      dark: { primary: { color: '{indigo.300}', contrastColor: '{indigo.950}', hoverColor: '{indigo.200}', activeColor: '{indigo.100}' } },
+      light: {
+        surface: {
+          0: '#ffffff', 50: '{slate.50}', 100: '{slate.100}', 200: '{slate.200}', 300: '{slate.300}',
+          400: '{slate.400}', 500: '{slate.500}', 600: '{slate.600}', 700: '{slate.700}', 800: '{slate.800}',
+          900: '{slate.900}', 950: '{slate.950}',
+        },
+        primary: { color: '{indigo.600}', contrastColor: '#ffffff', hoverColor: '{indigo.700}', activeColor: '{indigo.800}' },
+        highlight: { background: '{indigo.50}', focusBackground: '{indigo.100}', color: '{indigo.700}', focusColor: '{indigo.800}' },
+        formField: {
+          background: '{surface.0}', disabledBackground: '{surface.100}', filledBackground: '{surface.50}',
+          filledHoverBackground: '{surface.50}', filledFocusBackground: '{surface.50}', borderColor: '{surface.300}',
+          hoverBorderColor: '{surface.400}', focusBorderColor: '{primary.color}', invalidBorderColor: '{red.500}',
+          color: '{slate.900}', disabledColor: '{slate.500}', placeholderColor: '{slate.500}',
+          invalidPlaceholderColor: '{red.700}', floatLabelColor: '{slate.500}', floatLabelFocusColor: '{primary.color}',
+          floatLabelActiveColor: '{slate.500}', floatLabelInvalidColor: '{red.700}', iconColor: '{slate.500}',
+        },
+        text: { color: '{slate.900}', hoverColor: '{slate.950}', mutedColor: '{slate.600}', hoverMutedColor: '{slate.700}' },
+        content: { background: '{surface.0}', hoverBackground: '{surface.50}', borderColor: '{surface.200}', color: '{text.color}', hoverColor: '{text.hover.color}' },
+        overlay: {
+          select: { background: '{surface.0}', borderColor: '{surface.200}', color: '{text.color}' },
+          popover: { background: '{surface.0}', borderColor: '{surface.200}', color: '{text.color}' },
+          modal: { background: '{surface.0}', borderColor: '{surface.200}', color: '{text.color}' },
+        },
+        navigation: {
+          item: {
+            focusBackground: '{indigo.100}', activeBackground: '{indigo.100}', color: '{indigo.950}',
+            focusColor: '{indigo.800}', activeColor: '{indigo.800}',
+            icon: { color: '{indigo.700}', focusColor: '{indigo.800}', activeColor: '{indigo.700}' },
+          },
+        },
+      },
+      dark: {
+        surface: {
+          0: '#ffffff', 50: '{slate.50}', 100: '{slate.100}', 200: '{slate.200}', 300: '{slate.300}',
+          400: '{slate.400}', 500: '{slate.500}', 600: '{slate.600}', 700: '{slate.700}', 800: '{slate.800}',
+          900: '{slate.900}', 950: '{slate.950}',
+        },
+        primary: { color: '{indigo.300}', contrastColor: '{slate.900}', hoverColor: '{indigo.200}', activeColor: '{indigo.100}' },
+        highlight: { background: '{indigo.950}', focusBackground: '{indigo.900}', color: '{indigo.200}', focusColor: '{indigo.100}' },
+        formField: {
+          background: '{slate.900}', disabledBackground: '{slate.800}', filledBackground: '{slate.900}',
+          filledHoverBackground: '{slate.900}', filledFocusBackground: '{slate.900}', borderColor: '{slate.600}',
+          hoverBorderColor: '{slate.500}', focusBorderColor: '{primary.color}', invalidBorderColor: '{red.300}',
+          color: '{slate.100}', disabledColor: '{slate.400}', placeholderColor: '{slate.400}',
+          invalidPlaceholderColor: '{red.300}', floatLabelColor: '{slate.400}', floatLabelFocusColor: '{primary.color}',
+          floatLabelActiveColor: '{slate.400}', floatLabelInvalidColor: '{red.300}', iconColor: '{slate.400}',
+        },
+        text: { color: '{slate.100}', hoverColor: '{slate.50}', mutedColor: '{slate.300}', hoverMutedColor: '{slate.200}' },
+        content: { background: '{slate.800}', hoverBackground: '{slate.700}', borderColor: '{slate.700}', color: '{text.color}', hoverColor: '{text.hover.color}' },
+        overlay: {
+          select: { background: '{slate.800}', borderColor: '{slate.700}', color: '{text.color}' },
+          popover: { background: '{slate.800}', borderColor: '{slate.700}', color: '{text.color}' },
+          modal: { background: '{slate.800}', borderColor: '{slate.700}', color: '{text.color}' },
+        },
+        navigation: {
+          item: {
+            focusBackground: '{indigo.800}', activeBackground: '{indigo.800}', color: '{indigo.100}',
+            focusColor: '{indigo.50}', activeColor: '{indigo.50}',
+            icon: { color: '{indigo.300}', focusColor: '{indigo.200}', activeColor: '{indigo.100}' },
+          },
+        },
+      },
     },
   },
 });
@@ -85,6 +146,9 @@ export const appConfig: ApplicationConfig = {
     ),
     provideAnimationsAsync(),
     providePrimeNG({
+{{ if model.web_admin_layout }}
+      ripple: true,
+{{ end }}
       theme: {
         preset: {{ if model.web_admin_layout }}webTheme{{ else }}Aura{{ end }},
         options: { darkModeSelector: '.dark-mode' }
