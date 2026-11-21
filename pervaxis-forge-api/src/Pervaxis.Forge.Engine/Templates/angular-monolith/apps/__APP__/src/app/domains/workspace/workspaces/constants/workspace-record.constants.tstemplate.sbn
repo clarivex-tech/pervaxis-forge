@@ -1,0 +1,58 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { WorkspacePlan, WorkspaceStatus } from '../contracts/workspace-record.model';
+
+export const WORKSPACE_NAME_MIN_LENGTH = 3;
+export const WORKSPACE_NAME_MAX_LENGTH = 60;
+export const WORKSPACE_OWNER_MAX_LENGTH = 80;
+export const WORKSPACE_DESCRIPTION_MAX_LENGTH = 500;
+export const WORKSPACE_CODE_PATTERN = /^[A-Z]{3}-\d{3}$/;
+export const WORKSPACE_DEFAULT_PAGE_SIZE = 10;
+export const WORKSPACE_PAGE_SIZE_OPTIONS: readonly number[] = [5, 10, 25];
+
+export const WORKSPACE_STATUSES: readonly WorkspaceStatus[] = ['Active', 'Suspended', 'Archived'];
+export const WORKSPACE_PLANS: readonly WorkspacePlan[] = ['Standard', 'Professional', 'Enterprise'];
+
+/** Configuration value that explicitly selects the in-browser mock data source. */
+export const WORKSPACE_RECORDS_MODE_OPTION = 'workspaceRecordsMode';
+export const WORKSPACE_RECORDS_MOCK_MODE = 'mock';
+
+/** Button labels and toast copy share one verb per action. */
+export const WORKSPACE_COPY = {
+  mockBanner: 'Workspaces, members, audit history, export and restore are simulated in this browser session. No API, database or AWS service is called.',
+  toast: {
+    created: 'Workspace created',
+    updated: 'Changes saved',
+    suspended: 'Workspaces suspended',
+    deleted: 'Workspace deleted',
+    deletedMany: 'Workspaces deleted',
+    restored: 'Workspaces restored (mock)',
+    exported: 'Export prepared (mock). No file was generated.',
+    auditExported: 'Audit log export prepared (mock). No file was generated.',
+    refreshed: 'Workspaces refreshed',
+    createFailed: 'Couldn\u2019t create workspace',
+    updateFailed: 'Couldn\u2019t save changes',
+    suspendFailed: 'Couldn\u2019t suspend workspaces',
+    deleteFailed: 'Couldn\u2019t delete workspaces',
+    restoreFailed: 'Couldn\u2019t restore workspaces',
+    exportFailed: 'Couldn\u2019t export workspaces',
+    detailFailed: 'Couldn\u2019t load workspace details',
+  },
+} as const;
+{{ end }}

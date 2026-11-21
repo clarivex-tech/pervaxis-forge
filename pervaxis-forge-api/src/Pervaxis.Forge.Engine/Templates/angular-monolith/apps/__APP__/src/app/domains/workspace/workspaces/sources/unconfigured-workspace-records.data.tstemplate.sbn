@@ -1,0 +1,47 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { Injectable } from '@angular/core';
+import { Observable, throwError } from 'rxjs';
+import { WorkspaceRecordsData, WorkspaceRecordsError } from './workspace-records.data';
+
+const REFERENCE = 'ERR-WS-UNCONFIGURED';
+
+/**
+ * Selected when `workspaceRecordsMode` is not `mock`. A live Workspaces API does not exist yet, so
+ * every call fails visibly. This is never used as an automatic fallback for API or authentication errors.
+ */
+@Injectable()
+export class UnconfiguredWorkspaceRecordsData extends WorkspaceRecordsData {
+  readonly source = 'unconfigured' as const;
+  list(): Observable<never> { return this.fail(); }
+  create(): Observable<never> { return this.fail(); }
+  update(): Observable<never> { return this.fail(); }
+  setStatus(): Observable<never> { return this.fail(); }
+  remove(): Observable<never> { return this.fail(); }
+  restore(): Observable<never> { return this.fail(); }
+  members(): Observable<never> { return this.fail(); }
+  audit(): Observable<never> { return this.fail(); }
+  exportRecords(): Observable<never> { return this.fail(); }
+  private fail(): Observable<never> {
+    return throwError(() => new WorkspaceRecordsError(
+      'No Workspaces data source is configured. Set workspaceRecordsMode to "mock" in domain.config.json for the explicit mock preview, or provide a live data implementation.',
+      503, REFERENCE));
+  }
+}
+{{ end }}

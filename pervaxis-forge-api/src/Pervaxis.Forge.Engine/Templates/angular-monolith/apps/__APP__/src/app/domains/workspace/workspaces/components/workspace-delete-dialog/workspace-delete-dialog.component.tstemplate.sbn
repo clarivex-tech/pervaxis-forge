@@ -1,0 +1,106 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import {
+  ChangeDetectionStrategy, Component, ElementRef, HostListener, Injector, afterNextRender, computed, effect, inject, input, output,
+  signal, untracked, viewChild,
+} from '@angular/core';
+import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
+import { InputTextModule } from 'primeng/inputtext';
+import { WorkspaceRecord } from '../../contracts/workspace-record.model';
+import { WorkspaceFailure } from '../../state/workspace-records.state';
+
+const BULK_PHRASE = 'DELETE';
+const LISTED_NAMES = 5;
+
+@Component({
+  selector: 'domain-workspace-delete-dialog',
+  standalone: true,
+  imports: [ButtonModule, DialogModule, InputTextModule],
+  templateUrl: './workspace-delete-dialog.component.html',
+  styleUrl: './workspace-delete-dialog.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class WorkspaceDeleteDialogComponent {
+  /** Records awaiting confirmation. Null keeps the dialog closed. */
+  readonly records = input<readonly WorkspaceRecord[] | null>(null);
+  readonly busy = input(false);
+  readonly failure = input<WorkspaceFailure | null>(null);
+  readonly confirmed = output<void>();
+  readonly cancelled = output<void>();
+  /** Emitted after the dialog is fully hidden, when focus can safely return to the opener. */
+  readonly hidden = output<void>();
+
+  protected readonly typed = signal('');
+  protected readonly open = computed(() => (this.records()?.length ?? 0) > 0);
+  protected readonly bulk = computed(() => (this.records()?.length ?? 0) > 1);
+  protected readonly memberTotal = computed(() => (this.records() ?? []).reduce((sum, record) => sum + record.memberCount, 0));
+  /** Optional typed verification. Single deletes use the code, bulk deletes use a fixed word. */
+  protected readonly phrase = computed<string | null>(() => {
+    const records = this.records() ?? [];
+    if (this.memberTotal() === 0 || records.length === 0) return null;
+    return records.length === 1 ? records[0].code : BULK_PHRASE;
+  });
+  protected readonly canConfirm = computed(() => !this.busy() && (this.phrase() === null || this.typed() === this.phrase()));
+  protected readonly title = computed(() => {
+    const records = this.records() ?? [];
+    return records.length === 1 ? 'Delete \u201c' + records[0].name + '\u201d?' : 'Delete ' + records.length + ' workspaces?';
+  });
+  protected readonly listedNames = computed(() => (this.records() ?? []).slice(0, LISTED_NAMES).map(record => record.name));
+  protected readonly hiddenCount = computed(() => Math.max(0, (this.records()?.length ?? 0) - LISTED_NAMES));
+
+  private readonly injector = inject(Injector);
+  private readonly typedInput = viewChild<ElementRef<HTMLInputElement>>('typedInput');
+  private readonly cancelButton = viewChild('cancelButton', { read: ElementRef<HTMLElement> });
+
+  constructor() {
+    effect(() => {
+      this.records();
+      untracked(() => this.typed.set(''));
+    });
+  }
+
+  /** Escape cancels, except while a deletion is running. Handled here so it is consistent with the drawer. */
+  @HostListener('document:keydown', ['$event'])
+  protected onKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'Escape' || !this.open() || this.busy()) return;
+    this.cancelled.emit();
+  }
+
+  protected onTyped(event: Event): void {
+    this.typed.set((event.target as HTMLInputElement).value);
+  }
+
+  protected onVisibleChange(visible: boolean): void {
+    if (!visible && this.open() && !this.busy()) this.cancelled.emit();
+  }
+
+  /** Moves focus to the typed-code field when present, otherwise to the safe Cancel action. */
+  protected focusInitial(): void {
+    afterNextRender(() => {
+      const target = this.typedInput()?.nativeElement ?? this.cancelButton()?.nativeElement.querySelector('button');
+      target?.focus();
+    }, { injector: this.injector });
+  }
+
+  protected confirm(): void {
+    if (this.canConfirm()) this.confirmed.emit();
+  }
+}
+{{ end }}

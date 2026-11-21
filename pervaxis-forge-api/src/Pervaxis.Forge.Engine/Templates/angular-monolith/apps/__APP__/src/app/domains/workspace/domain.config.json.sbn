@@ -1,5 +1,6 @@
 {{ if model.angular_cognito_enabled && model.web_admin_layout }}
 {
-  "apiPath": "/api/v1/workspace/tasks"
+  "apiPath": "/api/v1/workspace/tasks",
+  "workspaceRecordsMode": "mock"
 }
 {{ end }}

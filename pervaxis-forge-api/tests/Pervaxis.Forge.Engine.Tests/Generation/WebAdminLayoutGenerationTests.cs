@@ -152,4 +152,88 @@ public sealed class WebAdminLayoutGenerationTests
         Assert.DoesNotContain("#", workspace);
     }
 
-}
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task WorkspaceCrudaReferenceStaysInsideDomainAndWebOnly(bool combined)
+    {
+        var manifest = new ForgeManifest
+        {
+            Product = "verify", VerticalSlug = "verify", ServiceName = "admin-web",
+            ComponentPrefix = "vfy", ServiceType = ServiceType.Monolithic, CloudProvider = "AWS",
+            AngularAuth = TestTenancy.AngularAuth,
+            UiTargets = combined ? ["web", "mobile"] : ["web"],
+        };
+        using var zip = new ZipArchive(new MemoryStream(await new PrintGenerator().GenerateAsync(manifest, "AWS")));
+        const string root = "/domains/workspace/workspaces/";
+        var files = zip.Entries.Where(e => e.FullName.Contains(root, StringComparison.Ordinal)).ToList();
+        var packages = new StreamReader(zip.Entries.Single(e => e.FullName.EndsWith("package.json", StringComparison.Ordinal)).Open()).ReadToEnd();
+        if (combined)
+        {
+            Assert.Empty(files);
+            Assert.DoesNotContain("ag-grid", packages);
+            return;
+        }
+
+        string Read(string suffix) => new StreamReader(files.Single(e => e.FullName.EndsWith(suffix, StringComparison.Ordinal)).Open()).ReadToEnd();
+        foreach (var required in new[]
+        {
+            "components/workspace-grid/workspace-grid.component.ts", "components/workspace-drawer/workspace-drawer.component.ts",
+            "components/workspace-form/workspace-form.component.ts", "components/workspace-detail/workspace-detail.component.ts",
+            "components/workspace-delete-dialog/workspace-delete-dialog.component.ts", "pages/workspace-records/workspace-records.component.ts",
+            "state/workspace-records.state.ts", "sources/mock-workspace-records.data.ts", "sources/workspace-records.providers.ts",
+        })
+        {
+            Assert.Contains(files, e => e.FullName.EndsWith(required, StringComparison.Ordinal));
+        }
+
+        // AG Grid Community and PrimeNG only; no Enterprise, Ng-Matero or Canvas.
+        Assert.Contains("\"ag-grid-community\"", packages);
+        Assert.Contains("\"ag-grid-angular\"", packages);
+        Assert.DoesNotContain("ag-grid-enterprise", packages);
+        Assert.DoesNotContain("ng-matero", packages);
+
+        // Domain-owned: declared requirements, explicit mock mode, and no host/platform imports.
+        var domain = new StreamReader(zip.Entries.Single(e => e.FullName.EndsWith("/domains/workspace/domain.json", StringComparison.Ordinal)).Open()).ReadToEnd();
+        Assert.Contains("\"ag-grid-community\"", domain);
+        Assert.Contains("\"workspaceRecordsMode\"", domain);
+        var config = new StreamReader(zip.Entries.Single(e => e.FullName.EndsWith("/domains/workspace/domain.config.json", StringComparison.Ordinal)).Open()).ReadToEnd();
+        Assert.Contains("\"workspaceRecordsMode\": \"mock\"", config);
+        Assert.Contains("\"apiPath\": \"/api/v1/workspace/tasks\"", config);
+        foreach (var file in files.Where(e => e.FullName.EndsWith(".ts", StringComparison.Ordinal)))
+        {
+            var text = new StreamReader(file.Open()).ReadToEnd();
+            Assert.DoesNotContain("{{", text);
+            Assert.DoesNotContain("ag-grid-enterprise", text);
+            Assert.DoesNotContain("/platform/", text);
+            Assert.DoesNotContain("@forge/ui-contracts/v2", text);
+        }
+        foreach (var file in files.Where(e => e.FullName.EndsWith(".html", StringComparison.Ordinal)))
+        {
+            Assert.DoesNotContain("{{", new StreamReader(file.Open()).ReadToEnd());
+        }
+
+        // Mock data is selected only by the explicit option and never reached from the live Tasks feature.
+        var providers = Read("sources/workspace-records.providers.ts");
+        Assert.Contains("=== WORKSPACE_RECORDS_MOCK_MODE", providers);
+        Assert.Contains("UnconfiguredWorkspaceRecordsData", providers);
+        foreach (var file in zip.Entries.Where(e => e.FullName.Contains("/domains/workspace/tasks/", StringComparison.Ordinal)
+                     && e.FullName.EndsWith(".ts", StringComparison.Ordinal)))
+        {
+            var text = new StreamReader(file.Open()).ReadToEnd();
+            Assert.DoesNotContain("Mock", text);
+            Assert.DoesNotContain("workspaces/", text);
+        }
+        var routes = new StreamReader(zip.Entries.Single(e => e.FullName.EndsWith("/domains/workspace/routes.ts", StringComparison.Ordinal)).Open()).ReadToEnd();
+        Assert.Contains("providers: [WorkspaceTaskApi, WorkspaceTaskState]", routes);
+        Assert.Contains("path: 'workspaces'", routes);
+
+        // Accessibility and theming contract of the screen.
+        var grid = Read("workspace-grid/workspace-grid.component.ts");
+        Assert.Contains("AllCommunityModule", grid);
+        Assert.Contains("var(--color-surface)", grid);
+        var page = Read("workspace-records/workspace-records.component.html");
+        Assert.Contains("role=\"search\"", page);
+        Assert.Contains("aria-label=\"Breadcrumb\"", page);
+        Assert.Contains("ERR-WS", Read("sources/mock-workspace-records.data.ts"));
+    }}

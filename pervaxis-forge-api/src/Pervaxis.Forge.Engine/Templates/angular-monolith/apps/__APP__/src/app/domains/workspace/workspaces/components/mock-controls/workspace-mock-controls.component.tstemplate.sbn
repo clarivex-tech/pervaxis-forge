@@ -1,0 +1,97 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { ChangeDetectionStrategy, Component, inject } from '@angular/core';
+import { FormsModule } from '@angular/forms';
+import { ButtonModule } from 'primeng/button';
+import { SelectModule } from 'primeng/select';
+import { MockWorkspaceRecordsData, MockWorkspaceScenario } from '../../sources/mock-workspace-records.data';
+import { WorkspaceRecordsState } from '../../state/workspace-records.state';
+
+interface ScenarioOption {
+  readonly value: MockWorkspaceScenario;
+  readonly label: string;
+}
+
+/**
+ * Review-only controls for the explicit mock data source. They are rendered only when the screen is
+ * running on mock data and never ship as production behavior.
+ */
+@Component({
+  selector: 'domain-workspace-mock-controls',
+  standalone: true,
+  imports: [FormsModule, ButtonModule, SelectModule],
+  template: `
+    <section class="mock-controls" aria-labelledby="workspace-mock-controls-title">
+      <h2 id="workspace-mock-controls-title">Mock preview controls</h2>
+      <div class="mock-controls__row">
+        <div class="mock-controls__field">
+          <label for="workspace-mock-scenario">List state</label>
+          <p-select inputId="workspace-mock-scenario" [options]="scenarios" optionLabel="label" optionValue="value"
+                    [ngModel]="mock.scenario()" (ngModelChange)="setScenario($event)" appendTo="body" />
+        </div>
+        <p-button label="Show no search results" severity="secondary" [outlined]="true" size="small"
+                  (onClick)="showNoResults()" />
+        <label class="mock-controls__check">
+          <input type="checkbox" [checked]="mock.failNextMutation()" (change)="setFailNext($event)" />
+          Make the next create, save, suspend, delete or restore fail
+        </label>
+      </div>
+    </section>
+  `,
+  styles: [`
+    :host { display: block; }
+    .mock-controls { margin-bottom: 1rem; padding: 0.75rem 1rem; border: 1px dashed var(--color-info-border); border-radius: 0.6rem; background: var(--color-info-bg); color: var(--color-text); }
+    h2 { margin: 0 0 0.5rem; font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--color-info); }
+    .mock-controls__row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.75rem 1.25rem; }
+    .mock-controls__field { display: flex; flex-direction: column; gap: 0.25rem; }
+    .mock-controls__field label { font-size: 0.85rem; font-weight: 600; }
+    .mock-controls__check { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+    :host :focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+  `],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class WorkspaceMockControlsComponent {
+  protected readonly mock = inject(MockWorkspaceRecordsData);
+  private readonly state = inject(WorkspaceRecordsState);
+  protected readonly scenarios: ScenarioOption[] = [
+    { value: 'data', label: 'Data loaded' },
+    { value: 'loading', label: 'Loading (stays loading)' },
+    { value: 'empty', label: 'Empty (no records)' },
+    { value: 'error', label: 'Error with reference code' },
+    { value: 'denied', label: 'Access denied' },
+  ];
+
+  protected setScenario(scenario: MockWorkspaceScenario): void {
+    this.mock.setScenario(scenario);
+    this.state.clearFilters();
+    this.state.clearSelection();
+    void this.state.load();
+  }
+
+  /** Applies a search that matches nothing, so the real no-results path is exercised. */
+  protected showNoResults(): void {
+    if (this.mock.scenario() !== 'data') this.setScenario('data');
+    this.state.setSearch('zzz-no-match');
+  }
+
+  protected setFailNext(event: Event): void {
+    this.mock.failNextMutation.set((event.target as HTMLInputElement).checked);
+  }
+}
+{{ end }}

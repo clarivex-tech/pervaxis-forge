@@ -1,0 +1,8 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+:host { display: block; }
+.grid-region { width: 100%; }
+.grid { display: block; width: 100%; }
+@media (prefers-reduced-motion: reduce) {
+  :host ::ng-deep .ag-root-wrapper * { transition: none !important; animation: none !important; }
+}
+{{ end }}

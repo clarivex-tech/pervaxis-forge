@@ -1,0 +1,264 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { Injectable, InjectionToken, inject, signal } from '@angular/core';
+import { NEVER, Observable, defer, map, timer } from 'rxjs';
+import {
+  WorkspaceAuditChange, WorkspaceAuditEvent, WorkspaceDraft, WorkspaceExportResult, WorkspaceMember,
+  WorkspaceMemberRole, WorkspaceRecord, WorkspaceStatus,
+} from '../contracts/workspace-record.model';
+import { WorkspaceRecordsData, WorkspaceRecordsError } from './workspace-records.data';
+
+/** Simulated network delay. Specs override this with 0. */
+export const MOCK_WORKSPACE_LATENCY_MS = new InjectionToken<number>('workspace.mock.latency-ms', {
+  providedIn: 'root',
+  factory: () => 350,
+});
+
+/** List outcomes a reviewer can preview. They only change what this mock returns. */
+export type MockWorkspaceScenario = 'data' | 'loading' | 'empty' | 'error' | 'denied';
+
+const MOCK_ACTOR = 'Mock user';
+const MEMBER_NAMES: readonly string[] = [
+  'Aarav Shah', 'Bianca Rossi', 'Chen Yu', 'Dara Okafor', 'Elif Demir', 'Farah Khan', 'Gabriel Costa',
+  'Hiro Sato', 'Ingrid Berg', 'Jamal Reed', 'Kavya Iyer', 'Lucas Meyer', 'Maya Patel', 'Nikolai Volkov',
+  'Olivia Grant', 'Pedro Alves',
+];
+
+type SeedRow = readonly [string, string, string, WorkspaceRecord['plan'], WorkspaceStatus, number, string];
+const SEED: readonly SeedRow[] = [
+  ['Finance Core', 'FIN-001', 'Priya Nair', 'Enterprise', 'Active', 12, '2026-03-12'],
+  ['Retail Ops', 'RTL-004', 'Marcus Lee', 'Professional', 'Active', 8, '2026-04-02'],
+  ['HR Portal', 'HRP-002', 'Sana Iqbal', 'Standard', 'Suspended', 4, '2026-04-19'],
+  ['Data Platform', 'DAT-007', 'Tom Becker', 'Enterprise', 'Active', 15, '2026-04-30'],
+  ['Legacy CRM', 'CRM-001', 'Anita Roy', 'Standard', 'Archived', 0, '2025-01-11'],
+  ['Procurement', 'PRC-003', 'Li Wei', 'Professional', 'Active', 6, '2026-06-08'],
+  ['Field Service', 'FLD-005', 'Omar Haddad', 'Professional', 'Suspended', 3, '2026-07-21'],
+  ['Compliance', 'CMP-006', 'Elena Petrov', 'Enterprise', 'Active', 9, '2026-09-14'],
+  ['Marketing Hub', 'MKT-008', 'Chloe Martin', 'Professional', 'Active', 7, '2026-09-30'],
+  ['Analytics Lab', 'ANL-009', 'Noah Kim', 'Standard', 'Active', 5, '2026-10-05'],
+  ['Support Desk', 'SUP-010', 'Ravi Menon', 'Professional', 'Suspended', 4, '2026-10-12'],
+  ['Legal Vault', 'LGL-011', 'Hannah Fischer', 'Enterprise', 'Active', 3, '2026-10-20'],
+  ['Sandbox', 'SBX-012', 'Diego Alvarez', 'Standard', 'Archived', 0, '2026-10-28'],
+  ['Partner Portal', 'PRT-013', 'Mei Tanaka', 'Professional', 'Active', 6, '2026-11-03'],
+];
+
+/**
+ * In-browser Workspaces data. It is selected only by `workspaceRecordsMode: "mock"` and is never a
+ * fallback for failed API or authentication calls. Members, audit history, export and restore are
+ * simulated here and do not exist in any backend yet.
+ */
+@Injectable()
+export class MockWorkspaceRecordsData extends WorkspaceRecordsData {
+  readonly source = 'mock' as const;
+  readonly scenario = signal<MockWorkspaceScenario>('data');
+  /** When true, the next create, update, status change, delete or restore fails once. */
+  readonly failNextMutation = signal(false);
+  private readonly latencyMs = inject(MOCK_WORKSPACE_LATENCY_MS);
+  private records: WorkspaceRecord[] = seedRecords();
+  private deleted: WorkspaceRecord[] = [];
+  private auditLog = new Map<string, WorkspaceAuditEvent[]>(seedAudit(this.records));
+  private sequence = 0;
+  private eventSequence = 1000;
+
+  /** Switches the previewed list outcome. Callers reload the list afterwards. */
+  setScenario(scenario: MockWorkspaceScenario): void {
+    this.scenario.set(scenario);
+    if (scenario === 'data') {
+      this.records = seedRecords();
+      this.deleted = [];
+      this.auditLog = new Map(seedAudit(this.records));
+    } else if (scenario === 'empty') {
+      this.records = [];
+      this.deleted = [];
+      this.auditLog = new Map();
+    }
+  }
+
+  list(): Observable<readonly WorkspaceRecord[]> {
+    const scenario = this.scenario();
+    if (scenario === 'loading') return NEVER;
+    return this.respond(() => {
+      if (scenario === 'error') {
+        throw new WorkspaceRecordsError('The server didn\u2019t respond. Check your connection and try again.', 503, 'ERR-WS-5031');
+      }
+      if (scenario === 'denied') {
+        throw new WorkspaceRecordsError('You do not have access to Workspaces.', 403, 'ERR-WS-4031');
+      }
+      return [...this.records];
+    });
+  }
+
+  create(draft: WorkspaceDraft): Observable<WorkspaceRecord> {
+    return this.respond(() => {
+      this.failIfRequested();
+      if (this.records.some(record => record.code === draft.code)) {
+        throw new WorkspaceRecordsError('This code is already used.', 409, 'ERR-WS-4091',
+          { code: 'This code is already used. Choose another.' });
+      }
+      const now = new Date().toISOString();
+      const record: WorkspaceRecord = {
+        id: 'mock-ws-new-' + (++this.sequence), name: draft.name, code: draft.code, owner: draft.owner,
+        plan: draft.plan, status: draft.status, memberCount: 0, description: draft.description,
+        createdAt: now, updatedAt: now, updatedBy: MOCK_ACTOR,
+      };
+      this.records = [record, ...this.records];
+      this.log(record.id, 'created', MOCK_ACTOR + ' created this workspace', []);
+      return record;
+    });
+  }
+
+  update(id: string, draft: WorkspaceDraft): Observable<WorkspaceRecord> {
+    return this.respond(() => {
+      this.failIfRequested();
+      const current = this.require(id);
+      const updated: WorkspaceRecord = {
+        ...current, name: draft.name, owner: draft.owner, plan: draft.plan, status: draft.status,
+        description: draft.description, updatedAt: new Date().toISOString(), updatedBy: MOCK_ACTOR,
+      };
+      this.replace(updated);
+      const changes = diff(current, updated);
+      const statusChanged = current.status !== updated.status;
+      this.log(id, statusChanged ? 'status-changed' : 'updated',
+        MOCK_ACTOR + (statusChanged ? ' changed the status' : ' updated this workspace'), changes);
+      return updated;
+    });
+  }
+
+  setStatus(ids: readonly string[], status: WorkspaceStatus): Observable<readonly WorkspaceRecord[]> {
+    return this.respond(() => {
+      this.failIfRequested();
+      const updated: WorkspaceRecord[] = [];
+      for (const id of ids) {
+        const current = this.require(id);
+        const next: WorkspaceRecord = { ...current, status, updatedAt: new Date().toISOString(), updatedBy: MOCK_ACTOR };
+        this.replace(next);
+        this.log(id, 'status-changed', MOCK_ACTOR + ' changed the status', diff(current, next));
+        updated.push(next);
+      }
+      return updated;
+    });
+  }
+
+  remove(ids: readonly string[]): Observable<void> {
+    return this.respond(() => {
+      this.failIfRequested();
+      const removed = ids.map(id => this.require(id));
+      this.records = this.records.filter(record => !ids.includes(record.id));
+      this.deleted = [...removed, ...this.deleted];
+      for (const record of removed) this.log(record.id, 'deleted', MOCK_ACTOR + ' deleted this workspace', []);
+    });
+  }
+
+  restore(ids: readonly string[]): Observable<readonly WorkspaceRecord[]> {
+    return this.respond(() => {
+      this.failIfRequested();
+      const restored = this.deleted.filter(record => ids.includes(record.id));
+      if (restored.length !== ids.length) {
+        throw new WorkspaceRecordsError('These workspaces can no longer be restored.', 404, 'ERR-WS-4041');
+      }
+      this.deleted = this.deleted.filter(record => !ids.includes(record.id));
+      this.records = [...restored, ...this.records];
+      for (const record of restored) this.log(record.id, 'restored', MOCK_ACTOR + ' restored this workspace', []);
+      return restored;
+    });
+  }
+
+  members(id: string): Observable<readonly WorkspaceMember[]> {
+    return this.respond(() => {
+      const record = this.require(id, true);
+      return Array.from({ length: record.memberCount }, (_, index): WorkspaceMember => {
+        const name = index === 0 ? record.owner : MEMBER_NAMES[(index + record.code.charCodeAt(0)) % MEMBER_NAMES.length];
+        const role: WorkspaceMemberRole = index === 0 ? 'Owner' : index === 1 ? 'Admin' : index % 4 === 0 ? 'Viewer' : 'Member';
+        return {
+          id: record.id + '-member-' + index, name, role,
+          email: name.toLowerCase().replace(/[^a-z]+/g, '.') + '@example.test',
+          joinedAt: record.createdAt,
+        };
+      });
+    });
+  }
+
+  audit(id: string): Observable<readonly WorkspaceAuditEvent[]> {
+    return this.respond(() => {
+      this.require(id, true);
+      return [...(this.auditLog.get(id) ?? [])].sort((a, b) => b.at.localeCompare(a.at));
+    });
+  }
+
+  exportRecords(ids: readonly string[] | null): Observable<WorkspaceExportResult> {
+    return this.respond(() => ({ recordCount: ids ? ids.length : this.records.length, fileGenerated: false as const }));
+  }
+
+  private respond<T>(produce: () => T): Observable<T> {
+    return defer(() => timer(this.latencyMs).pipe(map(() => produce())));
+  }
+
+  private failIfRequested(): void {
+    if (!this.failNextMutation()) return;
+    this.failNextMutation.set(false);
+    throw new WorkspaceRecordsError('The server could not complete the change.', 500, 'ERR-WS-5032');
+  }
+
+  private require(id: string, includeDeleted = false): WorkspaceRecord {
+    const record = this.records.find(item => item.id === id)
+      ?? (includeDeleted ? this.deleted.find(item => item.id === id) : undefined);
+    if (!record) throw new WorkspaceRecordsError('This workspace no longer exists.', 404, 'ERR-WS-4040');
+    return record;
+  }
+
+  private replace(next: WorkspaceRecord): void {
+    this.records = this.records.map(record => record.id === next.id ? next : record);
+  }
+
+  private log(id: string, action: WorkspaceAuditEvent['action'], summary: string, changes: readonly WorkspaceAuditChange[]): void {
+    const event: WorkspaceAuditEvent = {
+      id: 'mock-audit-' + (++this.eventSequence), action, actor: MOCK_ACTOR, at: new Date().toISOString(), summary, changes,
+    };
+    this.auditLog.set(id, [...(this.auditLog.get(id) ?? []), event]);
+  }
+}
+
+function seedRecords(): WorkspaceRecord[] {
+  return SEED.map(([name, code, owner, plan, status, memberCount, created], index): WorkspaceRecord => ({
+    id: 'mock-ws-' + String(index + 1).padStart(3, '0'), name, code, owner, plan, status, memberCount,
+    description: 'Shared space for ' + name + ' work.',
+    createdAt: created + 'T09:00:00Z', updatedAt: '2026-11-03T10:42:00Z', updatedBy: 'A. Rao',
+  }));
+}
+
+function seedAudit(records: readonly WorkspaceRecord[]): [string, WorkspaceAuditEvent[]][] {
+  return records.map((record): [string, WorkspaceAuditEvent[]] => [record.id, [
+    { id: record.id + '-audit-1', action: 'created', actor: record.owner, at: record.createdAt,
+      summary: record.owner + ' created this workspace', changes: [] },
+    { id: record.id + '-audit-2', action: 'status-changed', actor: record.owner, at: '2026-09-18T16:05:00Z',
+      summary: record.owner + ' changed the status', changes: [{ field: 'Status', from: 'Suspended', to: record.status }] },
+    { id: record.id + '-audit-3', action: 'updated', actor: 'A. Rao', at: record.updatedAt,
+      summary: 'A. Rao updated this workspace', changes: [{ field: 'Plan', from: 'Professional', to: record.plan }] },
+  ]]);
+}
+
+function diff(before: WorkspaceRecord, after: WorkspaceRecord): WorkspaceAuditChange[] {
+  const fields: readonly [string, keyof WorkspaceRecord][] = [
+    ['Name', 'name'], ['Owner', 'owner'], ['Plan', 'plan'], ['Status', 'status'], ['Description', 'description'],
+  ];
+  return fields
+    .filter(([, key]) => before[key] !== after[key])
+    .map(([field, key]) => ({ field, from: String(before[key]), to: String(after[key]) }));
+}
+{{ end }}

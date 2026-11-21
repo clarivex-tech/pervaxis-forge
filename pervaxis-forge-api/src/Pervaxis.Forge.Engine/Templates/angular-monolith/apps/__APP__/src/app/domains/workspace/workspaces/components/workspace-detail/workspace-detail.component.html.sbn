@@ -1,0 +1,96 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+<div class="detail__body">
+  <p-tabs [value]="tab()" (valueChange)="onTab($event)">
+    <p-tablist>
+      <p-tab value="overview">Overview</p-tab>
+      <p-tab value="members">Members</p-tab>
+      <p-tab value="audit">Audit timeline</p-tab>
+    </p-tablist>
+    <p-tabpanels>
+      <p-tabpanel value="overview">
+        <dl class="facts">
+          <dt>Owner</dt><dd [textContent]="record().owner"></dd>
+          <dt>Plan</dt><dd [textContent]="record().plan"></dd>
+          <dt>Members</dt><dd [textContent]="record().memberCount"></dd>
+          <dt>Created</dt><dd><time [attr.datetime]="record().createdAt" [textContent]="record().createdAt | date:'mediumDate':'UTC'"></time></dd>
+          <dt>Description</dt><dd [textContent]="record().description || 'No description.'"></dd>
+          <dt>Last updated</dt>
+          <dd>
+            <time [attr.datetime]="record().updatedAt" [textContent]="record().updatedAt | date:'medium':'UTC'"></time>
+            <span [textContent]="' by ' + record().updatedBy"></span>
+          </dd>
+        </dl>
+      </p-tabpanel>
+
+      <p-tabpanel value="members">
+        <p class="mock-note" role="note"><i class="pi pi-info-circle" aria-hidden="true"></i> Mock members. Membership is generated in this browser and is not connected to any directory or API.</p>
+        @if (loading()) {
+          <div class="skeletons" role="status" aria-label="Loading members">
+            @for (row of placeholderRows; track row) { <p-skeleton height="1.25rem" /> }
+          </div>
+        } @else if (failure(); as problem) {
+          <p class="inline-error" role="alert" [textContent]="problem.message + ' Reference: ' + problem.referenceCode"></p>
+        } @else if (members().length === 0) {
+          <p class="muted">This workspace has no members yet.</p>
+        } @else {
+          <table class="members">
+            <caption class="sr-only">Workspace members</caption>
+            <thead><tr><th scope="col">Name</th><th scope="col">Role</th><th scope="col">Joined</th></tr></thead>
+            <tbody>
+              @for (member of members(); track member.id) {
+                <tr>
+                  <td><span class="member-name" [textContent]="member.name"></span><span class="member-email" [textContent]="member.email"></span></td>
+                  <td [textContent]="member.role"></td>
+                  <td><time [attr.datetime]="member.joinedAt" [textContent]="member.joinedAt | date:'mediumDate':'UTC'"></time></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        }
+      </p-tabpanel>
+
+      <p-tabpanel value="audit">
+        <p class="mock-note" role="note"><i class="pi pi-info-circle" aria-hidden="true"></i> Mock audit history. Events are seeded or recorded in this browser session only. No audit service exists yet.</p>
+        @if (loading()) {
+          <div class="skeletons" role="status" aria-label="Loading audit history">
+            @for (row of placeholderRows; track row) { <p-skeleton height="2.5rem" /> }
+          </div>
+        } @else if (failure(); as problem) {
+          <p class="inline-error" role="alert" [textContent]="problem.message + ' Reference: ' + problem.referenceCode"></p>
+        } @else if (audit().length === 0) {
+          <p class="muted">No audit events recorded.</p>
+        } @else {
+          <ol class="timeline" aria-label="Audit timeline">
+            @for (event of audit(); track event.id) {
+              <li>
+                <div class="who" [textContent]="event.summary"></div>
+                <div class="when"><time [attr.datetime]="event.at" [textContent]="event.at | date:'medium':'UTC'"></time></div>
+                @if (event.changes.length > 0) {
+                  <ul class="diff">
+                    @for (change of event.changes; track change.field) {
+                      <li>
+                        <span [textContent]="change.field + ': '"></span>
+                        <s [textContent]="change.from ?? 'empty'"></s>
+                        <span class="sr-only"> changed to </span><span aria-hidden="true"> &rarr; </span>
+                        <ins [textContent]="change.to ?? 'empty'"></ins>
+                      </li>
+                    }
+                  </ul>
+                }
+              </li>
+            }
+          </ol>
+          <p-button label="Export audit log (mock)" icon="pi pi-download" size="small" severity="secondary" [outlined]="true" (onClick)="exportAudit.emit()" />
+        }
+      </p-tabpanel>
+    </p-tabpanels>
+  </p-tabs>
+</div>
+
+<footer class="detail__footer">
+  <p-button label="Delete" icon="pi pi-trash" severity="danger" [outlined]="true" [disabled]="busy()"
+            [ariaLabel]="'Delete ' + record().name" (onClick)="remove.emit()" />
+  <span class="spacer"></span>
+  <p-button label="Edit" icon="pi pi-pencil" [disabled]="busy()" [ariaLabel]="'Edit ' + record().name" (onClick)="edit.emit()" />
+</footer>
+{{ end }}

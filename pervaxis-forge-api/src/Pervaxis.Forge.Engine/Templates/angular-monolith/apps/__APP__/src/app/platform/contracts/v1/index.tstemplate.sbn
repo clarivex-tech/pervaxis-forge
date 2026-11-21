@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited. All Rights Reserved.
  * Pervaxis UI contracts V1. Source-compatible for contract major 1; no platform implementations.
  */
@@ -8,6 +8,12 @@ import { Observable } from 'rxjs';
 
 export const UI_CONTRACT_MAJOR = 1 as const;
 
+export interface UiNavigationItemV1 {
+  readonly label: string;
+  readonly icon: string;
+  /** Route beneath the domain root. */
+  readonly path: string;
+}
 export interface UiDomainManifestV1 {
   readonly contractVersion: 1;
   readonly security: 'cognito-tenant' | 'public';
@@ -16,6 +22,8 @@ export interface UiDomainManifestV1 {
   readonly icon: string;
   /** Optional route beneath the domain root used by the generated navigation item. */
   readonly navigationPath?: string;
+  /** Optional extra sidebar links for one domain. When present they replace the single navigationPath link. */
+  readonly navigationItems?: readonly UiNavigationItemV1[];
   readonly supportedTargets: readonly ('web' | 'mobile')[];
   readonly permissions: readonly string[];
   readonly requirements: {

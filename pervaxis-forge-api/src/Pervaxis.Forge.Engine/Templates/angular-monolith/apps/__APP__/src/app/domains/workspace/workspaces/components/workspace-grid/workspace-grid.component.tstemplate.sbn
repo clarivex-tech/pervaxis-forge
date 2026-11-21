@@ -1,0 +1,153 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal } from '@angular/core';
+import { AgGridAngular } from 'ag-grid-angular';
+import {
+  AllCommunityModule, CellClickedEvent, CellKeyDownEvent, ColDef, FullWidthCellKeyDownEvent, GetRowIdParams, GridApi,
+  GridReadyEvent, ModuleRegistry, RowSelectionOptions, themeQuartz,
+} from 'ag-grid-community';
+import { WORKSPACE_DEFAULT_PAGE_SIZE, WORKSPACE_PAGE_SIZE_OPTIONS } from '../../constants/workspace-record.constants';
+import { WorkspaceRecord } from '../../contracts/workspace-record.model';
+import { WorkspaceStatusBadgeComponent } from '../status-badge/workspace-status-badge.component';
+import { WorkspaceRowActionsComponent } from './workspace-row-actions.component';
+
+// AG Grid Community only. Enterprise modules are intentionally never registered.
+ModuleRegistry.registerModules([AllCommunityModule]);
+
+const ACTIONS_COLUMN = 'actions';
+const SELECTION_COLUMN = 'ag-Grid-SelectionColumn';
+
+// Grid colors come from the shared semantic tokens, so light and dark themes follow the app.
+const gridTheme = themeQuartz.withParams({
+  accentColor: 'var(--p-primary-color)',
+  backgroundColor: 'var(--color-surface)',
+  foregroundColor: 'var(--color-text)',
+  borderColor: 'var(--color-border)',
+  chromeBackgroundColor: 'var(--color-surface-hover)',
+  headerBackgroundColor: 'var(--color-surface-hover)',
+  headerTextColor: 'var(--color-text-muted)',
+  headerFontWeight: 600,
+  rowHoverColor: 'var(--color-surface-hover)',
+  selectedRowBackgroundColor: 'var(--color-primary-light)',
+  fontFamily: 'inherit',
+  fontSize: 14,
+  wrapperBorderRadius: 0,
+  browserColorScheme: 'inherit',
+});
+
+@Component({
+  selector: 'domain-workspace-grid',
+  standalone: true,
+  imports: [AgGridAngular],
+  templateUrl: './workspace-grid.component.html',
+  styleUrl: './workspace-grid.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class WorkspaceGridComponent {
+  readonly rows = input.required<readonly WorkspaceRecord[]>();
+  readonly selectedIds = input<readonly string[]>([]);
+  readonly selectionChange = output<readonly string[]>();
+  readonly open = output<WorkspaceRecord>();
+  readonly edit = output<WorkspaceRecord>();
+  readonly remove = output<WorkspaceRecord>();
+
+  protected readonly rowData = computed(() => [...this.rows()]);
+  protected readonly theme = gridTheme;
+  protected readonly pageSize = WORKSPACE_DEFAULT_PAGE_SIZE;
+  protected readonly pageSizes = [...WORKSPACE_PAGE_SIZE_OPTIONS];
+  protected readonly rowSelection: RowSelectionOptions<WorkspaceRecord> = {
+    mode: 'multiRow', checkboxes: true, headerCheckbox: true, enableClickSelection: false, selectAll: 'currentPage',
+  };
+  protected readonly columnDefs: ColDef<WorkspaceRecord>[] = [
+    { field: 'name', headerName: 'Workspace', pinned: 'left', minWidth: 170, flex: 2, sort: 'asc' },
+    { field: 'code', headerName: 'Code', minWidth: 100, width: 105 },
+    { field: 'owner', headerName: 'Owner', minWidth: 130, flex: 1 },
+    { field: 'plan', headerName: 'Plan', minWidth: 115, width: 120 },
+    { field: 'status', headerName: 'Status', minWidth: 120, width: 125, cellRenderer: WorkspaceStatusBadgeComponent },
+    { field: 'memberCount', headerName: 'Members', type: 'rightAligned', minWidth: 105, width: 110 },
+    {
+      colId: ACTIONS_COLUMN, headerName: 'Actions', pinned: 'right', width: 150, minWidth: 150, sortable: false,
+      resizable: false, suppressMovable: true, cellRenderer: WorkspaceRowActionsComponent,
+      cellRendererParams: {
+        onEdit: (record: WorkspaceRecord) => this.edit.emit(record),
+        onDelete: (record: WorkspaceRecord) => this.remove.emit(record),
+      },
+    },
+  ];
+  protected readonly selectionColumnDef = { pinned: 'left' as const };
+  protected readonly defaultColDef: ColDef<WorkspaceRecord> = { sortable: true, resizable: true, suppressMovable: true };
+  protected readonly getRowId = (params: GetRowIdParams<WorkspaceRecord>): string => params.data.id;
+
+  private readonly api = signal<GridApi<WorkspaceRecord> | null>(null);
+  private applyingSelection = false;
+
+  constructor() {
+    effect(() => {
+      const api = this.api();
+      const ids = new Set(this.selectedIds());
+      if (!api) return;
+      this.applyingSelection = true;
+      try {
+        api.forEachNode(node => {
+          const wanted = node.id !== undefined && ids.has(node.id);
+          if (node.isSelected() !== wanted) node.setSelected(wanted);
+        });
+      } finally {
+        this.applyingSelection = false;
+      }
+    });
+  }
+
+  /** Puts keyboard focus back inside the grid, on the last focused cell when there is one. */
+  restoreFocus(): void {
+    const api = this.api();
+    if (!api) return;
+    const focused = api.getFocusedCell();
+    const column = focused?.column ?? api.getAllDisplayedColumns()[1] ?? api.getAllDisplayedColumns()[0];
+    if (column) api.setFocusedCell(focused?.rowIndex ?? 0, column);
+  }
+
+  protected onGridReady(event: GridReadyEvent<WorkspaceRecord>): void {
+    this.api.set(event.api);
+  }
+
+  protected onSelectionChanged(): void {
+    const api = this.api();
+    if (!api || this.applyingSelection) return;
+    this.selectionChange.emit(api.getSelectedNodes().flatMap(node => node.id === undefined ? [] : [node.id]));
+  }
+
+  protected onCellClicked(event: CellClickedEvent<WorkspaceRecord>): void {
+    const columnId = event.column.getColId();
+    if (columnId === ACTIONS_COLUMN || columnId === SELECTION_COLUMN || !event.data) return;
+    if (event.event instanceof MouseEvent && (event.event.target as HTMLElement).closest('button, a, input')) return;
+    this.open.emit(event.data);
+  }
+
+  protected onCellKeyDown(event: CellKeyDownEvent<WorkspaceRecord> | FullWidthCellKeyDownEvent<WorkspaceRecord>): void {
+    const keyboard = event.event;
+    if (!('column' in event) || !(keyboard instanceof KeyboardEvent) || keyboard.key !== 'Enter' || !event.data) return;
+    const columnId = event.column.getColId();
+    if (columnId === ACTIONS_COLUMN || columnId === SELECTION_COLUMN) return;
+    if ((keyboard.target as HTMLElement).closest('button, a, input')) return;
+    keyboard.preventDefault();
+    this.open.emit(event.data);
+  }
+}
+{{ end }}

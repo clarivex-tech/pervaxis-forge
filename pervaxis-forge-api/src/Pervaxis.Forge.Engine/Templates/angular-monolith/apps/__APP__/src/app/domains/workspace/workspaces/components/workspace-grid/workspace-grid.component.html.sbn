@@ -1,0 +1,23 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+<div class="grid-region" role="region" aria-label="Workspaces table. Use arrow keys to move between cells and Enter to open a workspace.">
+  <ag-grid-angular
+    class="grid"
+    [theme]="theme"
+    [rowData]="rowData()"
+    [columnDefs]="columnDefs"
+    [defaultColDef]="defaultColDef"
+    [getRowId]="getRowId"
+    [rowSelection]="rowSelection"
+    [selectionColumnDef]="selectionColumnDef"
+    [pagination]="true"
+    [paginationPageSize]="pageSize"
+    [paginationPageSizeSelector]="pageSizes"
+    [animateRows]="false"
+    [ensureDomOrder]="true"
+    domLayout="autoHeight"
+    (gridReady)="onGridReady($event)"
+    (selectionChanged)="onSelectionChanged()"
+    (cellClicked)="onCellClicked($event)"
+    (cellKeyDown)="onCellKeyDown($event)" />
+</div>
+{{ end }}

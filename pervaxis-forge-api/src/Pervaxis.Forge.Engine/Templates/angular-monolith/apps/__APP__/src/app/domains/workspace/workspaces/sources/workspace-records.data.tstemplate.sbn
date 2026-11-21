@@ -1,0 +1,55 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import { Observable } from 'rxjs';
+import {
+  WorkspaceAuditEvent, WorkspaceDraft, WorkspaceExportResult, WorkspaceFieldErrors, WorkspaceMember,
+  WorkspaceRecord, WorkspaceStatus,
+} from '../contracts/workspace-record.model';
+
+/**
+ * Data port for the Workspaces CRUDA screen. The screen only talks to this contract, so a real API
+ * client can replace the mock without touching components or state. No API client exists yet.
+ */
+export abstract class WorkspaceRecordsData {
+  /** Identifies where records come from so the UI can label non-live data. */
+  abstract readonly source: 'mock' | 'unconfigured';
+  abstract list(): Observable<readonly WorkspaceRecord[]>;
+  abstract create(draft: WorkspaceDraft): Observable<WorkspaceRecord>;
+  abstract update(id: string, draft: WorkspaceDraft): Observable<WorkspaceRecord>;
+  abstract setStatus(ids: readonly string[], status: WorkspaceStatus): Observable<readonly WorkspaceRecord[]>;
+  abstract remove(ids: readonly string[]): Observable<void>;
+  abstract restore(ids: readonly string[]): Observable<readonly WorkspaceRecord[]>;
+  abstract members(id: string): Observable<readonly WorkspaceMember[]>;
+  abstract audit(id: string): Observable<readonly WorkspaceAuditEvent[]>;
+  abstract exportRecords(ids: readonly string[] | null): Observable<WorkspaceExportResult>;
+}
+
+/** Failure raised by a data source. `referenceCode` is safe to show to users and support. */
+export class WorkspaceRecordsError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly referenceCode: string,
+    readonly fieldErrors: WorkspaceFieldErrors = {},
+  ) {
+    super(message);
+    this.name = 'WorkspaceRecordsError';
+  }
+}
+{{ end }}

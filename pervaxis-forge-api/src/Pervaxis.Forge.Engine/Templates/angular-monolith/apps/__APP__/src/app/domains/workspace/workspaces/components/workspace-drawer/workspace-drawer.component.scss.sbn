@@ -1,0 +1,15 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+:host { display: contents; }
+.drawer-shell { display: flex; flex-direction: column; min-height: 100%; }
+.drawer-header { display: flex; align-items: flex-start; gap: 0.75rem; width: 100%; color: var(--color-text); }
+.drawer-title { flex: 1; min-width: 0; }
+.drawer-title h2 { margin: 0; font-size: 1.15rem; overflow-wrap: anywhere; }
+.drawer-subtitle { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem; color: var(--color-text-muted); font-size: 0.85rem; }
+.drawer-close {
+  display: inline-flex; align-items: center; justify-content: center; width: 2.25rem; height: 2.25rem; border: 0; border-radius: 50%;
+  background: transparent; color: var(--color-text); cursor: pointer;
+}
+.drawer-close:hover:not(:disabled) { background: var(--color-surface-hover); }
+.drawer-close:disabled { opacity: 0.5; cursor: not-allowed; }
+:host :focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+{{ end }}

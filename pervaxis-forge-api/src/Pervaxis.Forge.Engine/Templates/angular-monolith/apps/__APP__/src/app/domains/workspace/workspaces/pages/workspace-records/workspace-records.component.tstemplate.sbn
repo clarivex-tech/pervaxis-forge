@@ -1,0 +1,145 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+import {
+  ChangeDetectionStrategy, Component, ElementRef, Injector, OnInit, afterNextRender, computed, inject, viewChild,
+} from '@angular/core';
+import { DOCUMENT } from '@angular/common';
+import { FormsModule } from '@angular/forms';
+import { ButtonModule } from 'primeng/button';
+import { InputTextModule } from 'primeng/inputtext';
+import { SelectModule } from 'primeng/select';
+import { SkeletonModule } from 'primeng/skeleton';
+import { ToastModule } from 'primeng/toast';
+import { WorkspaceDeleteDialogComponent } from '../../components/workspace-delete-dialog/workspace-delete-dialog.component';
+import { WorkspaceDrawerComponent } from '../../components/workspace-drawer/workspace-drawer.component';
+import { WorkspaceGridComponent } from '../../components/workspace-grid/workspace-grid.component';
+import { WorkspaceMockControlsComponent } from '../../components/mock-controls/workspace-mock-controls.component';
+import {
+  WORKSPACE_COPY, WORKSPACE_PLANS, WORKSPACE_STATUSES,
+} from '../../constants/workspace-record.constants';
+import { WorkspaceFilters, WorkspaceRecord } from '../../contracts/workspace-record.model';
+import { WORKSPACE_TOAST_KEY, WorkspaceChipKey, WorkspaceRecordsState } from '../../state/workspace-records.state';
+import { FocusReturn } from '../../utils/focus-return';
+
+@Component({
+  selector: 'domain-workspace-records',
+  standalone: true,
+  imports: [
+    FormsModule, ButtonModule, InputTextModule, SelectModule, SkeletonModule, ToastModule, WorkspaceDeleteDialogComponent,
+    WorkspaceDrawerComponent, WorkspaceGridComponent, WorkspaceMockControlsComponent,
+  ],
+  templateUrl: './workspace-records.component.html',
+  styleUrl: './workspace-records.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+})
+export class WorkspaceRecordsComponent implements OnInit {
+  protected readonly state = inject(WorkspaceRecordsState);
+  protected readonly copy = WORKSPACE_COPY;
+  protected readonly toastKey = WORKSPACE_TOAST_KEY;
+  protected readonly statuses = [...WORKSPACE_STATUSES];
+  protected readonly plans = [...WORKSPACE_PLANS];
+  protected readonly skeletonRows = [1, 2, 3, 4, 5, 6];
+  protected readonly controlsDisabled = computed(() => this.state.viewState() !== 'ready' && this.state.viewState() !== 'no-results');
+  protected readonly announcement = computed(() => {
+    if (this.state.viewState() !== 'ready' && this.state.viewState() !== 'no-results') return '';
+    const count = this.state.filtered().length;
+    return count + (count === 1 ? ' workspace shown' : ' workspaces shown');
+  });
+  protected readonly summaryValue = computed(() => this.state.loadStatus() === 'ready');
+
+  private readonly document = inject(DOCUMENT);
+  private readonly injector = inject(Injector);
+  private readonly heading = viewChild<ElementRef<HTMLElement>>('heading');
+  private readonly grid = viewChild(WorkspaceGridComponent);
+  private readonly drawerFocus = new FocusReturn();
+  private readonly dialogFocus = new FocusReturn();
+
+  ngOnInit(): void {
+    void this.state.load();
+  }
+
+  protected create(): void {
+    this.drawerFocus.capture(this.document);
+    this.state.openCreate();
+  }
+
+  protected open(record: WorkspaceRecord): void {
+    this.drawerFocus.capture(this.document);
+    this.state.openRead(record.id);
+  }
+
+  protected edit(record: WorkspaceRecord): void {
+    this.drawerFocus.capture(this.document);
+    this.state.openEdit(record.id, 'closed');
+  }
+
+  protected requestDelete(records: readonly WorkspaceRecord[]): void {
+    this.dialogFocus.capture(this.document);
+    this.state.requestDelete(records);
+  }
+
+  protected onSearch(event: Event): void {
+    this.state.setSearch((event.target as HTMLInputElement).value);
+  }
+
+  protected removeChip(key: WorkspaceChipKey): void {
+    this.state.clearFilter(key);
+  }
+
+  protected onStatus(value: WorkspaceFilters['status'] | null): void {
+    this.state.setStatus(value ?? '');
+  }
+
+  protected onPlan(value: WorkspaceFilters['plan'] | null): void {
+    this.state.setPlan(value ?? '');
+  }
+
+  protected onDrawerClosed(): void {
+    this.drawerFocus.restore(() => this.focusFallback());
+  }
+
+  protected cancelDelete(): void {
+    this.state.cancelDelete();
+  }
+
+  protected onDeleteDialogHidden(): void {
+    this.dialogFocus.restore(() => this.focusFallback());
+  }
+
+  protected async confirmDelete(): Promise<void> {
+    const deleted = await this.state.confirmDelete();
+    if (!deleted) return;
+    this.dialogFocus.clear();
+    if (this.state.drawer().mode === 'closed') this.focusHeading();
+  }
+
+  private focusFallback(): void {
+    const grid = this.grid();
+    if (grid && !this.state.recentlyDeleted()) {
+      grid.restoreFocus();
+    } else {
+      this.focusHeading();
+    }
+  }
+
+  private focusHeading(): void {
+    afterNextRender(() => this.heading()?.nativeElement.focus(), { injector: this.injector });
+  }
+}
+{{ end }}

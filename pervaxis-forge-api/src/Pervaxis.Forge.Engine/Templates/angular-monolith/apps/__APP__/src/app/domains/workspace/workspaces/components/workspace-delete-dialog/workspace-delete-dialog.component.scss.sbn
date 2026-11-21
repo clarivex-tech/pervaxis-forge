@@ -1,0 +1,15 @@
+{{ if model.angular_cognito_enabled && model.web_admin_layout }}
+:host { display: contents; }
+.body { color: var(--color-text); }
+.body p { margin: 0 0 0.75rem; }
+.names { margin: 0 0 0.75rem; padding-left: 1.25rem; }
+.mock-note {
+  display: flex; gap: 0.5rem; align-items: flex-start; padding: 0.5rem 0.75rem; border: 1px dashed var(--color-info-border);
+  border-radius: 0.5rem; background: var(--color-info-bg); color: var(--color-info); font-size: 0.85rem;
+}
+.confirm-field { display: flex; flex-direction: column; gap: 0.3rem; margin-top: 0.5rem; }
+.confirm-field label { font-weight: 600; }
+.hint { color: var(--color-text-muted); font-size: 0.8rem; }
+.inline-error { margin-top: 0.75rem; color: var(--color-danger); font-weight: 600; }
+:host :focus-visible { outline: 3px solid var(--color-primary); outline-offset: 2px; }
+{{ end }}
