@@ -161,7 +161,8 @@ public static class ForgeHost
             options.AddPolicy(ForgeUiCorsPolicy, policy => policy
                 .WithOrigins(allowedOrigins)
                 .AllowAnyHeader()
-                .WithExposedHeaders("ETag")
+                // X-Correlation-ID is exposed so the UI can log the ID of a failed request, which is needed to find it in the logs.
+                .WithExposedHeaders("ETag", "X-Correlation-ID")
                 .AllowAnyMethod());
         });
         // -- Authentication (API Key + optional JWT/OIDC) ------------------------------------

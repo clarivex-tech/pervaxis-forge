@@ -158,6 +158,50 @@ public class ObservabilityGenerationTests
     }
 
     [Fact]
+    public async Task TheCors_ExposesTheCorrelationHeaderToTheBrowser()
+    {
+        var files = await GenerateAsync();
+
+        Single(files, "/ForgeHost.cs").Should().Contain("WithExposedHeaders(\"ETag\", \"X-Correlation-ID\")");
+    }
+
+    [Fact]
+    public async Task TheAngularMonolith_LogsCorrelationIdsForFailedRequests()
+    {
+        var zipBytes = await generator.GenerateAsync(AngularMonolithManifest(), "AWS");
+        using var archive = new ZipArchive(new MemoryStream(zipBytes), ZipArchiveMode.Read);
+        var files = archive.Entries.Where(e => !string.IsNullOrEmpty(e.Name)).ToDictionary(
+            e => e.FullName.Replace('\\', '/'),
+            e => new StreamReader(e.Open()).ReadToEnd());
+
+        var interceptor = Single(files, "/error.interceptor.ts");
+        interceptor.Should().Contain("X-Correlation-Id").And.Contain("errorId").And.Contain("traceId");
+        interceptor.Should().Contain("diagnostics");
+        Single(files, "/error.interceptor.spec.ts").Should().Contain("falls back to the correlation ID");
+    }
+
+    private static ForgeManifest AngularMonolithManifest() => new()
+    {
+        Product = "clarivolt",
+        VerticalSlug = "clarivolt",
+        ServiceName = "billing-ui",
+        ServiceType = ServiceType.Monolithic,
+        ComponentPrefix = "CLV",
+        CloudProvider = "AWS",
+        UiTargets = ["web"],
+        AngularAuth = new AngularAuthConfig
+        {
+            Provider = "Cognito",
+            UserPoolId = "us-east-1_AbC123xyz",
+            ClientId = "1h57kf5cpq17m0eml12EXAMPLE",
+            Domain = "https://auth.example.test",
+            Scopes = ["openid", "email"],
+            RedirectUri = "https://app.example.test/auth/callback",
+            PostLogoutRedirectUri = "https://app.example.test/",
+        },
+    };
+
+    [Fact]
     public async Task TheObservabilityReference_NamesEverySettingEnvironmentsMustProvide()
     {
         var files = await GenerateAsync();
