@@ -17,6 +17,7 @@
       }
     },
     "CloudWatch": {
+      "Enabled": true,
       "LogGroup": "/pervaxis/{{ model.manifest.vertical_slug }}/{{ model.manifest.service_name }}",
       "LogStreamPrefix": "{{ model.manifest.service_name }}"
     }
@@ -47,7 +48,8 @@
   },
 {{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
   "OpenTelemetry": {
-    "OtlpEndpoint": "http://localhost:4317"
+    "OtlpEndpoint": "",
+    "TraceSamplingRatio": 1.0
   },
 {{ end }}
   "Forge": {
@@ -124,6 +126,10 @@
 {{- end }}
     "AuditLogging": {
       "Enabled": true
+    },
+    "Observability": {
+      "SlowRequestThresholdMilliseconds": 2000,
+      "ExcludedPaths": ["/health", "/health/ready"]
     },
     "DataClassification": {
       "DefaultClassification": "internal",

@@ -1,0 +1,135 @@
+# Observability
+
+This page covers what {{ model.manifest.service_name }} records, where it goes, which settings each environment must provide, and how to find out why a request failed. Use it when a user reports a problem and you need the cause quickly.
+
+## What every request produces
+
+| Signal | What is recorded | Where it goes |
+|---|---|---|
+| Audit event | One line per request: method, path, route template, status, outcome, actor, tenant, correlation ID, trace ID, duration | Logs |
+| Slow request | A warning when a request takes at least `Forge:Observability:SlowRequestThresholdMilliseconds` (default 2000) | Logs and the `forge.slow_requests` counter |
+| Server error | Unhandled exceptions, logged with the exception, error ID, correlation ID and trace ID. The trace is marked as failed. | Logs, traces and the `forge.server_errors` counter |
+| Trace | Spans for incoming requests, outbound HTTP calls, EF Core database calls, and this service's own spans (`ForgeTelemetry.ActivitySource`) | OTLP collector |
+| Metrics | Request count and duration by route, outbound HTTP, .NET runtime (GC, thread pool), slow requests, server errors | OTLP collector |
+
+Health probes (`/health` and `/health/ready`) are not audited and are not counted as slow. They run every few seconds, so including them would bury real traffic.
+
+Every log line written during a request also carries `CorrelationId`, `TraceId`, `SpanId`, `ServiceName`, `ServiceVersion` and `Environment`.
+
+Every error response carries `errorId`, `correlationId` and `traceId`. Give the support team any one of them.
+
+## Settings each environment must provide
+
+Set these where the container runs: environment variables or the deployment's parameter store. There is no collector address in the code. Outside Development the service refuses to start if the OTLP endpoint is missing.
+
+| Setting | Environment variable | Required | Example |
+|---|---|---|---|
+| OTLP collector endpoint | `OpenTelemetry__OtlpEndpoint` | Yes, outside Development | `http://<collector-host>:4317` |
+| Trace sampling ratio | `OpenTelemetry__TraceSamplingRatio` | No (default `1.0`) | `0.2` |
+| Slow-request threshold | `Forge__Observability__SlowRequestThresholdMilliseconds` | No (default `2000`) | `1500` |
+| Excluded audit paths | `Forge__Observability__ExcludedPaths__0` (and `__1`, …) | No (default `/health`, `/health/ready`) | `/health` |
+| CloudWatch sink | `Serilog__CloudWatch__Enabled` | No (default `true`) | `false` when the platform ships container stdout |
+
+In Development, traces go to the console. They also go to OTLP when `OpenTelemetry__OtlpEndpoint` is set, so a local collector is optional.
+
+Logs go to stdout in every environment. In deployed environments they also go to CloudWatch Logs through the CloudWatch sink, unless that sink is switched off.
+
+### Avoiding duplicate logs
+
+Use the CloudWatch sink only when the platform does not ship container stdout:
+
+- If the platform ships container stdout to CloudWatch (for example through the ECS `awslogs` log driver), set `Serilog__CloudWatch__Enabled=false` in that environment. Each event then reaches CloudWatch once, through stdout.
+- If the platform does not ship container stdout, keep the default (the sink on).
+- Never leave both paths on. Every event would appear twice.
+
+## Log volume and levels
+
+Every environment logs at Information by default, so request audit, slow-request and error events are kept. Serilog's levels decide what reaches the logs. To change them, set these in appsettings or as environment variables with the same keys:
+
+| What | Key | Values |
+|---|---|---|
+| Lowest level kept, for everything | `Serilog__MinimumLevel__Default` | Verbose, Debug, Information, Warning, Error, Fatal |
+| One category, for example EF Core | `Serilog__MinimumLevel__Override__Microsoft.EntityFrameworkCore` | As for `Serilog__MinimumLevel__Default` |
+
+`Logging__LogLevel` (the Microsoft logging section) does not change what is written in this print. Only the Serilog levels do.
+
+To cut volume without losing audit lines, lower a noisy category, such as `Microsoft.EntityFrameworkCore`. Raising the default to Warning also removes the Information audit lines.
+
+## Audit retention
+
+Audit events are ordinary log events in the service's log group. They are not a tamper-proof record:
+
+- The service does not sign or chain them. Anyone who can write to or delete from the log group can change them.
+- Retention is set on the log group, not by the service. For compliance-grade audit, set a retention policy that your compliance team specifies, restrict who can write to and delete from the log group, and keep a copy in a store built for immutable audit if the requirement calls for it.
+
+Example: `aws logs put-retention-policy --log-group-name /pervaxis/<vertical>/<service> --retention-in-days <days>`
+
+## Find out why a request failed
+
+1. **Get an identifier.** Use the `correlationId`, `errorId` or `traceId` from the error response body. If the user only has a time and a screen, use the route and time window.
+2. **Search the logs.** Use the queries below against the service's log group, `/<vertical>/<service>`.
+3. **Open the trace.** Copy the `TraceId` from any line of the request and open it in the tracing backend. The trace shows the slow or failing step: a database call, an outbound HTTP call, or this service's own code.
+4. **Read the audit line.** Check `Outcome`, `Route`, `TenantId`, `StatusCode` and `ElapsedMs`. A `rejected` outcome is a client error; a `failed` outcome is a server error.
+
+### CloudWatch Logs Insights queries
+
+Run these in the log group for the environment:
+
+```
+fields @timestamp, @message
+| filter CorrelationId = "<correlation-id>"
+| sort @timestamp asc
+```
+
+```
+fields @timestamp, @message
+| filter TraceId = "<trace-id>"
+| sort @timestamp asc
+```
+
+```
+fields @timestamp, @message
+| filter ErrorId = "<error-id>"
+```
+
+Failed requests by route (set the time range in the console):
+
+```
+fields Route, Outcome
+| filter AuditAction = "request" and Outcome = "failed"
+| stats count() by Route
+| sort count() desc
+```
+
+The slowest requests, with the tenant that made them:
+
+```
+fields @timestamp, Route, ElapsedMs, TenantId, TraceId
+| filter AuditAction = "request" and ElapsedMs > 2000
+| sort ElapsedMs desc
+| limit 50
+```
+
+Unhandled exceptions with their stack traces:
+
+```
+fields @timestamp, @message
+| filter @message like /Unhandled exception/
+| sort @timestamp desc
+```
+
+## Alerts to create per environment
+
+Alert thresholds belong to the owning team. These are the signals worth alerting on:
+
+- `forge.server_errors` above zero for a sustained period.
+- Request duration (p95 or p99 by route) above the agreed objective.
+- `forge.slow_requests` well above its normal rate.
+- Absence of logs or traces from the service, which points to a broken collector or log sink.
+
+## Rules for new code
+
+- Use structured properties in log messages, for example `_logger.LogInformation("Fetching record {RecordId}", id)`. Never interpolate.
+- Never log personal data or secrets. The redaction enricher masks sensitive keys and email addresses in properties, but it does not rewrite exception messages. Keep personal data out of them.
+- Use `ForgeTelemetry.ActivitySource` for custom spans and `ForgeTelemetry.Meter` for custom metrics. Both are registered, so they are exported.
+- Do not call `SetStatus(ActivityStatusCode.Ok)` on spans you did not start.

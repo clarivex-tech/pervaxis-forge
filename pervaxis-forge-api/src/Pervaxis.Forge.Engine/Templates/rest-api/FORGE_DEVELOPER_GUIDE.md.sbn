@@ -18,7 +18,7 @@ For an existing database preserve its complete migration lineage and snapshot be
 
 ## Observability
 
-Every service method must be instrumented. Ship no dark code. See `.claude/guides/OBSERVABILITY_PATTERN.md` for the full pattern.
+Every service method must be instrumented. Ship no dark code. See [DeveloperReference/Observability.md](DeveloperReference/Observability.md) for what the service already emits, the settings each environment needs, and how to triage a production issue.
 
 ### Logging
 
@@ -37,20 +37,22 @@ _logger.LogError(ex, "Failed to create record with reference {Reference}", reque
 
 ### Tracing
 
-```csharp
-private static readonly ActivitySource ActivitySource = new("{{ model.names.namespace }}");
+Use `ForgeTelemetry.ActivitySource`. It is registered with OpenTelemetry, so spans are exported. Do not create your own `ActivitySource`: its spans would be silently dropped.
 
-using var activity = ActivitySource.StartActivity("{{ model.manifest.service_name }}.get");
+```csharp
+using var activity = ForgeTelemetry.ActivitySource.StartActivity("{{ model.manifest.service_name }}.get");
 activity?.SetTag("record.id", id);
-activity?.SetStatus(ActivityStatusCode.Ok);
 ```
+
+An exception that escapes a request is recorded on the request's span automatically. Leave the span status alone.
 
 ### Metrics
 
+Use `ForgeTelemetry.Meter`. It is registered with OpenTelemetry, so its instruments are exported. Do not create your own `Meter`.
+
 ```csharp
-private static readonly Meter Meter = new("{{ model.names.namespace }}");
 private static readonly Counter<long> OperationsCounter =
-    Meter.CreateCounter<long>("{{ model.manifest.service_name }}.operations");
+    ForgeTelemetry.Meter.CreateCounter<long>("{{ model.manifest.service_name }}.operations", "{operation}", "Domain operations.");
 
 OperationsCounter.Add(1, new TagList { { "operation", "get" }, { "result", "success" } });
 ```

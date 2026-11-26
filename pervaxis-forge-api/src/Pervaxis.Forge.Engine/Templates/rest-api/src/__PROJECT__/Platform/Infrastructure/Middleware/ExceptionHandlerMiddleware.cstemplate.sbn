@@ -16,11 +16,13 @@
  ************************************************************************
  */
 
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using {{ model.names.namespace }}.Platform.Common;
 using {{ model.names.namespace }}.Platform.Infrastructure.Exceptions;
+using {{ model.names.namespace }}.Platform.Infrastructure.Observability;
 using {{ model.names.namespace }}.Platform.Models.Configuration;
 using {{ model.names.namespace }}.Platform.Services;
 {{- has_resilience = model.manifest.resilience == null || model.manifest.resilience.retry_enabled || model.manifest.resilience.circuit_breaker_enabled || model.manifest.resilience.timeout_enabled }}
@@ -80,6 +82,15 @@ public sealed class ExceptionHandlerMiddleware
 
             LogException(ex, errorId, correlationId, problemDetails.Status ?? 500);
 
+            // The trace ID lets support go from the error response straight to the trace in the tracing backend.
+            var traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+            if ((problemDetails.Status ?? 500) >= StatusCodes.Status500InternalServerError)
+            {
+                Activity.Current?.SetStatus(ActivityStatusCode.Error, problemDetails.Title);
+                Activity.Current?.AddException(ex);
+                ForgeTelemetry.ServerErrors.Add(1, new KeyValuePair<string, object?>("error.type", ex.GetType().Name));
+            }
+
 {{- if has_resilience }}
             if (ex is BrokenCircuitException)
             {
@@ -99,7 +110,8 @@ public sealed class ExceptionHandlerMiddleware
                 status = problemDetails.Status,
                 detail = problemDetails.Detail,
                 errorId,
-                correlationId
+                correlationId,
+                traceId
             };
 
             await context.Response.WriteAsync(

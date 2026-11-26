@@ -17,35 +17,76 @@
  ************************************************************************
  */
 
+using OpenTelemetry.Instrumentation.Runtime;
+using OpenTelemetry.Metrics;
 using OpenTelemetry.Resources;
 using OpenTelemetry.Trace;
+using {{ model.names.namespace }}.Platform.Infrastructure.Observability;
 using {{ model.names.namespace }}.Platform.Models.Configuration;
 
 namespace {{ model.names.namespace }}.Platform.Infrastructure.Extensions;
 
 public static class TracingExtensions
 {
+    /// <summary>
+    /// Registers traces and metrics. Outside Development the OTLP endpoint is mandatory: set
+    /// OpenTelemetry__OtlpEndpoint for each deployment. The service refuses to start without it, so telemetry is
+    /// never dropped silently. Development writes traces to the console, and to OTLP only when an endpoint is set.
+    /// </summary>
     public static IServiceCollection AddForgeTracing(
-        this IServiceCollection services, IConfiguration configuration)
+        this IServiceCollection services, IConfiguration configuration, IHostEnvironment environment)
     {
         var options = new ForgeTracingOptions();
         configuration.GetSection(ForgeTracingOptions.SectionName).Bind(options);
 
+        var hasEndpoint = Uri.TryCreate(options.OtlpEndpoint, UriKind.Absolute, out var otlpEndpoint);
+        if (!environment.IsDevelopment() && !hasEndpoint)
+        {
+            throw new InvalidOperationException(
+                "OpenTelemetry:OtlpEndpoint is required outside Development. Set OpenTelemetry__OtlpEndpoint for this environment.");
+        }
+
+        if (options.TraceSamplingRatio is < 0 or > 1)
+        {
+            throw new InvalidOperationException("OpenTelemetry:TraceSamplingRatio must be between 0 and 1.");
+        }
+
         var serviceName = configuration["Forge:ServiceName"] ?? "{{ model.manifest.service_name }}";
 
         services.AddOpenTelemetry()
-            .ConfigureResource(resource => resource.AddService(serviceName))
+            .ConfigureResource(resource => resource
+                .AddService(serviceName, serviceVersion: ForgeTelemetry.ServiceVersion)
+                .AddAttributes([new KeyValuePair<string, object>("deployment.environment.name", environment.EnvironmentName)]))
             .WithTracing(tracing =>
             {
                 tracing
-                    .AddAspNetCoreInstrumentation()
+                    .SetSampler(new ParentBasedSampler(new TraceIdRatioBasedSampler(options.TraceSamplingRatio)))
+                    .AddSource(ForgeTelemetry.ActivitySourceName)
+                    .AddAspNetCoreInstrumentation(aspNet => aspNet.RecordException = true)
                     .AddHttpClientInstrumentation()
-                    .AddEntityFrameworkCoreInstrumentation()
-                    .AddOtlpExporter(otlp => otlp.Endpoint = new Uri(options.OtlpEndpoint));
+                    .AddEntityFrameworkCoreInstrumentation();
 
-                if (Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") == "Development")
+                if (hasEndpoint)
+                {
+                    tracing.AddOtlpExporter(otlp => otlp.Endpoint = otlpEndpoint!);
+                }
+
+                if (environment.IsDevelopment())
                 {
                     tracing.AddConsoleExporter();
+                }
+            })
+            .WithMetrics(metrics =>
+            {
+                metrics
+                    .AddAspNetCoreInstrumentation()
+                    .AddHttpClientInstrumentation()
+                    .AddRuntimeInstrumentation()
+                    .AddMeter(ForgeTelemetry.MeterName);
+
+                if (hasEndpoint)
+                {
+                    metrics.AddOtlpExporter(otlp => otlp.Endpoint = otlpEndpoint!);
                 }
             });
 
