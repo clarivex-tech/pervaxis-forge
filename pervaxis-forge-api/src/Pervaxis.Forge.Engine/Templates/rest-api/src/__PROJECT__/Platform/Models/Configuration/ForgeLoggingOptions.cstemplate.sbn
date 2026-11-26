@@ -32,4 +32,10 @@ public sealed class CloudWatchOptions
     public string LogGroup { get; set; } = "/pervaxis/{{ model.manifest.vertical_slug }}/{{ model.manifest.service_name }}";
 
     public string? LogStreamPrefix { get; set; }
+
+    /// <summary>
+    /// Ship logs to CloudWatch from this process. Set to false in an environment where the platform already
+    /// ships container stdout to CloudWatch, otherwise every event is stored twice.
+    /// </summary>
+    public bool Enabled { get; set; } = true;
 }

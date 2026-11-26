@@ -17,6 +17,8 @@
  ************************************************************************
  */
 
+using System.Diagnostics;
+
 namespace {{ model.names.namespace }}.Platform.Infrastructure.Middleware;
 
 public sealed class CorrelationIdMiddleware
@@ -42,6 +44,8 @@ public sealed class CorrelationIdMiddleware
             : Guid.NewGuid().ToString();
 
         context.Items["CorrelationId"] = correlationId;
+        // Lets a trace be searched by the correlation ID the caller reported.
+        Activity.Current?.SetTag("forge.correlation_id", correlationId);
 
         context.Response.OnStarting(() =>
         {

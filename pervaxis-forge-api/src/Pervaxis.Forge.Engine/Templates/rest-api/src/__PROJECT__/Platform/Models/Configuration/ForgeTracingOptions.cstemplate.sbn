@@ -22,5 +22,12 @@ public sealed class ForgeTracingOptions
 {
     public const string SectionName = "OpenTelemetry";
 
-    public string OtlpEndpoint { get; set; } = "http://localhost:4317";
+    /// <summary>
+    /// OTLP collector endpoint, for example http://collector:4317. Deliberately empty: each environment sets it
+    /// (OpenTelemetry__OtlpEndpoint). Required outside Development; the service does not start without it.
+    /// </summary>
+    public string OtlpEndpoint { get; set; } = string.Empty;
+
+    /// <summary>Fraction of new traces that are recorded, from 0 to 1. Child spans follow their parent's decision.</summary>
+    public double TraceSamplingRatio { get; set; } = 1.0;
 }

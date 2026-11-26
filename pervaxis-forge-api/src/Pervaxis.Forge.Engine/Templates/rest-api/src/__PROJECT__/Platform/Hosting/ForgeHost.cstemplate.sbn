@@ -111,6 +111,8 @@ public static class ForgeHost
             .BindConfiguration(ForgeAuthenticationOptions.SectionName);
         builder.Services.AddOptions<ForgeSecretsOptions>()
             .BindConfiguration(ForgeSecretsOptions.SectionName);
+        builder.Services.AddOptions<ForgeObservabilityOptions>()
+            .BindConfiguration(ForgeObservabilityOptions.SectionName);
         builder.Services.AddSingleton<ForgeDataRedaction>();
         builder.Services.AddOptions<ForgeOutputCachingOptions>()
             .BindConfiguration(ForgeOutputCachingOptions.SectionName);
@@ -218,7 +220,7 @@ public static class ForgeHost
 
         // -- OpenTelemetry Tracing --------------------------------------------------------
 {{ if model.manifest.observability == null || model.manifest.observability.open_telemetry_enabled }}
-        builder.Services.AddForgeTracing(builder.Configuration);
+        builder.Services.AddForgeTracing(builder.Configuration, builder.Environment);
 {{ end }}
 
         // -- FluentValidation -------------------------------------------------------------
@@ -316,48 +318,7 @@ public static class ForgeHost
             .Get<ForgeAuditLoggingOptions>() ?? new ForgeAuditLoggingOptions();
         if (auditLogging.Enabled)
         {
-            app.Use(async (context, next) =>
-            {
-                var startedAt = Stopwatch.GetTimestamp();
-                string? error = null;
-                try
-                {
-                    await next();
-                }
-                catch (Exception ex)
-                {
-                    // ExceptionHandlerMiddleware (further out) turns this into the error response; record it, then let it through.
-                    error = ex.GetType().Name;
-                    throw;
-                }
-                finally
-                {
-                    var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
-                    // The actor is the stable user ID (sub claim), not the display name, which is often an email address.
-                    var actor = context.User.Identity?.IsAuthenticated == true
-                        ? context.User.FindFirst("sub")?.Value
-                            ?? context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
-                            ?? "authenticated-user"
-                        : "anonymous";
-                    var statusCode = context.Response.StatusCode;
-                    var outcome = error is not null || statusCode >= StatusCodes.Status500InternalServerError ? "failed"
-                        : statusCode >= StatusCodes.Status400BadRequest ? "rejected"
-                        : "succeeded";
-
-                    app.Logger.Log(
-                        outcome == "failed" ? LogLevel.Warning : LogLevel.Information,
-                        "Audit event {AuditAction} {Method} {Path} {StatusCode} {Outcome} {Error} {ElapsedMs}ms {Actor} {CorrelationId}",
-                        "request",
-                        context.Request.Method,
-                        context.Request.Path.Value,
-                        error is null ? (int?)statusCode : null,
-                        outcome,
-                        error,
-                        elapsedMs,
-                        actor,
-                        context.Items["CorrelationId"]?.ToString() ?? context.TraceIdentifier);
-                }
-            });
+            app.UseMiddleware<RequestAuditMiddleware>();
         }
         app.UseCors(ForgeUiCorsPolicy);
         app.UseAuthentication();

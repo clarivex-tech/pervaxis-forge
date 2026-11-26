@@ -1,0 +1,34 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+namespace {{ model.names.namespace }}.Platform.Models.Configuration;
+
+/// <summary>Request-level observability thresholds and exclusions (Forge:Observability).</summary>
+public sealed class ForgeObservabilityOptions
+{
+    public const string SectionName = "Forge:Observability";
+
+    /// <summary>Requests at or above this duration are logged at Warning and counted in forge.slow_requests.</summary>
+    public int SlowRequestThresholdMilliseconds { get; set; } = 2000;
+
+    /// <summary>
+    /// Paths that are neither audited nor counted as slow. Load balancer and container health probes call these
+    /// every few seconds, so they would drown real requests in the audit trail.
+    /// </summary>
+    public string[] ExcludedPaths { get; set; } = ["/health", "/health/ready"];
+}

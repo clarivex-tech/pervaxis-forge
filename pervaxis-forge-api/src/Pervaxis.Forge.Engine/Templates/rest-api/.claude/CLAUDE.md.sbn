@@ -65,7 +65,8 @@ Standards and patterns are in `.claude/guides/` and `.claude/skills/`. Read befo
 {{- if model.manifest.tenant_ready }}
 | `guides/TENANCY_RULES.md` | **Mandatory** before adding or changing any entity, query, cache key or background job |
 {{- end }}
-| `guides/OBSERVABILITY_PATTERN.md` | Before adding logging, tracing, or metrics |
+| `DeveloperReference/Observability.md` | Before adding logging, tracing, or metrics, and when triaging a production issue |
+| `guides/OBSERVABILITY_PATTERN.md` | Before adding spans or metrics to a Genesis provider (Genesis providers only) |
 | `guides/RESILIENCE_PATTERN.md` | Before making any AWS SDK calls |
 | `guides/GENESIS_PROVIDERS.md` | Before using any Genesis module |
 | `guides/PERVAXIS_STANDARDS.md` | General platform coding standards |

@@ -1,0 +1,129 @@
+/*
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+using System.Diagnostics;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Options;
+using {{ model.names.namespace }}.Platform.Infrastructure.Observability;
+using {{ model.names.namespace }}.Platform.Models.Configuration;
+
+namespace {{ model.names.namespace }}.Platform.Infrastructure.Middleware;
+
+/// <summary>
+/// Writes one "Audit event" line per request, including requests that throw, and flags slow requests.
+/// Each line carries the route template, tenant, correlation ID and trace ID, so a support ticket can be
+/// traced to its logs and to the trace in one search. Paths in Forge:Observability:ExcludedPaths are skipped.
+/// The actor is the stable user ID (sub claim), not the display name, which is often an email address.
+/// </summary>
+public sealed class RequestAuditMiddleware
+{
+    private readonly RequestDelegate _next;
+    private readonly ILogger<RequestAuditMiddleware> _logger;
+    private readonly ForgeObservabilityOptions _options;
+    private readonly HashSet<string> _excludedPaths;
+
+    public RequestAuditMiddleware(
+        RequestDelegate next,
+        ILogger<RequestAuditMiddleware> logger,
+        IOptions<ForgeObservabilityOptions> options)
+    {
+        _next = next;
+        _logger = logger;
+        _options = options.Value;
+        _excludedPaths = new HashSet<string>(_options.ExcludedPaths, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public async Task InvokeAsync(HttpContext context)
+    {
+        var startedAt = Stopwatch.GetTimestamp();
+        string? error = null;
+        try
+        {
+            await _next(context).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            // ExceptionHandlerMiddleware (further out) turns this into the error response; record it, then let it through.
+            error = ex.GetType().Name;
+            throw;
+        }
+        finally
+        {
+            Record(context, startedAt, error);
+        }
+    }
+
+    private void Record(HttpContext context, long startedAt, string? error)
+    {
+        var path = context.Request.Path.Value ?? string.Empty;
+        if (_excludedPaths.Contains(path))
+        {
+            return;
+        }
+
+        var elapsedMs = Stopwatch.GetElapsedTime(startedAt).TotalMilliseconds;
+        var statusCode = context.Response.StatusCode;
+        var outcome = error is not null || statusCode >= StatusCodes.Status500InternalServerError ? "failed"
+            : statusCode >= StatusCodes.Status400BadRequest ? "rejected"
+            : "succeeded";
+
+        var route = (context.GetEndpoint() as RouteEndpoint)?.RoutePattern.RawText ?? "unmatched";
+        var tenantId = context.User.FindFirst("tenant_id")?.Value ?? "none";
+        var actor = context.User.Identity?.IsAuthenticated == true
+            ? context.User.FindFirst("sub")?.Value
+                ?? context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? "authenticated-user"
+            : "anonymous";
+        var correlationId = context.Items["CorrelationId"]?.ToString() ?? context.TraceIdentifier;
+        var traceId = Activity.Current?.TraceId.ToString() ?? context.TraceIdentifier;
+
+        Activity.Current?.SetTag("forge.tenant_id", tenantId);
+
+        _logger.Log(
+            outcome == "failed" ? LogLevel.Warning : LogLevel.Information,
+            "Audit event {AuditAction} {Method} {Path} {Route} {StatusCode} {Outcome} {Error} {ElapsedMs}ms {Actor} {TenantId} {CorrelationId} {TraceId}",
+            "request",
+            context.Request.Method,
+            path,
+            route,
+            error is null ? (int?)statusCode : null,
+            outcome,
+            error,
+            elapsedMs,
+            actor,
+            tenantId,
+            correlationId,
+            traceId);
+
+        if (elapsedMs >= _options.SlowRequestThresholdMilliseconds)
+        {
+            ForgeTelemetry.SlowRequests.Add(1, new KeyValuePair<string, object?>("http.route", route));
+            _logger.LogWarning(
+                "Slow request {Method} {Route} {StatusCode} took {ElapsedMs}ms (threshold {ThresholdMs}ms) {TenantId} {CorrelationId} {TraceId}",
+                context.Request.Method,
+                route,
+                statusCode,
+                elapsedMs,
+                _options.SlowRequestThresholdMilliseconds,
+                tenantId,
+                correlationId,
+                traceId);
+        }
+    }
+}

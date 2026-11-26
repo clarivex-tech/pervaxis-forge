@@ -135,10 +135,13 @@ public class OutboundSecurityGenerationTests
     [Fact]
     public async Task AuditLog_HonoursEnabled_AndRecordsFailures()
     {
-        var program = Single(await GenerateAsync(), "/Platform/Hosting/ForgeHost.cs");
+        var files = await GenerateAsync();
 
-        program.Should().Contain("if (auditLogging.Enabled)");
-        var audit = program[program.IndexOf("if (auditLogging.Enabled)", StringComparison.Ordinal)..];
+        Single(files, "/Platform/Hosting/ForgeHost.cs").Should()
+            .Contain("if (auditLogging.Enabled)")
+            .And.Contain("app.UseMiddleware<RequestAuditMiddleware>()");
+
+        var audit = Single(files, "/RequestAuditMiddleware.cs");
         audit.Should().Contain("finally").And.Contain("throw;").And.Contain("{Outcome}");
     }
 

@@ -18,6 +18,7 @@
  */
 
 using AWS.Logger.SeriLog;
+using {{ model.names.namespace }}.Platform.Infrastructure.Observability;
 using {{ model.names.namespace }}.Platform.Models.Configuration;
 using {{ model.names.namespace }}.Platform.Services;
 using Serilog;
@@ -41,22 +42,20 @@ public static class SerilogExtensions
                 context.HostingEnvironment.EnvironmentName,
                 services.GetRequiredService<ForgeDataRedaction>());
 
-            if (context.HostingEnvironment.IsDevelopment())
-            {
-                loggerConfig.WriteTo.Console(new RenderedCompactJsonFormatter());
-            }
-            else
-            {
-                if (options.CloudWatch is not null)
-                {
-                    var awsConfig = new AWS.Logger.AWSLoggerConfig
-                    {
-                        LogGroup = options.CloudWatch.LogGroup,
-                        LogStreamNamePrefix = options.CloudWatch.LogStreamPrefix ?? options.ServiceName
-                    };
+            // stdout is written in every environment, so `docker logs` and the container log driver see every event
+            // even when the CloudWatch sink cannot be reached.
+            loggerConfig.WriteTo.Console(new RenderedCompactJsonFormatter());
 
-                    loggerConfig.WriteTo.AWSSeriLog(awsConfig, textFormatter: new RenderedCompactJsonFormatter());
-                }
+            // CloudWatch only in deployed environments (not Development), and only when Serilog:CloudWatch is enabled.
+            if (!context.HostingEnvironment.IsDevelopment() && options.CloudWatch is { Enabled: true })
+            {
+                var awsConfig = new AWS.Logger.AWSLoggerConfig
+                {
+                    LogGroup = options.CloudWatch.LogGroup,
+                    LogStreamNamePrefix = options.CloudWatch.LogStreamPrefix ?? options.ServiceName
+                };
+
+                loggerConfig.WriteTo.AWSSeriLog(awsConfig, textFormatter: new RenderedCompactJsonFormatter());
             }
         });
 
@@ -77,6 +76,7 @@ public static class SerilogExtensions
         return loggerConfig
             .Enrich.WithProperty("ServiceName", serviceName ?? string.Empty)
             .Enrich.WithProperty("Environment", environmentName)
+            .Enrich.WithProperty("ServiceVersion", ForgeTelemetry.ServiceVersion)
             .Enrich.WithMachineName()
             .Enrich.FromLogContext()
             .Enrich.WithSpan()
