@@ -1,0 +1,87 @@
+/**
+ ************************************************************************
+ * Copyright (C) {{ model.current_year }} Clarivex Technologies Private Limited
+ * All Rights Reserved.
+ *
+ * NOTICE: All intellectual and technical concepts contained
+ * herein are proprietary to Clarivex Technologies Private Limited
+ * and may be covered by Indian and Foreign Patents,
+ * patents in process, and are protected by trade secret or
+ * copyright law. Dissemination of this information or reproduction
+ * of this material is strictly forbidden unless prior written
+ * permission is obtained from Clarivex Technologies Private Limited.
+ *
+ * Product:   Pervaxis Platform
+ * Website:   https://clarivex.tech
+ ************************************************************************
+ */
+
+import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+import { TestBed } from '@angular/core/testing';
+import { LoggerService } from '../services/logger.service';
+import { correlationInterceptor } from './correlation.interceptor';
+import { errorInterceptor } from './error.interceptor';
+
+describe('errorInterceptor', () => {
+  let http: HttpClient;
+  let backend: HttpTestingController;
+  let logger: jasmine.SpyObj<LoggerService>;
+
+  beforeEach(() => {
+    logger = jasmine.createSpyObj<LoggerService>('LoggerService', ['debug', 'info', 'warn', 'error']);
+    TestBed.configureTestingModule({
+      providers: [
+        // Same order as the app: the correlation ID is set before the error interceptor sees the request.
+        provideHttpClient(withInterceptors([correlationInterceptor, errorInterceptor])),
+        provideHttpClientTesting(),
+        { provide: LoggerService, useValue: logger },
+      ],
+    });
+    http = TestBed.inject(HttpClient);
+    backend = TestBed.inject(HttpTestingController);
+  });
+
+  afterEach(() => backend.verify());
+
+  it('logs the correlation ID and the ProblemDetails identifiers of a server error', () => {
+    http.get('/api/v1/orders').subscribe({ error: () => undefined });
+    const sent = backend.expectOne('/api/v1/orders');
+    const correlationId = sent.request.headers.get('X-Correlation-Id');
+
+    sent.flush(
+      { errorId: 'error-1', correlationId, traceId: 'trace-1' },
+      { status: 500, statusText: 'Internal Server Error' },
+    );
+
+    expect(logger.error).toHaveBeenCalledWith(
+      'Server error',
+      jasmine.any(String),
+      '/api/v1/orders',
+      { correlationId, errorId: 'error-1', traceId: 'trace-1' },
+    );
+  });
+
+  it('falls back to the correlation ID this client sent when the failure has no body', () => {
+    http.get('/api/v1/orders').subscribe({ error: () => undefined });
+    const sent = backend.expectOne('/api/v1/orders');
+    const correlationId = sent.request.headers.get('X-Correlation-Id');
+
+    sent.flush(null, { status: 401, statusText: 'Unauthorized' });
+
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Unauthorized request',
+      '/api/v1/orders',
+      jasmine.objectContaining({ correlationId }),
+    );
+  });
+
+  it('still passes the error to the caller', () => {
+    let status = 0;
+    http.get('/api/v1/orders').subscribe({ error: (error) => (status = error.status) });
+    backend.expectOne('/api/v1/orders').flush(null, { status: 403, statusText: 'Forbidden' });
+
+    expect(status).toBe(403);
+    expect(logger.warn).toHaveBeenCalledWith('Forbidden access', '/api/v1/orders', jasmine.any(Object));
+  });
+});

@@ -16,31 +16,57 @@
  ************************************************************************
  */
 
-import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { HttpErrorResponse, HttpInterceptorFn, HttpRequest } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { LoggerService } from '../services/logger.service';
 
+/** The ProblemDetails fields the API adds to its error responses. */
+interface ApiFailureBody {
+  correlationId?: unknown;
+  errorId?: unknown;
+  traceId?: unknown;
+}
+
 /**
- * HORIZONTAL: Logs HTTP failures. Session handling lives in authInterceptor and AuthService:
- * a 401 triggers one shared token refresh, and the session ends only when that refresh fails.
- * A 401 is not a reason to sign the user out here.
+ * The identifiers support needs to find a failure in the API logs and traces. The API puts them in its error body
+ * when it handled the request. A failure rejected before the API ran (for example a 401 from the tenancy check)
+ * has no body, so the correlation ID this client sent is used instead.
+ */
+function diagnosticsOf(req: HttpRequest<unknown>, error: HttpErrorResponse) {
+  const body = (error.error ?? null) as ApiFailureBody | null;
+  return {
+    correlationId: asText(body?.correlationId) ?? req.headers.get('X-Correlation-Id') ?? 'unknown',
+    errorId: asText(body?.errorId),
+    traceId: asText(body?.traceId),
+  };
+}
+
+function asText(value: unknown): string | undefined {
+  return typeof value === 'string' && value.length > 0 ? value : undefined;
+}
+
+/**
+ * HORIZONTAL: Logs HTTP failures with the identifiers that link them to the API logs. Session handling lives in
+ * authInterceptor and AuthService: a 401 triggers one shared token refresh, and the session ends only when that
+ * refresh fails. A 401 is not a reason to sign the user out here.
  */
 export const errorInterceptor: HttpInterceptorFn = (req, next) => {
   const logger = inject(LoggerService);
 
   return next(req).pipe(
     catchError((error: HttpErrorResponse) => {
+      const diagnostics = diagnosticsOf(req, error);
       switch (error.status) {
         case 401:
-          logger.warn('Unauthorized request', error.url);
+          logger.warn('Unauthorized request', error.url, diagnostics);
           break;
         case 403:
-          logger.warn('Forbidden access', error.url);
+          logger.warn('Forbidden access', error.url, diagnostics);
           break;
         default:
           if (error.status >= 500) {
-            logger.error('Server error', error.message, error.url);
+            logger.error('Server error', error.message, error.url, diagnostics);
           }
           break;
       }
